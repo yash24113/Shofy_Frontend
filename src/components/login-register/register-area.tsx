@@ -3,17 +3,19 @@ import React from 'react';
 import Link from 'next/link';
 import styles from '../../components/auth/AuthArea.module.css'
 
-/* keep using your existing register form if present */
 import RegisterForm from '../forms/register-form';
 
 const RegisterArea: React.FC = () => {
   return (
     <section className={styles.authSection}>
+      {/* Left Side */}
       <div className={styles.leftPanel}>
         <div className={styles.leftOverlay} />
         <div className={styles.leftContent}>
           <img src="/images/logo.png" alt="Logo" className={styles.logo} />
-          <h2 className={styles.heading}>One-Stop Solution For All Your Fabric Sourcing Needs</h2>
+          <h2 className={styles.heading}>
+            One-Stop Solution For All Your Fabric Sourcing Needs
+          </h2>
           <ul className={styles.features}>
             <li>Browse through 1000s of ready fabrics</li>
             <li>Free swatches for better decision making</li>
@@ -23,18 +25,23 @@ const RegisterArea: React.FC = () => {
         </div>
       </div>
 
+      {/* Right Side */}
       <div className={styles.rightPanel}>
         <div className={styles.formWrapper}>
           <button className={styles.closeBtn} aria-label="close">✕</button>
 
-          <h3 className={styles.title}>Sign Up</h3>
+          <h3 className={styles.title}>Signup</h3>
           <p className={styles.subtitle}>
-            Already have an account?{' '}
-            <Link href="/login"><a style={{ color: '#e25a4a', fontWeight: 700 }}>Sign In</a></Link>
+            Already A Member?{' '}
+            <Link href="/login">
+              <span className={styles.loginLink}>Login</span>
+            </Link>
           </p>
 
-          {/* Your RegisterForm will be styled by the module above */}
-          <RegisterForm />
+          {/* Scrollable Form */}
+          <div className={styles.formScroll}>
+            <RegisterForm />
+          </div>
         </div>
       </div>
     </section>
