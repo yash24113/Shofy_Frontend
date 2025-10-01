@@ -1,103 +1,150 @@
 'use client';
-import React from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import Image from "next/image";
-import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
-// internal
+import { useDispatch, useSelector } from "react-redux";
+
+// icons (yours)
 import { Close, Minus, Plus } from "@/svg";
+
+// actions (yours)
 import { add_cart_product, quantityDecrement } from "@/redux/features/cartSlice";
 import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
 
-const WishlistItem = ({ product }) => {
-  const { _id, image1, title, salesPrice } = product || {};
-  const { cart_products } = useSelector((state) => state.cart);
-  const isAddToCart = cart_products?.find?.((item) => item?._id === _id);
-  const dispatch = useDispatch();
-
-  const imageUrl = image1?.startsWith("http")
+/* ---------- helpers ---------- */
+const getImageUrl = (image1) => {
+  if (!image1) return "/images/placeholder-portrait.webp";
+  return image1.startsWith("http")
     ? image1
-    : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${image1}`;
+    : `${process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "")}/uploads/${image1}`;
+};
+const formatCurrency = (amount) => {
+  const val = Number.isFinite(amount) ? amount : 0;
+  const CURRENCY = process.env.NEXT_PUBLIC_CURRENCY || "INR";
+  const LOCALE   = process.env.NEXT_PUBLIC_LOCALE || "en-IN";
+  try {
+    return new Intl.NumberFormat(LOCALE, { style: "currency", currency: CURRENCY, maximumFractionDigits: 0 }).format(val);
+  } catch {
+    return `₹${val}`;
+  }
+};
 
-  const slug = product?.slug || _id;
+const WishlistItem = ({ product }) => {
+  const dispatch = useDispatch();
+  const { cart_products = [] } = useSelector((state) => state.cart) || {};
 
-  // handle add product (now also removes from wishlist)
-  const handleAddProduct = (prd) => {
-    dispatch(add_cart_product(prd));
-    // remove from wishlist after adding to cart (ecommerce-style)
+  const { _id, image1, title, salesPrice = 0, slug: slugFromApi } = product || {};
+  const slug = slugFromApi || _id;
+
+  const imageUrl = useMemo(() => getImageUrl(image1), [image1]);
+  const cartEntry = cart_products.find((item) => item?._id === _id);
+
+  const [removing, setRemoving] = useState(false);
+  const [moving, setMoving] = useState(false);
+
+  // add to cart (and remove from wishlist)
+  const handleAddProduct = useCallback(() => {
+    setMoving(true);
+    dispatch(add_cart_product(product));
     dispatch(remove_wishlist_product({ title, id: _id }));
-  };
+    setTimeout(() => setMoving(false), 300);
+  }, [dispatch, product, _id, title]);
 
-  // handle decrement product (only affects cart if already added)
-  const handleDecrement = (prd) => {
-    dispatch(quantityDecrement(prd));
-  };
+  // decrement (affects cart only if already added)
+  const handleDecrement = useCallback(() => {
+    dispatch(quantityDecrement(product));
+  }, [dispatch, product]);
 
-  // handle remove product from wishlist
-  const handleRemovePrd = (prd) => {
-    dispatch(remove_wishlist_product(prd));
-  };
+  // remove from wishlist
+  const handleRemovePrd = useCallback(() => {
+    setRemoving(true);
+    dispatch(remove_wishlist_product({ title, id: _id }));
+    setTimeout(() => setRemoving(false), 250);
+  }, [dispatch, _id, title]);
 
   return (
-    <tr>
-      <td className="tp-cart-img">
-        <Link href={`/fabric/${slug}`}>
-          {image1 && (
-            <Image
-              src={imageUrl}
-              alt={title || "product img"}
-              width={70}
-              height={100}
-              style={{ objectFit: "cover" }}
-            />
-          )}
-        </Link>
-      </td>
+    <div
+      className={`group relative grid grid-cols-[92px,1fr] gap-4 rounded-xl border p-4 md:p-5 shadow-sm hover:shadow-md transition-all
+                 ${removing ? "opacity-60" : ""}`}
+      role="listitem"
+    >
+      {/* image */}
+      <Link href={`/fabric/${slug}`} className="relative h-[92px] w-[92px] overflow-hidden rounded-lg bg-gray-50">
+        <Image
+          src={imageUrl}
+          alt={title || "product image"}
+          fill
+          sizes="92px"
+          style={{ objectFit: "cover" }}
+          onError={(e) => { (e.currentTarget).src = "/images/placeholder-portrait.webp"; }}
+        />
+      </Link>
 
-      <td className="tp-cart-title">
-        <Link href={`/fabric/${slug}`}>{title}</Link>
-      </td>
-
-      <td className="tp-cart-price">
-        <span>${(salesPrice || 0).toFixed(2)}</span>
-      </td>
-
-      <td className="tp-cart-quantity">
-        <div className="tp-product-quantity mt-10 mb-10">
-          <span onClick={() => handleDecrement(product)} className="tp-cart-minus">
-            <Minus />
-          </span>
-          <input
-            className="tp-cart-input"
-            type="text"
-            value={isAddToCart ? isAddToCart?.orderQuantity : 0}
-            readOnly
-          />
-          <span onClick={() => handleAddProduct(product)} className="tp-cart-plus">
-            <Plus />
-          </span>
+      {/* right side */}
+      <div className="min-w-0">
+        {/* title + price */}
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <Link href={`/fabric/${slug}`} className="line-clamp-2 font-medium leading-snug hover:underline">
+            {title || "Untitled Product"}
+          </Link>
+          <div className="shrink-0 text-right sm:pl-3">
+            <div className="text-base font-semibold">{formatCurrency(salesPrice)}</div>
+            <div className="text-xs text-gray-500">per unit</div>
+          </div>
         </div>
-      </td>
 
-      <td className="tp-cart-add-to-cart">
-        <button
-          onClick={() => handleAddProduct(product)}
-          type="button"
-          className="tp-btn tp-btn-2 tp-btn-blue"
-        >
-          Moving To Cart
-        </button>
-      </td>
+        {/* controls */}
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          {/* if already in cart show qty; else show Move to Cart */}
+          {cartEntry ? (
+            <div className="inline-flex items-center rounded-full border px-1">
+              <button
+                onClick={handleDecrement}
+                className="tp-cart-minus inline-flex h-9 w-9 items-center justify-center"
+                aria-label="Decrease quantity"
+                title="Decrease"
+              >
+                <Minus />
+              </button>
+              <input
+                className="tp-cart-input w-12 border-0 bg-transparent text-center font-medium"
+                type="text"
+                value={cartEntry?.orderQuantity || 1}
+                readOnly
+                aria-label="Quantity in cart"
+              />
+              <button
+                onClick={handleAddProduct}
+                className="tp-cart-plus inline-flex h-9 w-9 items-center justify-center"
+                aria-label="Increase quantity"
+                title="Increase"
+              >
+                <Plus />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleAddProduct}
+              type="button"
+              className="tp-btn tp-btn-2 tp-btn-blue inline-flex"
+              disabled={moving}
+              title="Add to cart"
+            >
+              {moving ? "Moving…" : "Moving To Cart"}
+            </button>
+          )}
 
-      <td className="tp-cart-action">
-        <button
-          onClick={() => handleRemovePrd({ title, id: _id })}
-          className="tp-cart-action-btn"
-        >
-          <Close />
-          <span> Remove</span>
-        </button>
-      </td>
-    </tr>
+          <button
+            onClick={handleRemovePrd}
+            className="inline-flex items-center gap-1 rounded-full border px-3 py-2 text-sm hover:bg-gray-50"
+            title="Remove from wishlist"
+          >
+            <Close />
+            <span>Remove</span>
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 
