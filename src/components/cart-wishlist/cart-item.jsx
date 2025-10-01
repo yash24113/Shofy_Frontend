@@ -8,11 +8,11 @@ import { Close, Minus, Plus } from "@/svg";
 import { add_cart_product, quantityDecrement, remove_product } from "@/redux/features/cartSlice";
 
 const CartItem = ({product}) => {
-  const {_id, image, title, salesPrice, orderQuantity = 0 } = product || {};
+  const {_id, image1, title, salesPrice, orderQuantity = 0 } = product || {};
 
   const dispatch = useDispatch();
 
-  const imageUrl = image?.startsWith('http') ? image : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${image}`;
+  const imageUrl = image1?.startsWith('http') ? image1 : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${image}`;
 
   const slug = product.slug || _id;
 
@@ -35,7 +35,7 @@ const CartItem = ({product}) => {
       {/* img */}
       <td className="tp-cart-img">
         <Link href={`/fabric/${slug}`}>
-          {image && <Image src={imageUrl} alt={title || "product img"} width={70} height={100} style={{objectFit:'cover'}} />}
+          {image1 && <Image src={imageUrl} alt={title || "product img"} width={70} height={100} style={{objectFit:'cover'}} />}
         </Link>
       </td>
       {/* title */}
