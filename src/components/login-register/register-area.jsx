@@ -10,7 +10,7 @@ const RegisterArea = () => {
         <div className="hidden md:flex w-1/2 bg-cover bg-center items-center justify-center p-12"
           style={{ backgroundImage: "url('/images/fabric-bg.jpg')" }}>
           <div className="bg-black bg-opacity-50 p-10 rounded-2xl text-white max-w-md">
-            <img src="/images/logo.png" alt="Fabrito Logo" className="mb-6 w-32" />
+            <img src="https://amritafashions.com/wp-content/uploads/amrita-fashions-company-logo-150x150.webp" alt="Fabrito Logo" className="mb-6 w-32" />
             <h2 className="text-2xl font-bold mb-4">One-Stop Solution For All Your Fabric Sourcing Needs</h2>
             <ul className="space-y-3 text-sm">
               <li>✅ Browse through 1000s of ready fabrics</li>
