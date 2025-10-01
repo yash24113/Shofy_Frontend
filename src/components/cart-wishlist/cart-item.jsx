@@ -23,12 +23,13 @@ const CartItem = ({ product, showToolbar = false, onClearCart }) => {
   const router = useRouter();
   const dispatch = useDispatch();
 
-  // read live qty from Redux (support id/_id shapes)
+  // --- normalize id so we always find the item in Redux, regardless of id/_id shape or type
+  const key = String(_id ?? id ?? "");
+
+  // live qty from Redux (default show 0 if not present)
   const { cart_products = [] } = useSelector((s) => s.cart) || {};
   const cartEntry =
-    cart_products.find(
-      (p) => p?._id === _id || p?.id === _id || p?._id === id || p?.id === id
-    ) || null;
+    cart_products.find((p) => String(p?._id ?? p?.id ?? "") === key) || null;
 
   const qty =
     typeof cartEntry?.orderQuantity === "number"
@@ -39,17 +40,20 @@ const CartItem = ({ product, showToolbar = false, onClearCart }) => {
     ? image1
     : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${image1}`;
 
-  const slug = product?.slug || _id || id;
+  const slug = product?.slug || key;
 
   // handlers
-  const inc = () => dispatch(add_cart_product(product));
+  const inc = () => {
+    // adds or increments; UI will re-read live qty from Redux
+    dispatch(add_cart_product(product));
+  };
   const dec = () => {
-    if (qty <= 0) return;
+    if ((qty || 0) <= 0) return; // keep it from going negative in UI
     dispatch(quantityDecrement(product));
   };
   const removeAndWishlist = () => {
     dispatch(add_to_wishlist(product));
-    dispatch(remove_product({ title, id: _id || id }));
+    dispatch(remove_product({ title, id: key }));
   };
 
   return (
@@ -98,7 +102,8 @@ const CartItem = ({ product, showToolbar = false, onClearCart }) => {
               <Minus />
             </button>
 
-            <span className="cart-qty-value" aria-live="polite">{qty}</span>
+            {/* default shows 0 if not in cart yet; updates live from Redux */}
+            <span className="cart-qty-value" aria-live="polite">{qty || 0}</span>
 
             <button
               onClick={inc}
