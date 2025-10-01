@@ -12,7 +12,7 @@ const CartItem = ({product}) => {
 
   const dispatch = useDispatch();
 
-  const imageUrl = image1?.startsWith('http') ? image1 : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${image}`;
+  const imageUrl = image1?.startsWith('http') ? image1 : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${image1}`;
 
   const slug = product.slug || _id;
 
