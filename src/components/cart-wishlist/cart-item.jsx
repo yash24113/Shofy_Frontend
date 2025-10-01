@@ -12,7 +12,7 @@ const CartItem = ({ product }) => {
   const { _id, image1, title, salesPrice, orderQuantity = 0 } = product || {};
   const dispatch = useDispatch();
 
-  // ✅ Always read the *live* quantity from Redux (so + updates UI immediately)
+  // live qty from Redux
   const { cart_products = [] } = useSelector((s) => s.cart) || {};
   const cartEntry = cart_products.find((p) => p?._id === _id);
   const qty = typeof cartEntry?.orderQuantity === "number" ? cartEntry.orderQuantity : orderQuantity || 0;
@@ -23,21 +23,16 @@ const CartItem = ({ product }) => {
 
   const slug = product?.slug || _id;
 
-  // +1
   const handleAddProduct = () => {
     dispatch(add_cart_product(product));
   };
-
-  // -1 (guard so it never goes below 0)
   const handleDecrement = () => {
     if (qty <= 0) return;
     dispatch(quantityDecrement(product));
   };
-
-  // Remove from cart -> Save to wishlist first
   const handleRemovePrd = () => {
     dispatch(add_to_wishlist(product));            // save for later
-    dispatch(remove_product({ title, id: _id }));  // then remove from cart
+    dispatch(remove_product({ title, id: _id }));  // remove from cart
   };
 
   return (
@@ -107,17 +102,28 @@ const CartItem = ({ product }) => {
           </div>
         </td>
 
-        {/* action */}
+        {/* action: Add Another + Remove */}
         <td className="tp-cart-action cart-cell cart-cell--action">
-          <button
-            onClick={handleRemovePrd}
-            className="tp-cart-action-btn cart-remove btn-pressable"
-            title="Remove from cart and save to wishlist"
-            type="button"
-          >
-            <Close />
-            <span> Remove</span>
-          </button>
+          <div className="cart-action-group">
+            <button
+              onClick={handleAddProduct}
+              className="tp-btn tp-btn-2 btn-primary btn-pressable"
+              type="button"
+              title="Add one more of this product"
+            >
+              Add Another Product
+            </button>
+
+            <button
+              onClick={handleRemovePrd}
+              className="tp-cart-action-btn cart-remove btn-pressable"
+              title="Remove from cart and save to wishlist"
+              type="button"
+            >
+              <Close />
+              <span> Remove</span>
+            </button>
+          </div>
         </td>
       </tr>
 
@@ -128,21 +134,16 @@ const CartItem = ({ product }) => {
           border-bottom: 1px solid #eef0f3;
           transition: background-color 160ms ease, box-shadow 180ms ease;
         }
-        .cart-row:hover {
-          background: #fafbfc;
-        }
+        .cart-row:hover { background: #fafbfc; }
 
         /* Cells */
-        .cart-cell {
-          padding: 14px 12px;
-          vertical-align: middle;
-        }
+        .cart-cell { padding: 14px 12px; vertical-align: middle; }
 
-        /* Consistent column widths like your screenshot */
+        /* Column widths (like your screenshot) */
         .cart-cell--img   { width: 110px; }
         .cart-cell--price { width: 160px; }
         .cart-cell--qty   { width: 220px; text-align: center; }
-        .cart-cell--action{ width: 160px; text-align: right; }
+        .cart-cell--action{ width: 230px; text-align: right; }
 
         /* Image */
         .cart-img-link { display: inline-block; line-height: 0; }
@@ -154,29 +155,19 @@ const CartItem = ({ product }) => {
 
         /* Title */
         .cart-title {
-          display: inline-block;
-          font-weight: 600;
-          line-height: 1.3;
-          color: #0f172a; /* slate-900 */
-          text-decoration: none;
+          display: inline-block; font-weight: 600; line-height: 1.3;
+          color: #0f172a; text-decoration: none;
         }
         .cart-title:hover { text-decoration: underline; }
 
         /* Price */
         .cart-price { font-weight: 600; color: #0f172a; }
 
-        /* Quantity group (CENTER it) */
+        /* Quantity (centered pill) */
         .cart-qty {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          margin-inline: auto;
-          border: 1px solid #e5e7eb;
-          border-radius: 999px;
-          padding: 2px;
-          background: #fff;
-          min-width: 124px;
-          height: 44px;
+          display: inline-flex; align-items: center; justify-content: center;
+          margin-inline: auto; border: 1px solid #e5e7eb; border-radius: 999px;
+          padding: 2px; background: #fff; min-width: 124px; height: 44px;
         }
         .cart-qty-btn {
           display: inline-flex; align-items: center; justify-content: center;
@@ -187,13 +178,19 @@ const CartItem = ({ product }) => {
         .cart-qty-btn:hover { background: #f3f4f6; }
         .cart-qty-btn:active { transform: translateY(1px); }
         .cart-qty-btn.is-disabled { opacity: 0.4; cursor: not-allowed; }
-
         .cart-qty-input {
           width: 52px; text-align: center; font-weight: 600;
           border: 0; background: transparent; outline: none;
         }
 
-        /* Remove button (animated) */
+        /* Action cell layout */
+        .cart-action-group {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        /* Animated buttons */
         .btn-pressable {
           position: relative; overflow: hidden; transform: translateZ(0);
           transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
@@ -211,9 +208,24 @@ const CartItem = ({ product }) => {
           transition: width 280ms ease, height 280ms ease, opacity 380ms ease; opacity: 0;
         }
 
+        /* Primary CTA look for Add Another */
+        .btn-primary {
+          background: linear-gradient(180deg, #2ea0ff 0%, #1670ff 100%);
+          color: #fff;
+          border: none;
+          padding: 10px 14px;
+          font-weight: 600;
+          border-radius: 12px;
+          white-space: nowrap;
+        }
+        .btn-primary:hover {
+          background: linear-gradient(180deg, #4eb0ff 0%, #2a7dff 100%);
+        }
+
+        /* Remove button */
         .cart-remove {
           color: #6b7280; border: 1px solid #e5e7eb; background: #fff;
-          padding: 12px 18px; border-radius: 12px;
+          padding: 10px 14px; border-radius: 12px; white-space: nowrap;
         }
         .cart-remove:hover { background: #f9fafb; color: #374151; }
 
@@ -221,7 +233,8 @@ const CartItem = ({ product }) => {
         @media (max-width: 640px) {
           .cart-cell { padding: 10px 8px; }
           .cart-cell--qty   { width: 180px; }
-          .cart-cell--action{ width: 130px; text-align: right; }
+          .cart-cell--action{ width: 100%; text-align: left; }
+          .cart-action-group { gap: 8px; }
 
           .cart-img { width: 56px; height: 80px; border-radius: 8px; }
           .cart-qty-btn { width: 34px; height: 34px; }
