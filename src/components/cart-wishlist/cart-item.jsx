@@ -38,7 +38,7 @@ const CartItem = ({ product }) => {
     <>
       <tr className="cart-row">
         {/* img */}
-        <td className="tp-cart-img cart-cell">
+        <td className="tp-cart-img cart-cell cart-cell--img">
           <Link href={`/fabric/${slug}`} className="cart-img-link">
             {image1 && (
               <Image
@@ -54,21 +54,21 @@ const CartItem = ({ product }) => {
         </td>
 
         {/* title */}
-        <td className="tp-cart-title cart-cell">
+        <td className="tp-cart-title cart-cell cart-cell--title">
           <Link href={`/fabric/${slug}`} className="cart-title">
             {title}
           </Link>
         </td>
 
         {/* price (line total) */}
-        <td className="tp-cart-price cart-cell">
+        <td className="tp-cart-price cart-cell cart-cell--price">
           <span className="cart-price">
             ${((salesPrice || 0) * orderQuantity).toFixed(2)}
           </span>
         </td>
 
-        {/* quantity */}
-        <td className="tp-cart-quantity cart-cell">
+        {/* quantity (CENTERED) */}
+        <td className="tp-cart-quantity cart-cell cart-cell--qty">
           <div className="tp-product-quantity cart-qty">
             <button
               onClick={() => handleDecrement(product)}
@@ -101,7 +101,7 @@ const CartItem = ({ product }) => {
         </td>
 
         {/* action */}
-        <td className="tp-cart-action cart-cell">
+        <td className="tp-cart-action cart-cell cart-cell--action">
           <button
             onClick={() => handleRemovePrd({ title, id: _id })}
             className="tp-cart-action-btn cart-remove btn-pressable"
@@ -130,6 +130,12 @@ const CartItem = ({ product }) => {
           padding: 14px 12px;
           vertical-align: middle;
         }
+
+        /* Make columns behave like your screenshot */
+        .cart-cell--img   { width: 110px; }
+        .cart-cell--price { width: 160px; }
+        .cart-cell--qty   { width: 220px; text-align: center; }
+        .cart-cell--action{ width: 160px; text-align: right; }
 
         /* Image */
         .cart-img-link {
@@ -163,14 +169,18 @@ const CartItem = ({ product }) => {
           color: #0f172a;
         }
 
-        /* Quantity group */
+        /* Quantity group (CENTER it) */
         .cart-qty {
           display: inline-flex;
           align-items: center;
+          justify-content: center;      /* center contents in the pill */
+          margin-inline: auto;          /* center the pill in the TD */
           border: 1px solid #e5e7eb;
           border-radius: 999px;
           padding: 2px;
           background: #fff;
+          min-width: 124px;
+          height: 44px;
         }
         .cart-qty-btn {
           display: inline-flex;
@@ -205,7 +215,7 @@ const CartItem = ({ product }) => {
           overflow: hidden;
           transform: translateZ(0);
           transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
-          border-radius: 10px;
+          border-radius: 12px;
         }
         .btn-pressable:hover {
           transform: translateY(-1px);
@@ -240,8 +250,8 @@ const CartItem = ({ product }) => {
           color: #6b7280; /* gray-500 */
           border: 1px solid #e5e7eb;
           background: #fff;
-          padding: 8px 12px;
-          border-radius: 10px;
+          padding: 12px 18px;
+          border-radius: 12px;
         }
         .cart-remove:hover {
           background: #f9fafb;
@@ -253,6 +263,9 @@ const CartItem = ({ product }) => {
           .cart-cell {
             padding: 10px 8px;
           }
+          .cart-cell--qty   { width: 180px; }
+          .cart-cell--action{ width: 130px; text-align: right; }
+
           .cart-img {
             width: 56px;
             height: 80px;
@@ -264,6 +277,10 @@ const CartItem = ({ product }) => {
           }
           .cart-qty-input {
             width: 44px;
+          }
+          .cart-qty {
+            height: 40px;
+            min-width: 112px;
           }
         }
       `}</style>
