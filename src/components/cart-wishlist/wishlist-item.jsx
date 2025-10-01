@@ -9,12 +9,12 @@ import {add_cart_product,quantityDecrement} from "@/redux/features/cartSlice";
 import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
 
 const WishlistItem = ({ product }) => {
-  const { _id, image, title, salesPrice } = product || {};
+  const { _id, image1, title, salesPrice } = product || {};
   const { cart_products } = useSelector((state) => state.cart);
   const isAddToCart = cart_products.find((item) => item._id === _id);
   const dispatch = useDispatch();
 
-  const imageUrl = image?.startsWith('http') ? image : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${image}`;
+  const imageUrl = image1?.startsWith('http') ? image1 : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${image1}`;
 
   const slug = product.slug || _id;
 
@@ -35,7 +35,7 @@ const WishlistItem = ({ product }) => {
     <tr>
       <td className="tp-cart-img">
         <Link href={`/fabric/${slug}`}>
-          {image && <Image src={imageUrl} alt={title || "product img"} width={70} height={100} style={{objectFit:'cover'}} />}
+          {image1 && <Image src={imageUrl} alt={title || "product img"} width={70} height={100} style={{objectFit:'cover'}} />}
         </Link>
       </td>
       <td className="tp-cart-title">
