@@ -161,6 +161,7 @@ const Header = () => {
                       <CartTwo />
                       <span className="tp-header-action-badge">{quantity}</span>
                     </button>
+
                   </div>
                   <div className="tp-header-action-item d-lg-none">
                     <button onClick={() => setIsCanvasOpen(true)} type="button" className="tp-header-action-btn tp-offcanvas-open-btn">

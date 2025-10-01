@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useDispatch, useSelector } from 'react-redux';
 import Link from 'next/link';
@@ -31,7 +31,7 @@ import { FiPhone, FiMenu } from 'react-icons/fi';
 const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
-  const { wishlist } = useSelector((state) => state.wishlist);
+  const { wishlist } = useSelector((state: any) => state.wishlist);
   const { quantity } = useCartInfo();
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
   const { searchText, setSearchText, handleSubmit: handleSearchSubmit } =
@@ -54,6 +54,28 @@ const HeaderTwo = ({ style_2 = false }) => {
   });
 
   /* ------------------------------------------------------------------ */
+  /*  (2) Social Links from API                                          */
+  /* ------------------------------------------------------------------ */
+  const [socialLinks, setSocialLinks] = useState<any>({});
+
+  useEffect(() => {
+    const fetchSocials = async () => {
+      try {
+        const res = await fetch('/api/socials'); // 🔥 API endpoint
+        if (res.ok) {
+          const data = await res.json();
+          setSocialLinks(data);
+        } else {
+          console.error('Failed to fetch socials');
+        }
+      } catch (error) {
+        console.error('Error fetching socials:', error);
+      }
+    };
+    fetchSocials();
+  }, []);
+
+  /* ------------------------------------------------------------------ */
   /*  RENDER                                                            */
   /* ------------------------------------------------------------------ */
   return (
@@ -72,22 +94,22 @@ const HeaderTwo = ({ style_2 = false }) => {
                   <div className="tp-header-info d-flex align-items-center flex-wrap">
                     <div className="tp-header-info-item social-icons d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2">
                       <span className="tp-social-icons">
-                        <a href="#" aria-label="Facebook">
+                        <a href={socialLinks.facebook || '#'} target="_blank" aria-label="Facebook">
                           <FaFacebookF />
                         </a>
-                        <a href="#" aria-label="Instagram">
+                        <a href={socialLinks.instagram || '#'} target="_blank" aria-label="Instagram">
                           <FaInstagram />
                         </a>
-                        <a href="#" aria-label="YouTube">
+                        <a href={socialLinks.youtube || '#'} target="_blank" aria-label="YouTube">
                           <FaYoutube />
                         </a>
-                        <a href="#" aria-label="LinkedIn">
+                        <a href={socialLinks.linkedin || '#'} target="_blank" aria-label="LinkedIn">
                           <FaLinkedinIn />
                         </a>
-                        <a href="#" aria-label="WhatsApp">
+                        <a href={socialLinks.whatsapp || '#'} target="_blank" aria-label="WhatsApp">
                           <FaWhatsapp />
                         </a>
-                        <a href="#" aria-label="Twitter">
+                        <a href={socialLinks.twitter || '#'} target="_blank" aria-label="Twitter">
                           <FaTwitter />
                         </a>
                       </span>
@@ -119,7 +141,7 @@ const HeaderTwo = ({ style_2 = false }) => {
             <div className="container">
               <div className="tp-mega-menu-wrapper p-relative">
                 <div className="row align-items-center">
-                  {/* ─────────────–– logo ───────────── */}
+                  {/* logo */}
                   <div className="col-6 col-sm-4 col-md-4 col-lg-3 col-xl-2">
                     <div className="logo d-flex align-items-center" style={{ gap: '12px' }}>
                       <Link href="/" className="d-flex align-items-center" style={{ gap: '12px' }}>
@@ -141,7 +163,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                     </div>
                   </div>
 
-                  {/* ─────────────–– menu ───────────── */}
+                  {/* menu */}
                   <div className="d-none d-xl-block col-xl-5">
                     <div className="main-menu menu-style-2">
                       <nav className="tp-main-menu-content">
@@ -150,7 +172,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                     </div>
                   </div>
 
-                  {/* ─────────────–– right-side icons ───────────── */}
+                  {/* right-side icons */}
                   <div className="col-6 col-sm-8 col-md-8 col-lg-9 col-xl-5">
                     <div className="tp-header-bottom-right d-flex align-items-center justify-content-end">
                       <div className="tp-header-search-2 d-none d-sm-block me-3">
@@ -199,7 +221,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                       </div>
                     </div>
                   </div>
-                  {/* ────────────────────────────────────────────── */}
+                  {/* end */}
                 </div>
               </div>
             </div>
