@@ -2,7 +2,7 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { useSelector } from 'react-redux';
-import WishlistItem from '@/components/wishlist/WishlistItem';
+import WishlistItem from '@/components/cart-wishlist/wishlist-item';
 
 const WishlistPage = () => {
   const { wishlist_products = [] } = useSelector((s) => s.wishlist) || {};
