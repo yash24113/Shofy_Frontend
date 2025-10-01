@@ -31,7 +31,7 @@ import { FiPhone, FiMenu } from 'react-icons/fi';
 const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
-  const { wishlist } = useSelector((state: any) => state.wishlist);
+  const { wishlist } = useSelector(state => state.wishlist);
   const { quantity } = useCartInfo();
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
   const { searchText, setSearchText, handleSubmit: handleSearchSubmit } =
@@ -56,7 +56,7 @@ const HeaderTwo = ({ style_2 = false }) => {
   /* ------------------------------------------------------------------ */
   /*  (2) Social Links from API                                          */
   /* ------------------------------------------------------------------ */
-  const [socialLinks, setSocialLinks] = useState<any>({});
+  const [socialLinks, setSocialLinks] = useState({});
 
   useEffect(() => {
     const fetchSocials = async () => {
