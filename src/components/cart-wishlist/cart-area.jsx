@@ -53,28 +53,28 @@ const CartArea = () => {
 
                 {/* Bottom actions row */}
                 <div className="tp-cart-bottom">
-                  <div className="row align-items-end">
+                  <div className="row align-items-end justify-content-between g-3">
                     {/* LEFT: Add Product */}
-                    <div className="col-xl-6 col-md-8">
+                    <div className="col-md-6">
                       <div className="tp-cart-actions-left">
                         <Link
                           href="/shop"
-                          className="tp-cart-add-btn btn-pressable"
+                          className="btn-base btn-primary btn-pressable"
                           title="Browse products"
                         >
-                          <span className="icon"><Plus /></span>
+                          <span className="btn-icon"><Plus /></span>
                           <span>Add Product</span>
                         </Link>
                       </div>
                     </div>
 
                     {/* RIGHT: Clear Cart */}
-                    <div className="col-xl-6 col-md-4">
-                      <div className="tp-cart-update text-md-end mr-30">
+                    <div className="col-md-6">
+                      <div className="tp-cart-update text-md-end">
                         <button
                           onClick={() => dispatch(clearCart())}
                           type="button"
-                          className="tp-cart-update-btn btn-pressable"
+                          className="btn-base btn-outline btn-pressable"
                           title="Remove all items from cart"
                         >
                           Clear Cart
@@ -94,26 +94,24 @@ const CartArea = () => {
         </div>
       </section>
 
-      {/* Internal styles for the new Add Product button */}
+      {/* Internal styles for Add Product & Clear Cart buttons */}
       <style jsx>{`
-        .tp-cart-actions-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding-left: 6px;
-        }
-
-        .btn-pressable {
+        /* Shared base button */
+        .btn-base {
           position: relative;
           display: inline-flex;
           align-items: center;
-          gap: 8px;
-          padding: 10px 16px;
+          gap: 10px;
+          min-height: 44px;
+          padding: 10px 18px;
           border-radius: 12px;
           font-weight: 600;
-          white-space: nowrap;
-          transform: translateZ(0);
-          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+          font-size: 15px;
+          line-height: 1;
+          text-decoration: none;
+          cursor: pointer;
+          user-select: none;
+          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
         }
         .btn-pressable:hover {
           transform: translateY(-1px);
@@ -123,39 +121,59 @@ const CartArea = () => {
           transform: translateY(0);
           box-shadow: 0 3px 10px rgba(2, 132, 199, 0.2);
         }
-
-        /* Primary gradient for Add Product */
-        .tp-cart-add-btn {
-          color: #fff;
-          background: linear-gradient(180deg, #2ea0ff 0%, #1670ff 100%);
-          border: none;
-          text-decoration: none;
+        .btn-pressable:focus-visible {
+          outline: 0;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45);
         }
-        .tp-cart-add-btn:hover {
-          background: linear-gradient(180deg, #4eb0ff 0%, #2a7dff 100%);
-        }
-        .tp-cart-add-btn .icon {
+        .btn-icon {
           display: inline-flex;
           align-items: center;
           line-height: 0;
         }
 
-        /* Keep Clear Cart visual consistent */
-        :global(.tp-cart-update-btn) {
+        /* Primary (Add Product) */
+        .btn-primary {
+          color: #fff;
+          border: none;
+          background: linear-gradient(180deg, #2ea0ff 0%, #1670ff 100%);
+        }
+        .btn-primary:hover {
+          background: linear-gradient(180deg, #4eb0ff 0%, #2a7dff 100%);
+        }
+        .btn-primary:active {
+          background: linear-gradient(180deg, #2a7dff 0%, #165cff 100%);
+        }
+
+        /* Outline (Clear Cart) */
+        .btn-outline {
           color: #374151;
           background: #fff;
           border: 1px solid #e5e7eb;
-          padding: 10px 16px;
-          border-radius: 12px;
         }
-        :global(.tp-cart-update-btn:hover) {
+        .btn-outline:hover {
           background: #f9fafb;
+          border-color: #d1d5db;
+        }
+        .btn-outline:active {
+          background: #f3f4f6;
+          border-color: #cbd5e1;
+        }
+
+        /* Layout helpers */
+        .tp-cart-actions-left {
+          display: flex;
+          align-items: center;
+        }
+        .tp-cart-update {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
         }
 
         @media (max-width: 640px) {
-          .tp-cart-actions-left {
-            padding-left: 0;
-            margin-bottom: 12px;
+          .tp-cart-actions-left,
+          .tp-cart-update {
+            justify-content: flex-start;
           }
         }
       `}</style>
