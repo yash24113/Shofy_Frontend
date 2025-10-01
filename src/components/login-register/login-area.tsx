@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import Link from 'next/link';
-import styles from './AuthArea.module.css';
+import styles from '../../components/auth/AuthArea.module.css'
 
 /* keep using your existing login form if present */
 import LoginForm from '../forms/login-form';
