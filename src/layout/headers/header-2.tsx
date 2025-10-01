@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useDispatch, useSelector } from 'react-redux';
 import Link from 'next/link';
 import Menus from './header-com/menus';
-import logo from '@assets/img/logo/my_logo.png';
+import localLogo from '@assets/img/logo/my_logo.png';
 import useSticky from '@/hooks/use-sticky';
 import useCartInfo from '@/hooks/use-cart-info';
 import { openCartMini } from '@/redux/features/cartSlice';
@@ -28,17 +28,41 @@ import {
 } from 'react-icons/fa';
 import { FiPhone, FiMenu } from 'react-icons/fi';
 
-const HeaderTwo = ({ style_2 = false }) => {
+type OfficeInfo = {
+  companyName?: string;
+  companyPhone1?: string;
+  companyPhone2?: string;
+  companyEmail?: string;
+  companyAddress?: string;
+  companyLanguages?: string[];
+  companyFoundingDate?: string;
+  companyEmployeeRange?: string;
+  companyAwards?: string;
+  whatsappNumber?: string;
+  gaId?: string;
+  clarityId?: string;
+  companyLogoUrl?: string;
+  facebook?: string;
+  instagram?: string;
+  linkedin?: string;
+  twitter?: string;
+  youtube?: string;
+};
+
+const sanitizePhone = (v?: string) =>
+  (v || '').replace(/[^\d+]/g, ''); // keep digits and leading + t
+
+const HeaderTwo = ({ style_2 = false }: { style_2?: boolean }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
-  const { wishlist } = useSelector(state => state.wishlist);
+  const { wishlist } = useSelector((state: any) => state.wishlist);
   const { quantity } = useCartInfo();
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
   const { searchText, setSearchText, handleSubmit: handleSearchSubmit } =
     useSearchFormSubmit();
 
   /* ------------------------------------------------------------------ */
-  /*  (1) form-validation schema                                        */
+  /*  (1) form-validation schema (kept as-is)                           */
   /* ------------------------------------------------------------------ */
   const schema = Yup.object().shape({
     name: Yup.string().required('Name is required'),
@@ -54,26 +78,74 @@ const HeaderTwo = ({ style_2 = false }) => {
   });
 
   /* ------------------------------------------------------------------ */
-  /*  (2) Social Links from API                                          */
+  /*  (2) Office / Social info from API (public fields only)            */
   /* ------------------------------------------------------------------ */
-  const [socialLinks, setSocialLinks] = useState({});
+  const [info, setInfo] = useState<OfficeInfo>({});
+  const [loadingInfo, setLoadingInfo] = useState<boolean>(false);
 
   useEffect(() => {
-    const fetchSocials = async () => {
+    const controller = new AbortController();
+
+    const fetchOfficeInfo = async () => {
       try {
-        const res = await fetch('https://test.amrita-fashions.com/landing/officeinformation'); // 🔥 API endpoint
-        if (res.ok) {
-          const data = await res.json();
-          setSocialLinks(data);
-        } else {
-          console.error('Failed to fetch socials');
+        setLoadingInfo(true);
+        const res = await fetch(
+          // You can move this to an env var: process.env.NEXT_PUBLIC_OFFICEINFO_URL
+          'https://test.amrita-fashions.com/landing/officeinformation',
+          { signal: controller.signal, cache: 'no-store' }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+
+        // Your sample structure: { success, data: [ {...} ] }
+        const first: any =
+          json && Array.isArray(json.data) && json.data.length > 0
+            ? json.data[0]
+            : {};
+
+        // Extract ONLY safe/public fields (skip tokens/keys)
+        const publicInfo: OfficeInfo = {
+          companyName: first.companyName,
+          companyPhone1: first.companyPhone1,
+          companyPhone2: first.companyPhone2,
+          companyEmail: first.companyEmail,
+          companyAddress: first.companyAddress,
+          companyLanguages: first.companyLanguages,
+          companyFoundingDate: first.companyFoundingDate,
+          companyEmployeeRange: first.companyEmployeeRange,
+          companyAwards: first.companyAwards,
+          whatsappNumber: first.whatsappNumber,
+          gaId: first.gaId,
+          clarityId: first.clarityId,
+          companyLogoUrl: first.companyLogoUrl,
+          facebook: first.facebook,
+          instagram: first.instagram,
+          linkedin: first.linkedin,
+          twitter: first.twitter,
+          youtube: first.youtube,
+        };
+
+        setInfo(publicInfo);
+      } catch (err) {
+        if ((err as any)?.name !== 'AbortError') {
+          console.error('Office info fetch failed:', err);
         }
-      } catch (error) {
-        console.error('Error fetching socials:', error);
+      } finally {
+        setLoadingInfo(false);
       }
     };
-    fetchSocials();
+
+    fetchOfficeInfo();
+    return () => controller.abort();
   }, []);
+
+  const phonePrimary = sanitizePhone(info.companyPhone1) || '919925155141';
+  const phoneDisplay = info.companyPhone1 || '+(91) 9925155141';
+  const whatsappDigits = sanitizePhone(info.whatsappNumber) || phonePrimary;
+  const waLink = `https://wa.me/${whatsappDigits}`;
+
+  const logoSrc = info.companyLogoUrl || localLogo;
+  const companyAlt = info.companyName || 'Company Logo';
 
   /* ------------------------------------------------------------------ */
   /*  RENDER                                                            */
@@ -94,35 +166,53 @@ const HeaderTwo = ({ style_2 = false }) => {
                   <div className="tp-header-info d-flex align-items-center flex-wrap">
                     <div className="tp-header-info-item social-icons d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2">
                       <span className="tp-social-icons">
-                        <a href={socialLinks.facebook || '#'} target="_blank" aria-label="Facebook">
-                          <FaFacebookF />
-                        </a>
-                        <a href={socialLinks.instagram || '#'} target="_blank" aria-label="Instagram">
-                          <FaInstagram />
-                        </a>
-                        <a href={socialLinks.youtube || '#'} target="_blank" aria-label="YouTube">
-                          <FaYoutube />
-                        </a>
-                        <a href={socialLinks.linkedin || '#'} target="_blank" aria-label="LinkedIn">
-                          <FaLinkedinIn />
-                        </a>
-                        <a href={socialLinks.whatsapp || '#'} target="_blank" aria-label="WhatsApp">
-                          <FaWhatsapp />
-                        </a>
-                        <a href={socialLinks.twitter || '#'} target="_blank" aria-label="Twitter">
-                          <FaTwitter />
-                        </a>
+                        {info.facebook && (
+                          <a href={info.facebook} target="_blank" rel="noreferrer" aria-label="Facebook">
+                            <FaFacebookF />
+                          </a>
+                        )}
+                        {info.instagram && (
+                          <a href={info.instagram} target="_blank" rel="noreferrer" aria-label="Instagram">
+                            <FaInstagram />
+                          </a>
+                        )}
+                        {info.youtube && (
+                          <a href={info.youtube} target="_blank" rel="noreferrer" aria-label="YouTube">
+                            <FaYoutube />
+                          </a>
+                        )}
+                        {info.linkedin && (
+                          <a href={info.linkedin} target="_blank" rel="noreferrer" aria-label="LinkedIn">
+                            <FaLinkedinIn />
+                          </a>
+                        )}
+                        {/* WhatsApp from number */}
+                        {whatsappDigits && (
+                          <a href={waLink} target="_blank" rel="noreferrer" aria-label="WhatsApp">
+                            <FaWhatsapp />
+                          </a>
+                        )}
+                        {info.twitter && (
+                          <a href={info.twitter} target="_blank" rel="noreferrer" aria-label="Twitter/X">
+                            <FaTwitter />
+                          </a>
+                        )}
                       </span>
-                      <a href="tel:+919925155141" className="mobile-phone d-md-none">
-                        <FiPhone className="phone-icon" /> +(91) 9925155141
+
+                      {/* Mobile phone (visible on md-) */}
+                      <a href={`tel:${phonePrimary}`} className="mobile-phone d-md-none">
+                        <FiPhone className="phone-icon" /> {phoneDisplay}
                       </a>
                     </div>
+
+                    {/* Desktop phone */}
                     <div className="tp-header-info-item phone-info d-none d-md-block">
-                      <a href="tel:+919925155141" className="desktop-phone">
-                        <FiPhone className="phone-icon" /> +(91) 9925155141
+                      <a href={`tel:${phonePrimary}`} className="desktop-phone">
+                        <FiPhone className="phone-icon" /> {phoneDisplay}
                       </a>
                     </div>
                   </div>
+
                   <div className="tp-header-top-right tp-header-top-black d-flex align-items-center justify-content-end">
                     <HeaderTopRight />
                   </div>
@@ -134,9 +224,7 @@ const HeaderTwo = ({ style_2 = false }) => {
           {/* Header Bottom */}
           <div
             id="header-sticky"
-            className={`tp-header-bottom-2 tp-header-sticky ${
-              sticky ? 'header-sticky' : ''
-            }`}
+            className={`tp-header-bottom-2 tp-header-sticky ${sticky ? 'header-sticky' : ''}`}
           >
             <div className="container">
               <div className="tp-mega-menu-wrapper p-relative">
@@ -146,17 +234,12 @@ const HeaderTwo = ({ style_2 = false }) => {
                     <div className="logo d-flex align-items-center" style={{ gap: '12px' }}>
                       <Link href="/" className="d-flex align-items-center" style={{ gap: '12px' }}>
                         <Image
-                          src={logo}
-                          alt="logo"
-                          width={120}
-                          height={40}
-                          style={{
-                            height: 'auto',
-                            width: 'auto',
-                            maxWidth: '120px',
-                            maxHeight: '40px',
-                          }}
-                          sizes="(max-width: 600px) 100px, 120px"
+                          src={logoSrc as any}
+                          alt={companyAlt}
+                          width={140}
+                          height={44}
+                          style={{ height: 'auto', width: 'auto', maxWidth: '140px', maxHeight: '44px' }}
+                          sizes="(max-width: 600px) 110px, 140px"
                           priority
                         />
                       </Link>
@@ -182,38 +265,45 @@ const HeaderTwo = ({ style_2 = false }) => {
                             value={searchText}
                             type="text"
                             placeholder="Search for Products..."
+                            aria-label="Search products"
                           />
-                          <button type="submit">
+                          <button type="submit" aria-label="Search">
                             <Search />
                           </button>
                         </form>
                       </div>
+
                       <div className="tp-header-action d-flex align-items-center">
                         <div className="tp-header-action-item d-none d-lg-block me-2">
-                          <Link href="/login" className="tp-header-action-btn">
+                          <Link href="/login" className="tp-header-action-btn" aria-label="Account">
                             <FaUser />
                           </Link>
                         </div>
+
                         <div className="tp-header-action-item d-none d-lg-block me-2">
-                          <Link href="/wishlist" className="tp-header-action-btn">
+                          <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
                             <FaHeart />
                             <span className="tp-header-action-badge">{wishlist.length}</span>
                           </Link>
                         </div>
+
                         <div className="tp-header-action-item me-2">
                           <button
                             onClick={() => dispatch(openCartMini())}
                             className="tp-header-action-btn cartmini-open-btn"
+                            aria-label="Open cart"
                           >
                             <CartTwo />
                             <span className="tp-header-action-badge">{quantity}</span>
                           </button>
                         </div>
+
                         <div className="tp-header-action-item tp-header-hamburger d-xl-none">
                           <button
                             onClick={() => setIsCanvasOpen(true)}
                             type="button"
                             className="tp-offcanvas-open-btn"
+                            aria-label="Open menu"
                           >
                             <FiMenu />
                           </button>
