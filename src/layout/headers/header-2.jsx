@@ -61,7 +61,7 @@ const HeaderTwo = ({ style_2 = false }) => {
   useEffect(() => {
     const fetchSocials = async () => {
       try {
-        const res = await fetch('/api/socials'); // 🔥 API endpoint
+        const res = await fetch('https://test.amrita-fashions.com/landing/officeinformation'); // 🔥 API endpoint
         if (res.ok) {
           const data = await res.json();
           setSocialLinks(data);
