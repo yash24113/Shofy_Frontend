@@ -72,7 +72,7 @@ const WishlistItem = ({ product }) => {
         </td>
 
         {/* quantity */}
-        <td className="tp-cart-quantity wishlist-cell">
+        {/* <td className="tp-cart-quantity wishlist-cell">
           <div className="tp-product-quantity wishlist-qty">
             <button
               onClick={() => handleDecrement(product)}
@@ -102,7 +102,7 @@ const WishlistItem = ({ product }) => {
               <Plus />
             </button>
           </div>
-        </td>
+        </td> */}
 
         {/* add to cart */}
         <td className="tp-cart-add-to-cart wishlist-cell">
