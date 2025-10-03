@@ -40,51 +40,70 @@ const HeaderTwo = ({ style_2 = false }) => {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // close dropdown on outside click / ESC
+  // Close dropdown on outside click / touch / ESC / scroll / resize / tab hide
   useEffect(() => {
-    if (!userOpen) return;
-    const onDoc = (e) => {
+    const close = () => setUserOpen(false);
+
+    const onPointer = (e) => {
+      // if click/touch happened outside both the button and the menu -> close
+      const btn = userBtnRef.current;
+      const menu = userMenuRef.current;
+      const target = e.target;
       if (
-        userMenuRef.current &&
-        !userMenuRef.current.contains(e.target) &&
-        userBtnRef.current &&
-        !userBtnRef.current.contains(e.target)
-      ) {
-        setUserOpen(false);
-      }
+        btn && btn.contains(target)
+      ) return;
+      if (
+        menu && menu.contains(target)
+      ) return;
+      close();
     };
-    const onEsc = (e) => e.key === 'Escape' && setUserOpen(false);
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onEsc);
+
+    const onEsc = (e) => { if (e.key === 'Escape') close(); };
+    const onScroll = () => close();
+    const onResize = () => close();
+    const onVisibility = () => { if (document.visibilityState === 'hidden') close(); };
+
+    if (userOpen) {
+      // capture phase helps catch events before they bubble into React portals
+      document.addEventListener('mousedown', onPointer, true);
+      document.addEventListener('touchstart', onPointer, true);
+      document.addEventListener('keydown', onEsc);
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onResize);
+      document.addEventListener('visibilitychange', onVisibility);
+    }
     return () => {
-      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('mousedown', onPointer, true);
+      document.removeEventListener('touchstart', onPointer, true);
       document.removeEventListener('keydown', onEsc);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [userOpen]);
 
- const handleLogout = () => {
-  try {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('sessionId');
-      try {
-        import('js-cookie')
-          .then((Cookies) => Cookies.default.remove('userInfo'))
-          .catch((err) => {
-            console.error("Failed to remove userInfo cookie:", err);
-          });
-      } catch (err) {
-        console.error("Error importing js-cookie:", err);
+  const handleLogout = () => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('sessionId');
+        try {
+          import('js-cookie')
+            .then((Cookies) => Cookies.default.remove('userInfo'))
+            .catch((err) => {
+              console.error("Failed to remove userInfo cookie:", err);
+            });
+        } catch (err) {
+          console.error("Error importing js-cookie:", err);
+        }
+      }
+    } finally {
+      setHasSession(false);
+      setUserOpen(false);
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
       }
     }
-  } finally {
-    setHasSession(false);
-    setUserOpen(false);
-    if (typeof window !== 'undefined') {
-      window.location.href = '/';
-    }
-  }
-};
-
+  };
 
   return (
     <>
@@ -279,7 +298,6 @@ const HeaderTwo = ({ style_2 = false }) => {
           box-shadow:-2px -2px 6px rgba(0,0,0,.05);
         }
 
-        /* Make the content a vertical list with gaps */
         .user-menu-inner{
           display:flex;
           flex-direction:column;
@@ -287,7 +305,6 @@ const HeaderTwo = ({ style_2 = false }) => {
           padding:8px;
         }
 
-        /* Force block-level row and spacing so items never collapse inline */
         .user-item{
           display:block !important;
           width:100%;
@@ -325,7 +342,6 @@ const HeaderTwo = ({ style_2 = false }) => {
           to{   transform:translateY(0);    opacity:1; }
         }
 
-        /* Mobile tweaks */
         @media (max-width:480px){
           .user-menu-dropdown{ min-width:210px; right:-8px; }
           .user-menu-dropdown::before{ right:24px; }
