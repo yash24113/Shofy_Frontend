@@ -12,8 +12,9 @@ import BestSellerProducts from '@/components/products/fashion/best-seller-produc
 import FashionTestimonial from '@/components/testimonial/fashion-testimonial';
 import BlogArea from '@/components/blog/fashion/blog-area';
 import FeatureAreaTwo from '@/components/features/feature-area-2';
-import { FiMessageCircle } from 'react-icons/fi';
-import { FaWhatsapp, FaFacebookF, FaInstagram, FaLinkedinIn, FaTwitter, FaYoutube, FaTelegramPlane } from 'react-icons/fa';
+import { FiMessageCircle, FiShare2 } from 'react-icons/fi';
+import { FaWhatsapp, FaFacebookF, FaInstagram, FaLinkedinIn, FaYoutube } from 'react-icons/fa';
+import { FaXTwitter } from 'react-icons/fa6';
 import { MdEmail } from 'react-icons/md';
 import Footer from '@/layout/footers/footer';
 import styles from './FloatingButtons.module.scss';
@@ -23,7 +24,7 @@ export default function HomePageTwo() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({ name: '', phone: '', help: '', email: '', location: '' });
 
-  // NEW: social share toggle state
+  // Sticky social toggle state
   const [socialOpen, setSocialOpen] = useState(false);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -152,16 +153,13 @@ export default function HomePageTwo() {
     }
   };
 
-  // Social links (replace with your real URLs)
+  // Social links (order: facebook, instagram, youtube, x/twitter, linkedin)
   const socialLinks = [
-    { id: 'whats', icon: <FaWhatsapp />, color: '#25D366', href: 'https://wa.me/919999999999' },
-    { id: 'fb',    icon: <FaFacebookF />, color: '#1877F2', href: 'https://facebook.com' },
-    { id: 'ig',    icon: <FaInstagram />, color: '#E1306C', href: 'https://instagram.com' },
-    { id: 'ln',    icon: <FaLinkedinIn />, color: '#0A66C2', href: 'https://linkedin.com' },
-    { id: 'tw',    icon: <FaTwitter />, color: '#1DA1F2', href: 'https://twitter.com' },
-    { id: 'yt',    icon: <FaYoutube />, color: '#FF0000', href: 'https://youtube.com' },
-    { id: 'tg',    icon: <FaTelegramPlane />, color: '#26A5E4', href: 'https://t.me' },
-    { id: 'mail',  icon: <MdEmail />, color: '#EA4335', href: 'mailto:info@amritaglobal.com' },
+    { id: 'fb',   icon: <FaFacebookF />, color: '#1877F2', href: 'https://facebook.com' },
+    { id: 'ig',   icon: <FaInstagram />, color: '#E1306C', href: 'https://instagram.com' },
+    { id: 'yt',   icon: <FaYoutube />,   color: '#FF0000', href: 'https://youtube.com' },
+    { id: 'tw',   icon: <FaXTwitter />,  color: '#000000', href: 'https://twitter.com' },
+    { id: 'ln',   icon: <FaLinkedinIn />,color: '#0A66C2', href: 'https://linkedin.com' },
   ];
 
   return (
@@ -233,16 +231,14 @@ export default function HomePageTwo() {
 
       {/* ===== Right-side Center Sticky Social Share ===== */}
       <div id="social-share-root" className="social-root">
-        {/* Toggle Button */}
+        {/* Toggle Button (Share icon) */}
         <button
           id="social-toggle"
           className={`social-toggle ${socialOpen ? 'open' : ''}`}
           aria-label="Share"
           onClick={() => setSocialOpen((v) => !v)}
         >
-          <span className="dot" />
-          <span className="dot" />
-          <span className="dot" />
+          <FiShare2 size={22} />
         </button>
 
         {/* Radial Items */}
@@ -259,7 +255,7 @@ export default function HomePageTwo() {
 
       <Footer />
 
-      {/* Page-level styles for the social menu & responsive chat bubble */}
+      {/* Styles: sticky social menu + animations + responsive chat bubble */}
       <style jsx>{`
         .social-root {
           position: fixed;
@@ -277,14 +273,14 @@ export default function HomePageTwo() {
           position: absolute;
           right: 0;
           top: 50%;
-          transform: translateY(-50%);
+          transform: translateY(-50%) rotate(0deg);
           width: 56px;
           height: 56px;
           border-radius: 50%;
           border: 0;
-          background: #fff;
-          color: #111827;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+          background: #111827;
+          color: #fff;
+          box-shadow: 0 12px 28px rgba(0,0,0,0.25);
           cursor: pointer;
           display: inline-flex;
           align-items: center;
@@ -293,17 +289,12 @@ export default function HomePageTwo() {
         }
         .social-toggle:hover {
           transform: translateY(-50%) scale(1.04);
-          box-shadow: 0 14px 28px rgba(0,0,0,0.18);
+          box-shadow: 0 16px 32px rgba(0,0,0,0.28);
         }
         .social-toggle.open {
           background: #60a5fa;
           color: #0b1b2a;
-        }
-        .social-toggle .dot {
-          width: 6px; height: 6px; border-radius: 50%;
-          background: currentColor;
-          margin: 0 2px;
-          display: inline-block;
+          transform: translateY(-50%) rotate(45deg) scale(1.02);
         }
 
         .social-items {
@@ -319,7 +310,7 @@ export default function HomePageTwo() {
         }
 
         .social-items li {
-          --size: 46px;
+          --size: 48px;
           position: absolute;
           width: var(--size);
           height: var(--size);
@@ -328,24 +319,30 @@ export default function HomePageTwo() {
           place-items: center;
           background: #fff;
           color: #111827;
-          box-shadow: 0 10px 24px rgba(0,0,0,0.15);
-          transition: transform 0.5s ease, opacity 0.4s ease;
+          box-shadow: 0 12px 28px rgba(0,0,0,0.18);
           opacity: 0;
-          transform: translate(0,0) scale(0.5);
+          transform: translate(0,0) scale(0.6);
+          transition: transform 560ms cubic-bezier(.22,.8,.27,1), opacity 420ms ease;
         }
+
+        /* Staggered animation delays for a \"magic\" pop */
+        .social-items li:nth-child(1) { transition-delay: 40ms; }
+        .social-items li:nth-child(2) { transition-delay: 80ms; }
+        .social-items li:nth-child(3) { transition-delay: 120ms; }
+        .social-items li:nth-child(4) { transition-delay: 160ms; }
+        .social-items li:nth-child(5) { transition-delay: 200ms; }
+
         .social-items.show li {
           opacity: 1;
           transform: var(--pos, translate(0,0)) scale(1);
         }
 
-        .social-items.show li:nth-child(1) { --pos: translate(-70px, -110px); }
-        .social-items.show li:nth-child(2) { --pos: translate(-120px, -55px); }
-        .social-items.show li:nth-child(3) { --pos: translate(-135px,   5px); }
-        .social-items.show li:nth-child(4) { --pos: translate(-120px,  65px); }
-        .social-items.show li:nth-child(5) { --pos: translate(-70px,  110px); }
-        .social-items.show li:nth-child(6) { --pos: translate(-10px,  135px); }
-        .social-items.show li:nth-child(7) { --pos: translate( 50px,  120px); }
-        .social-items.show li:nth-child(8) { --pos: translate( 95px,   75px); }
+        /* Clockwise arc positions (like your screenshot) */
+        .social-items.show li:nth-child(1) { --pos: translate(-110px, -90px); }
+        .social-items.show li:nth-child(2) { --pos: translate(-145px, -15px); }
+        .social-items.show li:nth-child(3) { --pos: translate(-115px,  65px); }
+        .social-items.show li:nth-child(4) { --pos: translate(-40px,  115px); }
+        .social-items.show li:nth-child(5) { --pos: translate( 30px,   85px); }
 
         .social-items li a {
           width: 100%; height: 100%;
@@ -364,31 +361,19 @@ export default function HomePageTwo() {
           box-shadow: inset 0 0 0 2px var(--clr, #60a5fa);
           opacity: .6;
         }
-        .social-items li svg {
-          font-size: 18px;
-        }
-        .social-items li:hover a {
-          transform: scale(1.08);
-        }
-        .social-items li:hover {
-          box-shadow: 0 14px 28px rgba(0,0,0,0.18);
-        }
+        .social-items li svg { font-size: 18px; }
+        .social-items li:hover a { transform: scale(1.08); }
+        .social-items li:hover { box-shadow: 0 16px 36px rgba(0,0,0,0.22); }
         .social-items li:hover a { color: var(--clr, #0ea5e9); }
 
         @media (max-width: 768px) {
-          .social-root {
-            right: 16px;
-            width: 240px; height: 240px;
-          }
+          .social-root { right: 16px; width: 240px; height: 240px; }
           .social-toggle { width: 52px; height: 52px; }
-          .social-items.show li:nth-child(1) { --pos: translate(-60px, -95px); }
-          .social-items.show li:nth-child(2) { --pos: translate(-105px, -45px); }
-          .social-items.show li:nth-child(3) { --pos: translate(-115px,   0); }
-          .social-items.show li:nth-child(4) { --pos: translate(-100px,  55px); }
-          .social-items.show li:nth-child(5) { --pos: translate(-55px,   95px); }
-          .social-items.show li:nth-child(6) { --pos: translate(-5px,   115px); }
-          .social-items.show li:nth-child(7) { --pos: translate( 40px,  100px); }
-          .social-items.show li:nth-child(8) { --pos: translate( 80px,   60px); }
+          .social-items.show li:nth-child(1) { --pos: translate(-95px, -75px); }
+          .social-items.show li:nth-child(2) { --pos: translate(-120px, -10px); }
+          .social-items.show li:nth-child(3) { --pos: translate(-95px,  55px); }
+          .social-items.show li:nth-child(4) { --pos: translate(-30px,  95px); }
+          .social-items.show li:nth-child(5) { --pos: translate( 26px,  70px); }
         }
 
         @media (max-width: 600px) {
@@ -400,19 +385,11 @@ export default function HomePageTwo() {
             max-width: 98vw !important;
             padding: 10px 6px !important;
           }
-          .chat-input {
-            font-size: 13px !important;
-            padding: 6px 8px !important;
-          }
+          .chat-input { font-size: 13px !important; padding: 6px 8px !important; }
           .chat-submit-btn, .chat-skip-btn, .chat-close-btn {
-            font-size: 13px !important;
-            padding: 6px 10px !important;
-            height: 30px !important;
+            font-size: 13px !important; padding: 6px 10px !important; height: 30px !important;
           }
-          .chat-message.bot-message {
-            font-size: 13px !important;
-            padding: 8px 10px !important;
-          }
+          .chat-message.bot-message { font-size: 13px !important; padding: 8px 10px !important; }
         }
       `}</style>
     </Wrapper>
