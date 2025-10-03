@@ -113,7 +113,7 @@ const WishlistItem = ({ product }) => {
             aria-busy={moving ? "true" : "false"}
             title="Move to Cart"
           >
-            {moving ? "Moving…" : "Moving To Cart"}
+            {moving ? "Moving…" : "Move to Cart"}
           </button>
         </td>
 
