@@ -3,8 +3,14 @@ import { apiSlice } from "@/redux/api/apiSlice";
 import { userLoggedIn } from "./authSlice";
 import Cookies from "js-cookie";
 
-/** tiny helper so we never forget to include the sid */
-const getSessionId = (sid) => sid || Cookies.get("sessionId") || "";
+/** helpers */
+const getSessionId = (sid) => {
+  if (sid) return sid;
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("sessionId") || "";
+  }
+  return "";
+};
 
 export const authApi = apiSlice.injectEndpoints({
   overrideExisting: true,
@@ -37,10 +43,9 @@ export const authApi = apiSlice.injectEndpoints({
     }),
 
     /* ──────────────────────────────────────────
-     * Login / Session (uses sessionId from your response)
+     * Login / Session (store sessionId in localStorage)
      * ────────────────────────────────────────── */
     loginUser: builder.mutation({
-      // Your actual endpoint base: https://test.amrita-fashions.com/shopy/
       query: ({ identifier, password }) => ({
         url: "users/login",
         method: "POST",
@@ -51,9 +56,13 @@ export const authApi = apiSlice.injectEndpoints({
         try {
           const { data } = await queryFulfilled;
           const { user, sessionId } = data || {};
-          if (user && sessionId) {
-            Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 }); // ~12h
-            Cookies.set("sessionId", sessionId, { expires: 0.5 });
+          if (user) {
+            Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 }); // keep user in cookie
+          }
+          if (sessionId && typeof window !== "undefined") {
+            localStorage.setItem("sessionId", sessionId); // store sessionId in localStorage
+          }
+          if (user || sessionId) {
             dispatch(userLoggedIn({ sessionId, user }));
           }
         } catch (err) {
@@ -82,9 +91,13 @@ export const authApi = apiSlice.injectEndpoints({
         try {
           const { data } = await queryFulfilled;
           const { user, sessionId } = data || {};
-          if (user && sessionId) {
+          if (user) {
             Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 });
-            Cookies.set("sessionId", sessionId, { expires: 0.5 });
+          }
+          if (sessionId && typeof window !== "undefined") {
+            localStorage.setItem("sessionId", sessionId);
+          }
+          if (user || sessionId) {
             dispatch(userLoggedIn({ sessionId, user }));
           }
         } catch (err) {
@@ -93,7 +106,7 @@ export const authApi = apiSlice.injectEndpoints({
       },
     }),
 
-    // Fetch session details (tries query param; if your server reads cookie, it still works)
+    // Fetch session details (using sessionId from localStorage)
     getSessionInfo: builder.query({
       query: ({ sessionId } = {}) => {
         const sid = getSessionId(sessionId);
@@ -112,27 +125,28 @@ export const authApi = apiSlice.injectEndpoints({
     }),
 
     /* ──────────────────────────────────────────
-     * LOGOUT using sessionId in BODY (+ query fallback)
+     * LOGOUT using sessionId from localStorage
      * ────────────────────────────────────────── */
     logoutUser: builder.mutation({
-      // Many backends prefer POST for logout; using POST avoids DELETE-body quirks.
       query: ({ sessionId } = {}) => {
         const sid = getSessionId(sessionId);
         return {
-          url: sid ? `users/logout?sessionId=${encodeURIComponent(sid)}` : "users/logout",
-          method: "POST",
+          url: "users/logout",
+          method: "POST", // safer than DELETE (allows body)
           credentials: "include",
-          body: { sessionId: sid }, // send in body as primary signal
+          body: { sessionId: sid },
         };
       },
       async onQueryStarted(arg, { queryFulfilled }) {
         try {
           await queryFulfilled;
         } catch (err) {
-          // even if server says "session not found", clear local state
           console.warn("logoutUser server response:", err?.error || err);
         } finally {
-          Cookies.remove("sessionId");
+          // Clear local/session state regardless
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("sessionId");
+          }
           Cookies.remove("userInfo");
         }
       },
