@@ -9,11 +9,10 @@ import { openCartMini } from '@/redux/features/cartSlice';
 import CartMiniSidebar from '@/components/common/cart-mini-sidebar';
 import OffCanvas from '@/components/common/off-canvas';
 import Menus from './header-com/menus';
-import HeaderTopRight from './header-com/header-top-right';
 import { CartTwo, Search } from '@/svg';
 import useSearchFormSubmit from '@/hooks/use-search-form-submit';
 import { FaHeart, FaUser } from 'react-icons/fa';
-import { FiMenu, FiPhone } from 'react-icons/fi';
+import { FiMenu } from 'react-icons/fi';
 
 const sanitizePhone = (v) => (v || '').replace(/[^\d+]/g, '');
 
@@ -38,10 +37,7 @@ const HeaderTwo = ({ style_2 = false }) => {
         typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId')
       );
     check();
-    // react to cross-tab changes too
-    const onStorage = (e) => {
-      if (e.key === 'sessionId') check();
-    };
+    const onStorage = (e) => { if (e.key === 'sessionId') check(); };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
@@ -71,42 +67,27 @@ const HeaderTwo = ({ style_2 = false }) => {
   const handleLogout = () => {
     try {
       if (typeof window !== 'undefined') {
-        // clear local session
         localStorage.removeItem('sessionId');
-        // best effort: also clear optional cookie if your app set it
         try {
-          // dynamic import to avoid bundling if you don't use it elsewhere
-          import('js-cookie').then((Cookies) => {
-            Cookies.default.remove('userInfo');
-          }).catch(() => {});
-        } catch (error) {
-          console.error("Error removing userInfo cookie:", error);
-        }
+          import('js-cookie')
+            .then((Cookies) => Cookies.default.remove('userInfo'))
+            .catch(() => {});
+        } catch {}
       }
     } finally {
       setHasSession(false);
       setUserOpen(false);
-      // optional: call your RTK logout mutation here if you have it
-      // router refresh/redirect:
       if (typeof window !== 'undefined') window.location.href = '/';
     }
   };
 
-  // ---- Company / phone bits you already had (kept minimal) ----
   const phonePrimary = sanitizePhone('+919925155141');
-  const phoneDisplay = '+(91) 9925155141';
 
-  // ---- Render ----
   return (
     <>
       <header>
-        <div
-          className={`tp-header-area tp-header-style-${
-            style_2 ? 'primary' : 'darkRed'
-          } tp-header-height`}
-        >
-          {/* Header Top — HIDDEN as requested */}
-          {/* (Intentionally not rendered) */}
+        <div className={`tp-header-area tp-header-style-${style_2 ? 'primary' : 'darkRed'} tp-header-height`}>
+          {/* Header Top — intentionally hidden */}
 
           {/* Header Bottom */}
           <div
@@ -174,66 +155,52 @@ const HeaderTwo = ({ style_2 = false }) => {
                             <FaUser />
                           </button>
 
-                          {/* Dropdown */}
                           {userOpen && (
-                            <div
-                              ref={userMenuRef}
-                              role="menu"
-                              className="user-menu-dropdown"
-                              style={{
-                                position: 'absolute',
-                                right: 0,
-                                top: 'calc(100% + 10px)',
-                                minWidth: 200,
-                                background: '#fff',
-                                borderRadius: 10,
-                                boxShadow: '0 10px 30px rgba(0,0,0,.12)',
-                                padding: 8,
-                                zIndex: 1000,
-                              }}
-                            >
-                              {hasSession ? (
-                                <>
-                                  <Link className="user-item" href="/profile" role="menuitem" onClick={() => setUserOpen(false)}>
-                                    My Account
-                                  </Link>
-                                  <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
-                                    Wishlist
-                                  </Link>
-                                  <button
-                                    className="user-item"
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setUserOpen(false);
-                                      dispatch(openCartMini());
-                                    }}
-                                  >
-                                    Cart
-                                  </button>
-                                  <div className="user-divider" />
-                                  <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
-                                    Logout
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
-                                    Wishlist
-                                  </Link>
-                                  <Link className="user-item" href="/login" role="menuitem" onClick={() => setUserOpen(false)}>
-                                    Login
-                                  </Link>
-                                  <Link className="user-item" href="/register" role="menuitem" onClick={() => setUserOpen(false)}>
-                                    Sign Up
-                                  </Link>
-                                </>
-                              )}
+                            <div ref={userMenuRef} role="menu" className="user-menu-dropdown">
+                              <div className="user-menu-inner">
+                                {hasSession ? (
+                                  <>
+                                    <Link className="user-item" href="/profile" role="menuitem" onClick={() => setUserOpen(false)}>
+                                      <span>My Account</span>
+                                    </Link>
+                                    <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
+                                      <span>Wishlist</span>
+                                    </Link>
+                                    <button
+                                      className="user-item"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        dispatch(openCartMini());
+                                      }}
+                                    >
+                                      <span>Cart</span>
+                                    </button>
+                                    <div className="user-divider" />
+                                    <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
+                                      <span>Logout</span>
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
+                                      <span>Wishlist</span>
+                                    </Link>
+                                    <Link className="user-item" href="/login" role="menuitem" onClick={() => setUserOpen(false)}>
+                                      <span>Login</span>
+                                    </Link>
+                                    <Link className="user-item" href="/register" role="menuitem" onClick={() => setUserOpen(false)}>
+                                      <span>Sign Up</span>
+                                    </Link>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
 
-                        {/* Wishlist icon (still visible in header bar) */}
+                        {/* Wishlist icon (header) */}
                         <div className="tp-header-action-item d-none d-lg-block me-2">
                           <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
                             <FaHeart />
@@ -282,31 +249,92 @@ const HeaderTwo = ({ style_2 = false }) => {
         categoryType="fashion"
       />
 
-      {/* tiny styles for user dropdown items */}
+      {/* Polished dropdown styles */}
       <style jsx>{`
+        .user-menu-dropdown {
+          position: absolute;
+          right: 0;
+          top: calc(100% + 12px);
+          z-index: 1000;
+          min-width: 220px;
+          background: #ffffff;
+          border-radius: 12px;
+          box-shadow:
+            0 20px 40px rgba(0,0,0,.14),
+            0 2px 6px rgba(0,0,0,.06);
+          overflow: hidden; /* keep rounded corners on focus ring */
+          animation: menuPop .14s ease-out;
+        }
+        .user-menu-dropdown::before {
+          /* caret triangle */
+          content: "";
+          position: absolute;
+          right: 16px;
+          top: -8px;
+          width: 14px;
+          height: 14px;
+          background: #ffffff;
+          transform: rotate(45deg);
+          box-shadow: -2px -2px 6px rgba(0,0,0,.05);
+        }
+        .user-menu-inner {
+          padding: 6px;
+        }
+
         .user-item {
-          display: block;
+          display: flex;
+          align-items: center;
+          gap: 10px;
           width: 100%;
           padding: 10px 12px;
           border-radius: 8px;
           font-size: 14px;
+          line-height: 1.2;
           color: #111827;
           text-decoration: none;
           text-align: left;
           background: transparent;
           border: 0;
           cursor: pointer;
+          outline: none;
+          transition: background .15s ease, color .15s ease, transform .02s ease;
         }
         .user-item:hover {
           background: #f3f4f6;
         }
+        .user-item:focus-visible {
+          background: #eef2ff;
+          box-shadow: 0 0 0 3px rgba(99,102,241,.25) inset;
+        }
+        .user-item:active {
+          transform: scale(.995);
+        }
         .user-item.danger {
           color: #b91c1c;
         }
+        .user-item.danger:hover {
+          background: #fee2e2;
+        }
+
         .user-divider {
           height: 1px;
           background: #e5e7eb;
-          margin: 6px 0;
+          margin: 6px 8px;
+          border-radius: 1px;
+        }
+
+        @keyframes menuPop {
+          from { transform: translateY(-4px); opacity: .0; }
+          to   { transform: translateY(0);    opacity: 1; }
+        }
+
+        /* Small screens: make sure menu doesn't overflow the edge */
+        @media (max-width: 480px) {
+          .user-menu-dropdown {
+            min-width: 200px;
+            right: -8px;
+          }
+          .user-menu-dropdown::before { right: 24px; }
         }
       `}</style>
     </>
