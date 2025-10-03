@@ -28,7 +28,7 @@ const WishlistArea = () => {
                   <table className="table">
                     <thead>
                       <tr>
-                        <th colSpan="2" className="tp-cart-header-product">Product</th>
+                        <th colSpan={2} className="tp-cart-header-product">Product</th>
                         <th className="tp-cart-header-price">Price</th>
                         <th className="tp-cart-header-quantity">Quantity</th>
                         <th>Action</th>
@@ -46,9 +46,9 @@ const WishlistArea = () => {
                 {/* Bottom actions row */}
                 <div className="tp-wishlist-bottom">
                   <div className="row align-items-end justify-content-between g-3">
-                    {/* LEFT: Add Product (to keep shopping) */}
+                    {/* LEFT: Add Product */}
                     <div className="col-md-6">
-                      <div className="wl-actions-left">
+                      <div className="wl-actions-left center-left">
                         <Link
                           href="/shop"
                           className="btn-base btn-primary btn-pressable"
@@ -80,7 +80,7 @@ const WishlistArea = () => {
         </div>
       </section>
 
-      {/* Internal styles for Add Product & Go To Cart buttons */}
+      {/* Internal styles for buttons */}
       <style jsx>{`
         /* Shared base button */
         .btn-base {
@@ -97,7 +97,8 @@ const WishlistArea = () => {
           text-decoration: none;
           cursor: pointer;
           user-select: none;
-          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+          transition: transform 160ms ease, box-shadow 160ms ease,
+            background 160ms ease, border-color 160ms ease, color 160ms ease;
         }
         .btn-pressable:hover {
           transform: translateY(-1px);
@@ -117,17 +118,17 @@ const WishlistArea = () => {
           line-height: 0;
         }
 
-        /* Primary (Add Product) */
+        /* Primary (Add Product) — black base, light-blue hover */
         .btn-primary {
           color: #fff;
           border: none;
-          background: linear-gradient(180deg, #2ea0ff 0%, #1670ff 100%);
+          background: #000;               /* black default */
         }
         .btn-primary:hover {
-          background: linear-gradient(180deg, #4eb0ff 0%, #2a7dff 100%);
+          background: #2ea0ff;            /* light blue on hover */
         }
         .btn-primary:active {
-          background: linear-gradient(180deg, #2a7dff 0%, #165cff 100%);
+          background: #1670ff;            /* slightly deeper blue on press */
         }
 
         /* Outline (Go To Cart) */
@@ -151,14 +152,13 @@ const WishlistArea = () => {
           display: flex;
           align-items: center;
         }
-        .wl-actions-right {
-          justify-content: flex-end;
-        }
+        .wl-actions-right { justify-content: flex-end; }
+
+        /* Center the Add Product button */
+        .center-left { justify-content: center; }
 
         @media (max-width: 640px) {
-          .wl-actions-right {
-            justify-content: flex-start;
-          }
+          .wl-actions-right { justify-content: flex-start; }
         }
       `}</style>
     </>
