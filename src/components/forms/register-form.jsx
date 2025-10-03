@@ -36,7 +36,7 @@ export default function RegisterForm() {
   const onFormSubmit = async (data) => {
     try {
       setEmail(data.email);
-      const res = await fetch(`${API_BASE}/users/send-otp`, {
+      const res = await fetch(`${API_BASE}/users/request-otp`, {
         method: 'POST',
         credentials: 'include',
         headers: {
