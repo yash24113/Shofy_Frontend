@@ -18,7 +18,7 @@ const CartArea = () => {
       <section className="tp-cart-area pb-120">
         <div className="container">
           {cart_products.length === 0 && (
-            <div className="text-center pt-50">
+            <div className="text-center pt-50">   # first image displayed as Thumb line
               <h3>No Cart Items Found</h3>
               <Link href="/shop" className="tp-cart-checkout-btn mt-20">
                 Continue Shopping

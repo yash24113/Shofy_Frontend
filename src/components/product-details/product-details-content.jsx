@@ -15,18 +15,17 @@ export default function ProductDetailsContent({ productItem }) {
     img,
     image1,
     image2,
-    imageURLs,          // optional extra images (merged & deduped)
+    imageURLs,          // optional extra images (merged after the 3 main)
     videoId,            // fallback video url
-    video,              // optional (if present on productItem)
-    videoThumbnail,     // optional (if present on productItem)
+    video,              // optional
+    videoThumbnail,     // optional
     status,
     groupcodeId,
   } = productItem ?? {};
 
-  // Keep a separate active image for DetailsWrapper (right side specs)
+  // active image for the details panel
   const [activeImg, setActiveImg] = useState(img || null);
   useEffect(() => { setActiveImg(img || null); }, [img]);
-
   const handleImageActive = (item) => setActiveImg(item?.img ?? img ?? null);
 
   const {
@@ -51,22 +50,22 @@ export default function ProductDetailsContent({ productItem }) {
             {/* Left: gallery */}
             <div className="col-xl-7 col-lg-6">
               <DetailsThumbWrapper
-                key={_id}                 // ensure re-mount per product
-                /* Default main image will be `img` */
+                key={_id}
+                /* force default main image to be `img` */
                 activeImg={img}
-                /* Left sidebar thumbnails come from these fields in order: img, image1, image2 */
+                /* the 3 primary thumbs in this exact order */
                 img={img}
                 image1={image1}
                 image2={image2}
-                /* Optional video support */
+                /* optional video */
                 video={video}
                 videoThumbnail={videoThumbnail}
-                /* Keep your existing extras */
+                /* extra images merged after the 3 primaries */
+                imageURLs={imageURLs}
                 handleImageActive={handleImageActive}
-                imageURLs={imageURLs}     /* merged & de-duplicated with above */
                 imgWidth={580}
                 imgHeight={670}
-                videoId={videoId}         /* fallback if video not provided above */
+                videoId={videoId}
                 status={status}
               />
             </div>

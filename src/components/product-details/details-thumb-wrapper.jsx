@@ -16,59 +16,78 @@ const processImageUrl = (url) => {
   return `${cleanBaseUrl}/uploads/${cleanPath}`;
 };
 
+/* Dedup while keeping the **first** occurrence */
+const uniqueByUrl = (arr) => {
+  const seen = new Set();
+  return arr.filter((it) => {
+    const key = `${it.type}|${it.img}|${it.video || ''}`;
+    if (!it.img) return false;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 /* ---------------- component ---------------- */
 const DetailsThumbWrapper = ({
-  /** Preferred direct fields */
-  img, image1, image2,            // strings (URLs/paths)
-  video, videoThumbnail,          // optional
+  /** Explicit product fields (preferred) */
+  img, image1, image2,
+  video, videoThumbnail,
 
-  /** Back-compat sources */
-  imageURLs,                      // [{ type:'image'|'video', img:<thumb>, video?:<url> }, ...]
-  apiImages,                      // { img?, image1?, image2?, video?, videoThumbnail? }
+  /** Optional legacy sources (will be merged after the 3 preferred fields) */
+  imageURLs,          // [{ type:'image'|'video', img, video? }]
+  apiImages,          // { img?, image1?, image2?, video?, videoThumbnail? }
 
-  handleImageActive,              // optional callback when user clicks an image thumb
-  activeImg,                      // legacy default image; we now prefer `img` if present
+  handleImageActive,
+  activeImg,          // default large image (we prefer `img` if provided)
   imgWidth = 416,
   imgHeight = 480,
-  videoId = false,                // optional fallback video url
+  videoId = false,
   status,
-  zoomScale = 2.2,                // magnification factor for zoom panel
-  zoomPaneWidth = 620,            // right panel width (px)
-  zoomPaneHeight = 480,           // right panel height (px)
-  lensSize = 140,                 // square lens side in px
+  zoomScale = 2.2,
+  zoomPaneWidth = 620,
+  zoomPaneHeight = 480,
+  lensSize = 140,
   lensBorder = '2px solid rgba(59,130,246,.75)',
   lensBg = 'rgba(255,255,255,.25)',
 }) => {
   const [isVideoActive, setIsVideoActive] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
 
-  /* ---------- Build list from DIRECT props (img, image1, image2, optional video) ---------- */
-  const fromDirect = useMemo(() => {
-    const pics = [img, image1, image2].map(processImageUrl).filter(Boolean);
-    const out = pics.map((p) => ({ type: 'image', img: p }));
+  /* ---------- Build the thumbnail list in EXACT order: img, image1, image2 ---------- */
+  const primaryThumbs = useMemo(() => {
+    const list = [
+      { type: 'image', img: processImageUrl(img) },
+      { type: 'image', img: processImageUrl(image1) },
+      { type: 'image', img: processImageUrl(image2) },
+    ].filter((x) => !!x.img);
+
+    // optional video from explicit fields
     if (video || videoThumbnail) {
       const vUrl = video ? (isRemote(video) ? video : processImageUrl(video)) : null;
-      const poster = processImageUrl(videoThumbnail) || pics[0] || null;
-      if (vUrl || poster) out.push({ type: 'video', img: poster, video: vUrl });
+      const poster = processImageUrl(videoThumbnail) || list[0]?.img || null;
+      if (vUrl || poster) list.push({ type: 'video', img: poster, video: vUrl });
     }
-    return out;
+    return list;
   }, [img, image1, image2, video, videoThumbnail]);
 
-  /* ---------- Build list from apiImages (fallback/merge) ---------- */
-  const fromApiImages = useMemo(() => {
+  /* ---------- Merge optional apiImages and imageURLs AFTER the 3 primaries ---------- */
+  const extrasFromApiImages = useMemo(() => {
     const src = apiImages || {};
-    const pics = [src.img, src.image1, src.image2].map(processImageUrl).filter(Boolean);
-    const out = pics.map((p) => ({ type: 'image', img: p }));
-    if (src.video) {
-      const vUrl = isRemote(src.video) ? src.video : processImageUrl(src.video);
-      const poster = processImageUrl(src.videoThumbnail) || pics[0] || null;
-      out.push({ type: 'video', img: poster, video: vUrl });
+    const pics = [src.img, src.image1, src.image2]
+      .map(processImageUrl)
+      .filter(Boolean)
+      .map((p) => ({ type: 'image', img: p }));
+
+    if (src.video || src.videoThumbnail) {
+      const vUrl = src.video ? (isRemote(src.video) ? src.video : processImageUrl(src.video)) : null;
+      const poster = processImageUrl(src.videoThumbnail) || pics[0]?.img || null;
+      if (vUrl || poster) pics.push({ type: 'video', img: poster, video: vUrl });
     }
-    return out;
+    return pics;
   }, [apiImages]);
 
-  /* ---------- Normalize provided imageURLs prop ---------- */
-  const fromImageURLsProp = useMemo(() => {
+  const extrasFromImageURLs = useMemo(() => {
     const list = Array.isArray(imageURLs) ? imageURLs : [];
     return list
       .map((item) => {
@@ -79,24 +98,17 @@ const DetailsThumbWrapper = ({
           type === 'video'
             ? (isRemote(item.video) ? item.video : processImageUrl(item.video))
             : null;
-        return thumb ? { ...item, type, img: thumb, video: vUrl } : null;
+        return thumb ? { type, img: thumb, video: vUrl } : null;
       })
       .filter(Boolean);
   }, [imageURLs]);
 
-  /* ---------- Merge in order: DIRECT first (img,image1,image2) -> apiImages -> imageURLs ---------- */
   const processedImageURLs = useMemo(() => {
-    const merged = [...fromDirect, ...fromApiImages, ...fromImageURLsProp];
-    const seen = new Set();
-    return merged.filter((it) => {
-      const key = `${it.type}|${it.img}|${it.video || ''}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [fromDirect, fromApiImages, fromImageURLsProp]);
+    // enforce order: img → image1 → image2 → (video) → apiImages → imageURLs
+    return uniqueByUrl([...primaryThumbs, ...extrasFromApiImages, ...extrasFromImageURLs]);
+  }, [primaryThumbs, extrasFromApiImages, extrasFromImageURLs]);
 
-  /* ---------- Default main image: prefer `img` prop, then activeImg, then first image ---------- */
+  /* ---------- Default main image: prefer `img`, then activeImg, then first image ---------- */
   const preferredDefault = useMemo(
     () => processImageUrl(img) || processImageUrl(activeImg) || null,
     [img, activeImg]
@@ -106,25 +118,23 @@ const DetailsThumbWrapper = ({
     return first ? first.img : null;
   }, [processedImageURLs]);
 
-  const defaultMain = useMemo(() => {
-    return preferredDefault || firstImageUrl || (processedImageURLs[0]?.img ?? null);
-  }, [preferredDefault, firstImageUrl, processedImageURLs]);
+  const defaultMain = useMemo(
+    () => preferredDefault || firstImageUrl || processedImageURLs[0]?.img || null,
+    [preferredDefault, firstImageUrl, processedImageURLs]
+  );
 
   const [mainSrc, setMainSrc] = useState(defaultMain);
 
-  // reset on change
   useEffect(() => {
     setMainSrc(defaultMain);
     setIsVideoActive(false);
     setCurrentVideoUrl(null);
   }, [defaultMain]);
 
-  // active thumb highlight
   const isActiveThumb = (item) =>
     (!isVideoActive && item.type === 'image' && item.img === mainSrc) ||
     (isVideoActive && item.type === 'video' && item.video === (currentVideoUrl || videoId));
 
-  // click handlers
   const onThumbClick = (item) => {
     if (item.type === 'video') {
       setIsVideoActive(true);
@@ -144,11 +154,9 @@ const DetailsThumbWrapper = ({
   const [zoomBgPos, setZoomBgPos] = useState('50% 50%');
   const [naturalSize, setNaturalSize] = useState({ w: imgWidth, h: imgHeight });
 
-  // lens
   const [showLens, setShowLens] = useState(false);
-  const [lensPos, setLensPos] = useState({ x: 0, y: 0 }); // top-left of lens (px relative to main container)
+  const [lensPos, setLensPos] = useState({ x: 0, y: 0 });
 
-  // capture natural image size from next/image
   const handleImageLoaded = ({ naturalWidth, naturalHeight }) => {
     setNaturalSize({ w: naturalWidth || imgWidth, h: naturalHeight || imgHeight });
   };
@@ -159,29 +167,23 @@ const DetailsThumbWrapper = ({
       setShowLens(true);
     }
   };
-
   const handleMouseLeave = () => {
     setShowZoom(false);
     setShowLens(false);
   };
-
   const handleMouseMove = (e) => {
     if (!imgWrapRef.current || isVideoActive) return;
-
     const rect = imgWrapRef.current.getBoundingClientRect();
-    const cx = e.clientX - rect.left; // cursor inside container
+    const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
 
-    // lens should be centered at cursor but clamped within container
     const half = lensSize / 2;
-    const lx = Math.max(0, Math.min(rect.width  - lensSize, cx - half));
+    const lx = Math.max(0, Math.min(rect.width - lensSize, cx - half));
     const ly = Math.max(0, Math.min(rect.height - lensSize, cy - half));
     setLensPos({ x: lx, y: ly });
 
-    // relative center of lens for background position (0..1)
     const centerX = (lx + half) / rect.width;
     const centerY = (ly + half) / rect.height;
-
     setZoomBgPos(`${centerX * 100}% ${centerY * 100}%`);
   };
 
@@ -316,7 +318,7 @@ const DetailsThumbWrapper = ({
         .pdw-thumbs-inner {
           display: flex; flex-direction: column; gap: 12px;
           max-height: ${zoomPaneHeight}px;
-          overflow: auto; /* scroll if many images */
+          overflow: auto;
           padding-right: 4px;
         }
         .pdw-thumb {
@@ -349,7 +351,7 @@ const DetailsThumbWrapper = ({
         /* Lens overlay */
         .pdw-lens {
           position: absolute; top: 0; left: 0;
-          pointer-events: none; /* don't block mouse events */
+          pointer-events: none;
           border-radius: 8px;
           box-shadow: inset 0 0 0 1px rgba(255,255,255,.6);
           backdrop-filter: saturate(120%) brightness(105%);
