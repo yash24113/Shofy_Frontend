@@ -51,7 +51,7 @@ const WishlistArea = () => {
                       <div className="wl-actions-left center-left">
                         <Link
                           href="/shop"
-                          className="btn-base btn-primary btn-pressable"
+                          className="add-btn"
                           title="Browse products"
                         >
                           <span className="btn-icon"><Plus /></span>
@@ -81,6 +81,67 @@ const WishlistArea = () => {
       </section>
 
       {/* Internal styles for buttons */}
+      <style jsx>{`
+  /* center the container */
+  .center-left {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* button look */
+  .add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 12px 22px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1;
+    color: #fff;
+
+    background: #000;             /* black base */
+    border: none;
+
+    transition: background 180ms ease, 
+                box-shadow 180ms ease, 
+                transform 120ms ease;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  }
+
+  .add-btn:hover {
+    background: #2ea0ff;          /* light blue hover */
+    box-shadow: 0 10px 28px rgba(46,160,255,0.35);
+    transform: translateY(-1px);
+  }
+
+  .add-btn:active {
+    background: #1670ff;          /* pressed */
+    transform: translateY(0);
+  }
+
+  .add-btn:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(46,160,255,0.45);
+  }
+
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
+  }
+
+  @media (max-width: 640px) {
+    .add-btn {
+      min-height: 44px;
+      padding: 10px 18px;
+      border-radius: 8px;
+    }
+  }
+`}</style>
       <style jsx>{`
         /* Shared base button */
         .btn-base {
