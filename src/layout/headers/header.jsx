@@ -56,7 +56,7 @@ const Header = () => {
                 <div className="col-xl-2 col-lg-2 col-md-4 col-6">
                   <div className="logo d-flex align-items-center" style={{gap: '12px'}}>
                     <Link href="/" className="d-flex align-items-center" style={{gap: '12px'}}>
-                      <Image src={logo} alt="logo" width={120} height={40} priority />
+                      <Image src="https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp" alt="logo" width={120} height={40} priority />
                     </Link>
                   </div>
                 </div>

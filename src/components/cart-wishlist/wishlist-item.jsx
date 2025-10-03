@@ -302,3 +302,6 @@ const WishlistItem = ({ product }) => {
 };
 
 export default WishlistItem;
+
+
+//give fully updated above code including Addtoproduct button css and also display as center   
