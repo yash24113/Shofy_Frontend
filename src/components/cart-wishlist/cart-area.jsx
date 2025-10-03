@@ -54,12 +54,12 @@ const CartArea = () => {
                 {/* Bottom actions row */}
                 <div className="tp-cart-bottom">
                   <div className="row align-items-end justify-content-between g-3">
-                    {/* LEFT: Add Product */}
+                    {/* LEFT: Add Product (inline like screenshot) */}
                     <div className="col-md-6">
                       <div className="tp-cart-actions-left center-left">
                         <Link
                           href="/shop"
-                          className="btn-base btn-primary btn-pressable"
+                          className="btn-inline-add"
                           title="Browse products"
                         >
                           <span className="btn-icon"><Plus /></span>
@@ -94,9 +94,44 @@ const CartArea = () => {
         </div>
       </section>
 
-      {/* Internal styles for Add Product & Clear Cart buttons */}
+      {/* Internal styles */}
       <style jsx>{`
-        /* Shared base button */
+        /* ===== Inline Add Product (like your screenshot) ===== */
+        .btn-inline-add {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 0;
+          min-height: auto;
+          border: 0;
+          background: transparent;
+          text-decoration: none;
+          font-weight: 500;
+          font-size: 16px;
+          color: #374151;               /* neutral gray text */
+          transition: color 150ms ease, text-decoration-color 150ms ease;
+        }
+        .btn-inline-add:hover {
+          color: #0ea5e9;               /* light blue on hover */
+          text-decoration: underline;   /* subtle underline like links */
+        }
+        .btn-inline-add:active {
+          color: #0284c7;
+        }
+        .btn-inline-add:focus-visible {
+          outline: 2px solid rgba(14,165,233,.35);
+          outline-offset: 2px;
+          border-radius: 4px;
+        }
+        .btn-inline-add .btn-icon {
+          display: inline-flex;
+          align-items: center;
+          line-height: 0;
+          font-size: 16px;              /* ensure the plus matches text size */
+          color: inherit;               /* icon follows text color */
+        }
+
+        /* ===== Existing button styles kept for Clear Cart ===== */
         .btn-base {
           position: relative;
           display: inline-flex;
@@ -109,7 +144,7 @@ const CartArea = () => {
           font-size: 15px;
           line-height: 1;
           text-decoration: none;
-          cursor: pointer;
+          cursor: pointer;  
           user-select: none;
           transition: transform 160ms ease, box-shadow 160ms ease,
                       background 160ms ease, border-color 160ms ease, color 160ms ease;
@@ -125,26 +160,6 @@ const CartArea = () => {
         .btn-pressable:focus-visible {
           outline: 0;
           box-shadow: 0 0 0 3px rgba(46, 160, 255, 0.45);
-        }
-        .btn-icon {
-          display: inline-flex;
-          align-items: center;
-          line-height: 0;
-        }
-
-        /* Primary (Add Product) — black base, light-blue hover */
-        .btn-primary {
-          color: #fff;
-          border: none;
-          background: #000;          /* black base */
-          box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-        }
-        .btn-primary:hover {
-          background: #2ea0ff;       /* light blue hover */
-          box-shadow: 0 10px 28px rgba(46,160,255,0.35);
-        }
-        .btn-primary:active {
-          background: #1670ff;       /* pressed */
         }
 
         /* Outline (Clear Cart) */
@@ -168,7 +183,7 @@ const CartArea = () => {
           display: flex;
           align-items: center;
         }
-        /* Center the Add Product button in its column */
+        /* center the inline Add Product link */
         .center-left {
           justify-content: center;
         }
