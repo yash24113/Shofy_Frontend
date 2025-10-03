@@ -155,7 +155,7 @@ const HeaderTwo = ({ style_2 = false }) => {
           } tp-header-height`}
         >
           {/* Header Top */}
-          <div className="tp-header-top-2 p-relative z-index-11 tp-header-top-border mobile-top-header d-none d-lg-block">
+         <div className="tp-header-top-2 p-relative z-index-11 tp-header-top-border mobile-top-header d-none d-lg-block">
             <div className="container">
               <div className="row align-items-center justify-content-between">
                 <div className="col-12 d-flex flex-wrap align-items-center justify-content-between">
@@ -214,7 +214,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                 </div>
               </div>
             </div>
-          </div>
+          </div> 
 
           {/* Header Bottom */}
           <div
