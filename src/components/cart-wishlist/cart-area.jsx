@@ -50,7 +50,7 @@ const CartArea = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {cart_products.map((item: any, i: number) => (
+                      {cart_products.map((item, i) => (
                         <CartItem key={i} product={item} />
                       ))}
                     </tbody>
