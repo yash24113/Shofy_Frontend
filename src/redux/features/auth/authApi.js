@@ -6,7 +6,9 @@ import Cookies from "js-cookie";
 export const authApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    // ─── Registration ──────────────────────────
+    /* ──────────────────────────────────────────
+     * Registration
+     * ────────────────────────────────────────── */
     sendRegistrationOTP: builder.mutation({
       query: (data) => ({
         url: "users/send-otp",
@@ -31,8 +33,12 @@ export const authApi = apiSlice.injectEndpoints({
       },
     }),
 
-    // ─── Login / Session ───────────────────────
+    /* ──────────────────────────────────────────
+     * Login / Session (uses sessionId from your response)
+     * ────────────────────────────────────────── */
     loginUser: builder.mutation({
+      // Your actual endpoint: https://test.amrita-fashions.com/shopy/users/login
+      // apiSlice.baseUrl should already include "/shopy/" root if needed.
       query: ({ identifier, password }) => ({
         url: "users/login",
         method: "POST",
@@ -42,13 +48,21 @@ export const authApi = apiSlice.injectEndpoints({
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
           const { data } = await queryFulfilled;
-          Cookies.set("userInfo", JSON.stringify({ user: data.user }), { expires: 0.5 });
-          dispatch(userLoggedIn({ accessToken: data.token, user: data.user }));
+          // Response sample:
+          // { success, message, user: {...}, sessionId: "..." }
+          const { user, sessionId } = data || {};
+          if (user && sessionId) {
+            Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 }); // 12h
+            Cookies.set("sessionId", sessionId, { expires: 0.5 });
+            // No token in your response — we store sessionId instead
+            dispatch(userLoggedIn({ sessionId, user }));
+          }
         } catch (err) {
           console.error("loginUser error:", err);
         }
       },
     }),
+
     requestLoginOTP: builder.mutation({
       query: ({ email }) => ({
         url: "users/login/otp/request",
@@ -57,6 +71,7 @@ export const authApi = apiSlice.injectEndpoints({
         body: { email },
       }),
     }),
+
     verifyLoginOTP: builder.mutation({
       query: ({ email, otp }) => ({
         url: "users/login/otp/verify",
@@ -67,36 +82,63 @@ export const authApi = apiSlice.injectEndpoints({
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
           const { data } = await queryFulfilled;
-          Cookies.set("userInfo", JSON.stringify({ user: data.user }), { expires: 0.5 });
-          dispatch(userLoggedIn({ accessToken: data.token, user: data.user }));
+          const { user, sessionId } = data || {};
+          if (user && sessionId) {
+            Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 });
+            Cookies.set("sessionId", sessionId, { expires: 0.5 });
+            dispatch(userLoggedIn({ sessionId, user }));
+          }
         } catch (err) {
           console.error("verifyLoginOTP error:", err);
         }
       },
     }),
+
+    // Fetch session details USING sessionId (not userId)
     getSessionInfo: builder.query({
-      query: ({ userId }) => ({
-        url: `users/${userId}/session`,
+      // Adjust the path to match your backend. Common patterns:
+      //   GET users/session/:sessionId
+      //   or GET users/session (reading from cookie)
+      // Below assumes :sessionId path.
+      query: ({ sessionId }) => ({
+        url: `users/session/${sessionId}`,
         credentials: "include",
       }),
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
           const { data } = await queryFulfilled;
-          dispatch(userLoggedIn({ user: data.session.user }));
+          // normalize to { user } if your API wraps it
+          const user = data?.session?.user || data?.user || data;
+          if (user) dispatch(userLoggedIn({ user }));
         } catch (err) {
           console.error("getSessionInfo error:", err);
         }
       },
     }),
+
+    // ✅ LOGOUT via sessionId (NOT userId)
     logoutUser: builder.mutation({
-      query: ({ userId }) => ({
-        url: `users/logout/${userId}`,
+      // Adjust if your backend expects body or different verb.
+      // Here we use DELETE /users/logout/:sessionId based on your requirement.
+      query: ({ sessionId }) => ({
+        url: `users/logout/${sessionId}`,
         method: "DELETE",
-        credentials: "include",
+        credentials: "include", 
       }),
+      async onQueryStarted(arg, { queryFulfilled }) {
+        try {
+          await queryFulfilled;
+        } finally {
+          // Clear client cookies regardless of server response to avoid stale sessions
+          Cookies.remove("sessionId");
+          Cookies.remove("userInfo");
+        }
+      },
     }),
 
-    // ─── Update Profile ────────────────────────
+    /* ──────────────────────────────────────────
+     * Update Profile
+     * ────────────────────────────────────────── */
     updateProfile: builder.mutation({
       query: ({ id, ...data }) => ({
         url: `users/${id}`,
@@ -114,13 +156,11 @@ export const authApi = apiSlice.injectEndpoints({
       },
     }),
 
-    // ───────────────────────────────────────────
-    // ✅ ADD THESE THREE ENDPOINTS
-    // ───────────────────────────────────────────
-
-    // 1) Email verification (your component uses a *Query* hook)
+    /* ──────────────────────────────────────────
+     * Extra auth endpoints you added
+     * ────────────────────────────────────────── */
+    // 1) Email verification (Query hook)
     confirmEmail: builder.query({
-      // adjust URL if your backend uses a different route
       query: (token) => ({
         url: `users/verify-email/${token}`,
         method: "GET",
@@ -128,9 +168,8 @@ export const authApi = apiSlice.injectEndpoints({
       }),
     }),
 
-    // 2) Forgot → send reset mail (your form passes { verifyEmail: email })
+    // 2) Forgot → send reset mail
     resetPassword: builder.mutation({
-      // adjust URL if different on your backend
       query: ({ verifyEmail }) => ({
         url: "users/password/forgot/request",
         method: "POST",
@@ -141,7 +180,6 @@ export const authApi = apiSlice.injectEndpoints({
 
     // 3) Forgot → confirm new password with token
     confirmForgotPassword: builder.mutation({
-      // adjust URL if different on your backend
       query: ({ password, token }) => ({
         url: "users/password/forgot/confirm",
         method: "POST",
@@ -152,7 +190,7 @@ export const authApi = apiSlice.injectEndpoints({
   }),
 });
 
-// Export hooks (add the three new ones here)
+// Export hooks
 export const {
   useSendRegistrationOTPMutation,
   useVerifyOTPAndRegisterMutation,
@@ -163,7 +201,7 @@ export const {
   useLogoutUserMutation,
   useUpdateProfileMutation,
 
-  // ✅ NEW exports to satisfy your components
+  // extra
   useConfirmEmailQuery,
   useResetPasswordMutation,
   useConfirmForgotPasswordMutation,
