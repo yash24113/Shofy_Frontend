@@ -57,10 +57,10 @@ export const authApi = apiSlice.injectEndpoints({
           const { data } = await queryFulfilled;
           const { user, sessionId } = data || {};
           if (user) {
-            Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 }); // keep user in cookie
+            Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 }); // ~12h
           }
           if (sessionId && typeof window !== "undefined") {
-            localStorage.setItem("sessionId", sessionId); // store sessionId in localStorage
+            localStorage.setItem("sessionId", sessionId); // save for logout
           }
           if (user || sessionId) {
             dispatch(userLoggedIn({ sessionId, user }));
@@ -126,24 +126,26 @@ export const authApi = apiSlice.injectEndpoints({
 
     /* ──────────────────────────────────────────
      * LOGOUT using sessionId from localStorage
+     * Calls: DELETE /users/logout/{sessionId}
      * ────────────────────────────────────────── */
     logoutUser: builder.mutation({
       query: ({ sessionId } = {}) => {
         const sid = getSessionId(sessionId);
+        // Guard: if somehow missing, still hit /users/logout to let server clear cookie (optional)
+        const url = sid ? `users/logout/${encodeURIComponent(sid)}` : "users/logout";
         return {
-          url: "users/logout",
-          method: "POST", // safer than DELETE (allows body)
+          url,
+          method: "DELETE", // change to 'POST' if your backend requires POST
           credentials: "include",
-          body: { sessionId: sid },
         };
       },
       async onQueryStarted(arg, { queryFulfilled }) {
         try {
           await queryFulfilled;
         } catch (err) {
+          // Even if server replies "session not found", clear local state to avoid ghost sessions
           console.warn("logoutUser server response:", err?.error || err);
         } finally {
-          // Clear local/session state regardless
           if (typeof window !== "undefined") {
             localStorage.removeItem("sessionId");
           }
