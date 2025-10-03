@@ -2,11 +2,15 @@
 import React from 'react';
 import Link from 'next/link';
 import { useSelector } from 'react-redux';
+import { useRouter } from 'next/navigation';
 import WishlistItem from './wishlist-item';
 import { Plus } from '@/svg';
 
 const WishlistArea = () => {
-  const { wishlist } = useSelector((state) => state.wishlist);
+  const { wishlist } = useSelector(state => state.wishlist);
+  const router = useRouter();
+
+  const handleAddProduct = () => router.push('/shop');
 
   return (
     <>
@@ -46,17 +50,19 @@ const WishlistArea = () => {
                 {/* Bottom actions row */}
                 <div className="tp-wishlist-bottom">
                   <div className="row align-items-end justify-content-between g-3">
-                    {/* LEFT: Add Product */}
+                    {/* LEFT: Add Product (button, not link) */}
                     <div className="col-md-6">
                       <div className="wl-actions-left center-left">
-                        <Link
-                          href="/shop"
+                        <button
+                          type="button"
+                          onClick={handleAddProduct}
                           className="add-btn"
                           title="Browse products"
+                          aria-label="Add Product"
                         >
-                          <span className="btn-icon"><Plus /></span>
+                          <span className="btn-icon" aria-hidden="true"><Plus /></span>
                           <span>Add Product</span>
-                        </Link>
+                        </button>
                       </div>
                     </div>
 
@@ -82,68 +88,68 @@ const WishlistArea = () => {
 
       {/* Internal styles for buttons */}
       <style jsx>{`
-  /* center the container */
-  .center-left {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
+        /* center the container */
+        .center-left {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
 
-  /* button look */
-  .add-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 48px;
-    padding: 12px 22px;
-    border-radius: 10px;
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 15px;
-    line-height: 1;
-    color: #fff;
+        /* Add Product button (black base → light-blue hover) */
+        .add-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          min-height: 48px;
+          padding: 12px 22px;
+          border-radius: 10px;
+          text-decoration: none;
+          font-weight: 600;
+          font-size: 15px;
+          line-height: 1;
+          color: #fff;
 
-    background: #000;             /* black base */
-    border: none;
+          background: #000;            /* black base */
+          border: none;
+          cursor: pointer;
 
-    transition: background 180ms ease, 
-                box-shadow 180ms ease, 
-                transform 120ms ease;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-  }
+          transition: background 180ms ease,
+                      box-shadow 180ms ease,
+                      transform 120ms ease;
+          box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+        }
+        .add-btn:hover {
+          background: #2ea0ff;        /* light blue hover */
+          box-shadow: 0 10px 28px rgba(46,160,255,0.35);
+          transform: translateY(-1px);
+          color: #0b1b2a;             /* darker text on lighter bg for contrast */
+        }
+        .add-btn:active {
+          background: #1670ff;        /* pressed */
+          transform: translateY(0);
+          color: #fff;
+        }
+        .add-btn:focus-visible {
+          outline: 0;
+          box-shadow: 0 0 0 3px rgba(46,160,255,0.45);
+        }
+        .btn-icon {
+          display: inline-flex;
+          align-items: center;
+          line-height: 0;
+        }
 
-  .add-btn:hover {
-    background: #2ea0ff;          /* light blue hover */
-    box-shadow: 0 10px 28px rgba(46,160,255,0.35);
-    transform: translateY(-1px);
-  }
+        @media (max-width: 640px) {
+          .add-btn {
+            min-height: 44px;
+            padding: 10px 18px;
+            border-radius: 8px;
+          }
+        }
+      `}</style>
 
-  .add-btn:active {
-    background: #1670ff;          /* pressed */
-    transform: translateY(0);
-  }
-
-  .add-btn:focus-visible {
-    outline: 0;
-    box-shadow: 0 0 0 3px rgba(46,160,255,0.45);
-  }
-
-  .btn-icon {
-    display: inline-flex;
-    align-items: center;
-    line-height: 0;
-  }
-
-  @media (max-width: 640px) {
-    .add-btn {
-      min-height: 44px;
-      padding: 10px 18px;
-      border-radius: 8px;
-    }
-  }
-`}</style>
       <style jsx>{`
-        /* Shared base button */
+        /* Shared base button (used by Go To Cart link) */
         .btn-base {
           position: relative;
           display: inline-flex;
@@ -173,24 +179,6 @@ const WishlistArea = () => {
           outline: 0;
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45);
         }
-        .btn-icon {
-          display: inline-flex;
-          align-items: center;
-          line-height: 0;
-        }
-
-        /* Primary (Add Product) — black base, light-blue hover */
-        .btn-primary {
-          color: #fff;
-          border: none;
-          background: #000;               /* black default */
-        }
-        .btn-primary:hover {
-          background: #2ea0ff;            /* light blue on hover */
-        }
-        .btn-primary:active {
-          background: #1670ff;            /* slightly deeper blue on press */
-        }
 
         /* Outline (Go To Cart) */
         .btn-outline {
@@ -214,8 +202,6 @@ const WishlistArea = () => {
           align-items: center;
         }
         .wl-actions-right { justify-content: flex-end; }
-
-        /* Center the Add Product button */
         .center-left { justify-content: center; }
 
         @media (max-width: 640px) {
