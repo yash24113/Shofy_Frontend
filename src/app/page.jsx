@@ -21,14 +21,16 @@ import styles from './FloatingButtons.module.scss';
 export default function HomePageTwo() {
   const [socialOpen, setSocialOpen] = useState(false);
 
-  // Close on outside click / ESC
+  // Close on outside click / ESC (pure JS)
   useEffect(() => {
     if (!socialOpen) return;
-    const onDocClick = (e: MouseEvent) => {
+
+    const onDocClick = (e) => {
       const root = document.getElementById('social-share-root');
-      if (root && !root.contains(e.target as Node)) setSocialOpen(false);
+      if (root && !root.contains(e.target)) setSocialOpen(false);
     };
-    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setSocialOpen(false); };
+    const onEsc = (e) => { if (e.key === 'Escape') setSocialOpen(false); };
+
     document.addEventListener('mousedown', onDocClick);
     document.addEventListener('keydown', onEsc);
     return () => {
@@ -37,7 +39,7 @@ export default function HomePageTwo() {
     };
   }, [socialOpen]);
 
-  // Order matters: we'll map these to 12 → 10 → 8 → 6 → 2 o'clock
+  // Order maps to 12 → 10 → 8 → 6 → 2 o'clock
   const socialLinks = [
     { id: 'ln', icon: <FaLinkedinIn />, color: '#0A66C2', href: 'https://linkedin.com' }, // 12
     { id: 'fb', icon: <FaFacebookF />,  color: '#1877F2', href: 'https://facebook.com' }, // 10
@@ -89,8 +91,8 @@ export default function HomePageTwo() {
         </button>
 
         <ul className={`social-items ${socialOpen ? 'show' : ''}`} aria-hidden={!socialOpen}>
-          {socialLinks.map((s, idx) => (
-            <li key={s.id} style={{ ['--clr' as any]: s.color }}>
+          {socialLinks.map((s) => (
+            <li key={s.id} style={{ ['--clr']: s.color }}>
               <a href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.id} title={s.id}>
                 {s.icon}
               </a>
@@ -149,7 +151,7 @@ export default function HomePageTwo() {
           cursor: pointer;
           display: inline-flex;
           align-items: center;
-          justify-content: center; /* <-- centers like Instagram chip */
+          justify-content: center;
           transition: transform .28s ease, background .18s ease, box-shadow .28s ease;
         }
         .social-toggle:hover{ transform: translateY(-50%) scale(1.04); }
@@ -171,7 +173,7 @@ export default function HomePageTwo() {
           width: 0; height: 0;
         }
 
-        /* Compact chips — perfectly centered content */
+        /* Compact chips */
         .social-items li{
           --size: 44px;
           position: absolute;
@@ -179,7 +181,7 @@ export default function HomePageTwo() {
           height: var(--size);
           border-radius: 50%;
           display: grid;
-          place-items: center;        /* <-- center like the Share chip */
+          place-items: center;
           background: #fff;
           color: #111827;
           border: 2px solid var(--clr, #60a5fa);
@@ -193,10 +195,10 @@ export default function HomePageTwo() {
         }
         .social-items li a{
           width: 100%; height: 100%;
-          display: grid; place-items: center;   /* exact centering */
+          display: grid; place-items: center;
           border-radius: 50%;
           color: #111827; text-decoration: none;
-          line-height: 1;                        /* avoid vertical drift */
+          line-height: 1;
           transition: transform .15s ease, color .15s ease;
         }
         .social-items li svg{ font-size: 18px; }
@@ -211,22 +213,17 @@ export default function HomePageTwo() {
         .social-items.show li:nth-child(4){ transition-delay: 160ms; }
         .social-items.show li:nth-child(5){ transition-delay: 200ms; }
 
-        /* ===== 12 → 10 → 8 → 6 → 2 o'clock (uniform arc) =====
-           Use a consistent circle: center ≈ (-110px, 0), radius ≈ 100px.
-           This guarantees Instagram (and all) align/center like the Share chip.
-        */
-        .social-items.show li:nth-child(1){ transform: translate(-110px, -100px) scale(1); } /* LinkedIn @ 12 */
-        .social-items.show li:nth-child(2){ transform: translate(-160px,  -50px) scale(1); } /* Facebook @ 10 */
-        .social-items.show li:nth-child(3){ transform: translate(-160px,   50px) scale(1); } /* Instagram @ 8 */
-        .social-items.show li:nth-child(4){ transform: translate(-110px,  100px) scale(1); } /* YouTube  @ 6 */
-        .social-items.show li:nth-child(5){ transform: translate( -50px,  -58px) scale(1); } /* X/Twitter @ 2 */
+        /* Uniform arc: 12 → 10 → 8 → 6 → 2 o'clock */
+        .social-items.show li:nth-child(1){ transform: translate(-110px, -100px) scale(1); }
+        .social-items.show li:nth-child(2){ transform: translate(-160px,  -50px) scale(1); }
+        .social-items.show li:nth-child(3){ transform: translate(-160px,   50px) scale(1); }
+        .social-items.show li:nth-child(4){ transform: translate(-110px,  100px) scale(1); }
+        .social-items.show li:nth-child(5){ transform: translate( -50px,  -58px) scale(1); }
 
-        /* ===== Responsive ===== */
         @media (max-width: 768px){
           .social-root{ right: 16px; width: 230px; height: 230px; }
           .social-toggle{ width: 44px; height: 44px; }
           .social-items li{ --size: 40px; }
-          /* slightly smaller radius */
           .social-items.show li:nth-child(1){ transform: translate(-96px, -90px) scale(1); }
           .social-items.show li:nth-child(2){ transform: translate(-140px, -44px) scale(1); }
           .social-items.show li:nth-child(3){ transform: translate(-140px,  44px) scale(1); }
