@@ -2,6 +2,7 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 // internal
 import { clearCart } from '@/redux/features/cartSlice';
 import CartCheckout from './cart-checkout';
@@ -12,13 +13,18 @@ import { Plus } from '@/svg';
 const CartArea = () => {
   const { cart_products } = useSelector((state) => state.cart);
   const dispatch = useDispatch();
+  const router = useRouter();
+
+  const handleAddProduct = () => {
+    router.push('/shop');
+  };
 
   return (
     <>
       <section className="tp-cart-area pb-120">
         <div className="container">
           {cart_products.length === 0 && (
-            <div className="text-center pt-50">   # first image displayed as Thumb line
+            <div className="text-center pt-50">
               <h3>No Cart Items Found</h3>
               <Link href="/shop" className="tp-cart-checkout-btn mt-20">
                 Continue Shopping
@@ -37,14 +43,14 @@ const CartArea = () => {
                   <table className="table">
                     <thead>
                       <tr>
-                        <th colSpan="2" className="tp-cart-header-product">Product</th>
+                        <th colSpan={2} className="tp-cart-header-product">Product</th>
                         <th className="tp-cart-header-price">Price</th>
                         <th className="tp-cart-header-quantity">Quantity</th>
                         <th></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {cart_products.map((item, i) => (
+                      {cart_products.map((item: any, i: number) => (
                         <CartItem key={i} product={item} />
                       ))}
                     </tbody>
@@ -54,17 +60,19 @@ const CartArea = () => {
                 {/* Bottom actions row */}
                 <div className="tp-cart-bottom">
                   <div className="row align-items-end justify-content-between g-3">
-                    {/* LEFT: Add Product (inline like screenshot) */}
+                    {/* LEFT: Add Product (button with black → light-blue hover) */}
                     <div className="col-md-6">
                       <div className="tp-cart-actions-left center-left">
-                        <Link
-                          href="/shop"
-                          className="btn-inline-add"
+                        <button
+                          type="button"
+                          onClick={handleAddProduct}
+                          className="btn-add-product"
                           title="Browse products"
+                          aria-label="Add Product"
                         >
-                          <span className="btn-icon"><Plus /></span>
-                          <span>Add Product</span>
-                        </Link>
+                          <span className="btn-icon" aria-hidden="true"><Plus /></span>
+                          <span className="btn-label">Add Product</span>
+                        </button>
                       </div>
                     </div>
 
@@ -96,39 +104,58 @@ const CartArea = () => {
 
       {/* Internal styles */}
       <style jsx>{`
-        /* ===== Inline Add Product (like your screenshot) ===== */
-        .btn-inline-add {
+        /* ===== Add Product button (black base → light-blue hover) ===== */
+        .btn-add-product {
+          --btnRadius: 12px;
+          --btnPadY: 12px;
+          --btnPadX: 20px;
+
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          padding: 0;
-          min-height: auto;
-          border: 0;
-          background: transparent;
-          text-decoration: none;
-          font-weight: 500;
-          font-size: 16px;
-          color: #374151;               /* neutral gray text */
-          transition: color 150ms ease, text-decoration-color 150ms ease;
+          gap: 10px;
+          padding: var(--btnPadY) var(--btnPadX);
+          border: none;
+          border-radius: var(--btnRadius);
+          background: #0b0b0e;                     /* black base */
+          color: #ffffff;
+          font-weight: 600;
+          font-size: 15px;
+          line-height: 1;
+          cursor: pointer;
+          user-select: none;
+          box-shadow: 0 6px 16px rgba(0,0,0,0.22);
+          transform: translateZ(0);
+          transition:
+            background-color 180ms ease,
+            color 180ms ease,
+            transform 150ms ease,
+            box-shadow 180ms ease,
+            outline-color 0s;
         }
-        .btn-inline-add:hover {
-          color: #0ea5e9;               /* light blue on hover */
-          text-decoration: underline;   /* subtle underline like links */
+        .btn-add-product:hover {
+          background: #60a5fa;                     /* light blue hover */
+          color: #0b1b2a;                          /* dark text for contrast on light blue */
+          transform: translateY(-1px);
+          box-shadow: 0 10px 24px rgba(96,165,250,0.35);
         }
-        .btn-inline-add:active {
-          color: #0284c7;
+        .btn-add-product:active {
+          background: #3b82f6;                     /* slightly deeper blue when pressed */
+          color: #ffffff;
+          transform: translateY(0);
+          box-shadow: 0 6px 16px rgba(59,130,246,0.35);
         }
-        .btn-inline-add:focus-visible {
-          outline: 2px solid rgba(14,165,233,.35);
+        .btn-add-product:focus-visible {
+          outline: 3px solid rgba(96,165,250,0.55); /* focus ring in light blue family */
           outline-offset: 2px;
-          border-radius: 4px;
         }
-        .btn-inline-add .btn-icon {
+        .btn-add-product .btn-icon {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           line-height: 0;
-          font-size: 16px;              /* ensure the plus matches text size */
-          color: inherit;               /* icon follows text color */
+        }
+        .btn-add-product .btn-label {
+          white-space: nowrap;
         }
 
         /* ===== Existing button styles kept for Clear Cart ===== */
@@ -183,7 +210,6 @@ const CartArea = () => {
           display: flex;
           align-items: center;
         }
-        /* center the inline Add Product link */
         .center-left {
           justify-content: center;
         }
