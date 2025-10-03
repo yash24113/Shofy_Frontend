@@ -1,42 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import Menus from './header-com/menus';
-import localLogo from '@assets/img/logo/my_logo.png';
+import { useDispatch, useSelector } from 'react-redux';
 import useSticky from '@/hooks/use-sticky';
 import useCartInfo from '@/hooks/use-cart-info';
 import { openCartMini } from '@/redux/features/cartSlice';
-import HeaderTopRight from './header-com/header-top-right';
 import CartMiniSidebar from '@/components/common/cart-mini-sidebar';
+import OffCanvas from '@/components/common/off-canvas';
+import Menus from './header-com/menus';
+import HeaderTopRight from './header-com/header-top-right';
 import { CartTwo, Search } from '@/svg';
 import useSearchFormSubmit from '@/hooks/use-search-form-submit';
-import OffCanvas from '@/components/common/off-canvas';
-import { useForm } from 'react-hook-form';
-import * as Yup from 'yup';
-import { yupResolver } from '@hookform/resolvers/yup';
-import {
-  FaFacebookF,
-  FaInstagram,
-  FaYoutube,
-  FaLinkedinIn,
-  FaWhatsapp,
-  FaTwitter,
-  FaHeart,
-  FaUser,
-} from 'react-icons/fa';
-import { FiPhone, FiMenu } from 'react-icons/fi';
+import { FaHeart, FaUser } from 'react-icons/fa';
+import { FiMenu, FiPhone } from 'react-icons/fi';
 
-/* ----------------------- helpers ----------------------- */
-const sanitizePhone = (v) => (v || '').replace(/[^\d+]/g, ''); // keep digits and leading +
+const sanitizePhone = (v) => (v || '').replace(/[^\d+]/g, '');
 
-const isHttpUrl = (v) => typeof v === 'string' && /^https?:\/\//i.test(v);
-
-/* ========================================================
-   Component (JSX, no TS)
-======================================================== */
 const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
@@ -44,108 +24,79 @@ const HeaderTwo = ({ style_2 = false }) => {
   const { quantity } = useCartInfo();
 
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
-  const { searchText, setSearchText, handleSubmit: handleSearchSubmit } =
-    useSearchFormSubmit();
+  const { searchText, setSearchText, handleSubmit: handleSearchSubmit } = useSearchFormSubmit();
 
-  /* ---------------- form-validation schema --------------- */
-  const schema = Yup.object().shape({
-    name: Yup.string().required('Name is required'),
-    mobileNumber: Yup.string().required('Mobile number is required'),
-    email: Yup.string().email('Invalid email').required('Email is required'),
-    company: Yup.string().required('Company name is required'),
-    message: Yup.string().required('Message is required'),
-  });
-
-  useForm({
-    resolver: yupResolver(schema),
-    mode: 'onTouched',
-  });
-
-  /* ---------------- office / social info ----------------- */
-  const [info, setInfo] = useState({
-    companyName: '',
-    companyPhone1: '',
-    companyPhone2: '',
-    companyEmail: '',
-    companyAddress: '',
-    companyLanguages: [],
-    companyFoundingDate: '',
-    companyEmployeeRange: '',
-    companyAwards: '',
-    whatsappNumber: '',
-    gaId: '',
-    clarityId: '',
-    companyLogoUrl: '',
-    facebook: '',
-    instagram: '',
-    linkedin: '',
-    twitter: '',
-    youtube: '',
-  });
-  const [loadingInfo, setLoadingInfo] = useState(false);
+  // ---- Session & user dropdown ----
+  const [hasSession, setHasSession] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const userBtnRef = useRef(null);
+  const userMenuRef = useRef(null);
 
   useEffect(() => {
-    const controller = new AbortController();
-    const fetchOfficeInfo = async () => {
-      try {
-        setLoadingInfo(true);
-        const res = await fetch(
-          process.env.NEXT_PUBLIC_OFFICEINFO_URL ||
-            'https://test.amrita-fashions.com/landing/officeinformation',
-          { signal: controller.signal, cache: 'no-store' }
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        const first =
-          json && Array.isArray(json.data) && json.data.length > 0
-            ? json.data[0]
-            : {};
-
-        setInfo({
-          companyName: first.companyName || '',
-          companyPhone1: first.companyPhone1 || '',
-          companyPhone2: first.companyPhone2 || '',
-          companyEmail: first.companyEmail || '',
-          companyAddress: first.companyAddress || '',
-          companyLanguages: Array.isArray(first.companyLanguages)
-            ? first.companyLanguages
-            : [],
-          companyFoundingDate: first.companyFoundingDate || '',
-          companyEmployeeRange: first.companyEmployeeRange || '',
-          companyAwards: first.companyAwards || '',
-          whatsappNumber: first.whatsappNumber || '',
-          gaId: first.gaId || '',
-          clarityId: first.clarityId || '',
-          companyLogoUrl: first.companyLogoUrl || '',
-          facebook: first.facebook || '',
-          instagram: first.instagram || '',
-          linkedin: first.linkedin || '',
-          twitter: first.twitter || '',
-          youtube: first.youtube || '',
-        });
-      } catch (err) {
-        if (err?.name !== 'AbortError') {
-          console.error('Office info fetch failed:', err);
-        }
-      } finally {
-        setLoadingInfo(false);
-      }
+    const check = () =>
+      setHasSession(
+        typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId')
+      );
+    check();
+    // react to cross-tab changes too
+    const onStorage = (e) => {
+      if (e.key === 'sessionId') check();
     };
-
-    fetchOfficeInfo();
-    return () => controller.abort();
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const phonePrimary = sanitizePhone(info.companyPhone1) || '919925155141';
-  const phoneDisplay = info.companyPhone1 || '+(91) 9925155141';
-  const whatsappDigits = sanitizePhone(info.whatsappNumber) || phonePrimary;
-  const waLink = `https://wa.me/${whatsappDigits}`;
+  // close dropdown on outside click / ESC
+  useEffect(() => {
+    if (!userOpen) return;
+    const onDoc = (e) => {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(e.target) &&
+        userBtnRef.current &&
+        !userBtnRef.current.contains(e.target)
+      ) {
+        setUserOpen(false);
+      }
+    };
+    const onEsc = (e) => e.key === 'Escape' && setUserOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [userOpen]);
 
-  // allow either static import or remote string
-  const logoSrc = "https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp";
-  const companyAlt = info.companyName || 'Company Logo';
+  const handleLogout = () => {
+    try {
+      if (typeof window !== 'undefined') {
+        // clear local session
+        localStorage.removeItem('sessionId');
+        // best effort: also clear optional cookie if your app set it
+        try {
+          // dynamic import to avoid bundling if you don't use it elsewhere
+          import('js-cookie').then((Cookies) => {
+            Cookies.default.remove('userInfo');
+          }).catch(() => {});
+        } catch (error) {
+          console.error("Error removing userInfo cookie:", error);
+        }
+      }
+    } finally {
+      setHasSession(false);
+      setUserOpen(false);
+      // optional: call your RTK logout mutation here if you have it
+      // router refresh/redirect:
+      if (typeof window !== 'undefined') window.location.href = '/';
+    }
+  };
 
-  /* -------------------------- render --------------------- */
+  // ---- Company / phone bits you already had (kept minimal) ----
+  const phonePrimary = sanitizePhone('+919925155141');
+  const phoneDisplay = '+(91) 9925155141';
+
+  // ---- Render ----
   return (
     <>
       <header>
@@ -154,67 +105,8 @@ const HeaderTwo = ({ style_2 = false }) => {
             style_2 ? 'primary' : 'darkRed'
           } tp-header-height`}
         >
-          {/* Header Top */}
-         <div className="tp-header-top-2 p-relative z-index-11 tp-header-top-border mobile-top-header d-none d-lg-block">
-            <div className="container">
-              <div className="row align-items-center justify-content-between">
-                <div className="col-12 d-flex flex-wrap align-items-center justify-content-between">
-                  <div className="tp-header-info d-flex align-items-center flex-wrap">
-                    <div className="tp-header-info-item social-icons d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2">
-                      <span className="tp-social-icons">
-                        {info.facebook ? (
-                          <a href={info.facebook} target="_blank" rel="noreferrer" aria-label="Facebook">
-                            <FaFacebookF />
-                          </a>
-                        ) : null}
-                        {info.instagram ? (
-                          <a href={info.instagram} target="_blank" rel="noreferrer" aria-label="Instagram">
-                            <FaInstagram />
-                          </a>
-                        ) : null}
-                        {info.youtube ? (
-                          <a href={info.youtube} target="_blank" rel="noreferrer" aria-label="YouTube">
-                            <FaYoutube />
-                          </a>
-                        ) : null}
-                        {info.linkedin ? (
-                          <a href={info.linkedin} target="_blank" rel="noreferrer" aria-label="LinkedIn">
-                            <FaLinkedinIn />
-                          </a>
-                        ) : null}
-                        {whatsappDigits ? (
-                          <a href={waLink} target="_blank" rel="noreferrer" aria-label="WhatsApp">
-                            <FaWhatsapp />
-                          </a>
-                        ) : null}
-                        {info.twitter ? (
-                          <a href={info.twitter} target="_blank" rel="noreferrer" aria-label="Twitter/X">
-                            <FaTwitter />
-                          </a>
-                        ) : null}
-                      </span>
-
-                      {/* Mobile phone (visible on md-) */}
-                      <a href={`tel:${phonePrimary}`} className="mobile-phone d-md-none">
-                        <FiPhone className="phone-icon" /> {phoneDisplay}
-                      </a>
-                    </div>
-
-                    {/* Desktop phone */}
-                    <div className="tp-header-info-item phone-info d-none d-md-block">
-                      <a href={`tel:${phonePrimary}`} className="desktop-phone">
-                        <FiPhone className="phone-icon" /> {phoneDisplay}
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="tp-header-top-right tp-header-top-black d-flex align-items-center justify-content-end">
-                    <HeaderTopRight />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div> 
+          {/* Header Top — HIDDEN as requested */}
+          {/* (Intentionally not rendered) */}
 
           {/* Header Bottom */}
           <div
@@ -224,24 +116,23 @@ const HeaderTwo = ({ style_2 = false }) => {
             <div className="container">
               <div className="tp-mega-menu-wrapper p-relative">
                 <div className="row align-items-center">
-                  {/* logo */}
+                  {/* Logo */}
                   <div className="col-6 col-sm-4 col-md-4 col-lg-3 col-xl-2">
                     <div className="logo d-flex align-items-center" style={{ gap: '12px' }}>
                       <Link href="/" className="d-flex align-items-center" style={{ gap: '12px' }}>
                         <img
-                          src={logoSrc}
-                          alt={companyAlt}
+                          src="https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp"
+                          alt="Company Logo"
                           width={140}
                           height={44}
                           style={{ height: 'auto', width: 'auto', maxWidth: '140px', maxHeight: '44px' }}
                           sizes="(max-width: 600px) 110px, 140px"
-                          priority
                         />
                       </Link>
                     </div>
                   </div>
 
-                  {/* menu */}
+                  {/* Menu */}
                   <div className="d-none d-xl-block col-xl-5">
                     <div className="main-menu menu-style-2">
                       <nav className="tp-main-menu-content">
@@ -250,7 +141,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                     </div>
                   </div>
 
-                  {/* right-side icons */}
+                  {/* Right side */}
                   <div className="col-6 col-sm-8 col-md-8 col-lg-9 col-xl-5">
                     <div className="tp-header-bottom-right d-flex align-items-center justify-content-end">
                       <div className="tp-header-search-2 d-none d-sm-block me-3">
@@ -269,12 +160,80 @@ const HeaderTwo = ({ style_2 = false }) => {
                       </div>
 
                       <div className="tp-header-action d-flex align-items-center">
-                        <div className="tp-header-action-item d-none d-lg-block me-2">
-                          <Link href="/login" className="tp-header-action-btn" aria-label="Account">
+                        {/* User dropdown */}
+                        <div className="tp-header-action-item me-2 position-relative">
+                          <button
+                            ref={userBtnRef}
+                            onClick={() => setUserOpen((v) => !v)}
+                            className="tp-header-action-btn"
+                            aria-haspopup="menu"
+                            aria-expanded={userOpen}
+                            aria-label="Account menu"
+                            type="button"
+                          >
                             <FaUser />
-                          </Link>
+                          </button>
+
+                          {/* Dropdown */}
+                          {userOpen && (
+                            <div
+                              ref={userMenuRef}
+                              role="menu"
+                              className="user-menu-dropdown"
+                              style={{
+                                position: 'absolute',
+                                right: 0,
+                                top: 'calc(100% + 10px)',
+                                minWidth: 200,
+                                background: '#fff',
+                                borderRadius: 10,
+                                boxShadow: '0 10px 30px rgba(0,0,0,.12)',
+                                padding: 8,
+                                zIndex: 1000,
+                              }}
+                            >
+                              {hasSession ? (
+                                <>
+                                  <Link className="user-item" href="/profile" role="menuitem" onClick={() => setUserOpen(false)}>
+                                    My Account
+                                  </Link>
+                                  <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
+                                    Wishlist
+                                  </Link>
+                                  <button
+                                    className="user-item"
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                      setUserOpen(false);
+                                      dispatch(openCartMini());
+                                    }}
+                                  >
+                                    Cart
+                                  </button>
+                                  <div className="user-divider" />
+                                  <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
+                                    Logout
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
+                                    Wishlist
+                                  </Link>
+                                  <Link className="user-item" href="/login" role="menuitem" onClick={() => setUserOpen(false)}>
+                                    Login
+                                  </Link>
+                                  <Link className="user-item" href="/register" role="menuitem" onClick={() => setUserOpen(false)}>
+                                    Sign Up
+                                  </Link>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
 
+                        {/* Wishlist icon (still visible in header bar) */}
                         <div className="tp-header-action-item d-none d-lg-block me-2">
                           <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
                             <FaHeart />
@@ -282,6 +241,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                           </Link>
                         </div>
 
+                        {/* Cart */}
                         <div className="tp-header-action-item me-2">
                           <button
                             onClick={() => dispatch(openCartMini())}
@@ -293,6 +253,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                           </button>
                         </div>
 
+                        {/* Mobile hamburger */}
                         <div className="tp-header-action-item tp-header-hamburger d-xl-none">
                           <button
                             onClick={() => setIsCanvasOpen(true)}
@@ -320,6 +281,34 @@ const HeaderTwo = ({ style_2 = false }) => {
         setIsCanvasOpen={setIsCanvasOpen}
         categoryType="fashion"
       />
+
+      {/* tiny styles for user dropdown items */}
+      <style jsx>{`
+        .user-item {
+          display: block;
+          width: 100%;
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-size: 14px;
+          color: #111827;
+          text-decoration: none;
+          text-align: left;
+          background: transparent;
+          border: 0;
+          cursor: pointer;
+        }
+        .user-item:hover {
+          background: #f3f4f6;
+        }
+        .user-item.danger {
+          color: #b91c1c;
+        }
+        .user-divider {
+          height: 1px;
+          background: #e5e7eb;
+          margin: 6px 0;
+        }
+      `}</style>
     </>
   );
 };
