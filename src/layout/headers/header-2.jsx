@@ -14,8 +14,6 @@ import useSearchFormSubmit from '@/hooks/use-search-form-submit';
 import { FaHeart, FaUser } from 'react-icons/fa';
 import { FiMenu } from 'react-icons/fi';
 
-const sanitizePhone = (v) => (v || '').replace(/[^\d+]/g, '');
-
 const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
@@ -64,26 +62,29 @@ const HeaderTwo = ({ style_2 = false }) => {
     };
   }, [userOpen]);
 
-  const handleLogout = () => {
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('sessionId');
-        try {
-          import('js-cookie')
-            .then((Cookies) => Cookies.default.remove('userInfo'))
-            .catch(() => {});
-        } catch {
-          // No operation if js-cookie import fails
-        }
+ const handleLogout = () => {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('sessionId');
+      try {
+        import('js-cookie')
+          .then((Cookies) => Cookies.default.remove('userInfo'))
+          .catch((err) => {
+            console.error("Failed to remove userInfo cookie:", err);
+          });
+      } catch (err) {
+        console.error("Error importing js-cookie:", err);
       }
-    } finally {
-      setHasSession(false);
-      setUserOpen(false);
-      if (typeof window !== 'undefined') window.location.href = '/';
     }
-  };
+  } finally {
+    setHasSession(false);
+    setUserOpen(false);
+    if (typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
+  }
+};
 
-  // const phonePrimary = sanitizePhone('+919925155141');
 
   return (
     <>
@@ -251,73 +252,83 @@ const HeaderTwo = ({ style_2 = false }) => {
         categoryType="fashion"
       />
 
-      {/* Dropdown styles */}
+      {/* Polished dropdown styles (stacked items) */}
       <style jsx>{`
-        .user-menu-dropdown {
-          position: absolute;
-          right: 0;
-          top: calc(100% + 12px);
-          z-index: 1000;
-          min-width: 220px;
-          background: #fff;
-          border-radius: 12px;
-          box-shadow: 0 8px 20px rgba(0,0,0,.15);
-          overflow: hidden;
-          animation: fadeIn 0.15s ease-out;
+        .user-menu-dropdown{
+          position:absolute;
+          right:0;
+          top:calc(100% + 12px);
+          z-index:1000;
+          min-width: 230px;
+          background:#fff;
+          border-radius:12px;
+          box-shadow:
+            0 18px 40px rgba(0,0,0,.14),
+            0 2px 6px rgba(0,0,0,.06);
+          overflow:hidden;
+          animation:menuPop .14s ease-out both;
         }
-        .user-menu-dropdown::before {
-          content: "";
-          position: absolute;
-          right: 18px;
-          top: -6px;
-          width: 12px;
-          height: 12px;
-          background: #fff;
-          transform: rotate(45deg);
-          box-shadow: -2px -2px 4px rgba(0,0,0,.05);
+        .user-menu-dropdown::before{
+          content:"";
+          position:absolute;
+          right:18px;
+          top:-7px;
+          width:14px;height:14px;
+          background:#fff;
+          transform:rotate(45deg);
+          box-shadow:-2px -2px 6px rgba(0,0,0,.05);
         }
-        .user-menu-inner { padding: 6px; }
 
-        .user-item {
-          display: block;
-          width: 100%;
-          padding: 10px 14px;
-          font-size: 14px;
-          color: #111827;
-          text-decoration: none;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: background 0.2s, color 0.2s;
+        /* Make the content a vertical list with gaps */
+        .user-menu-inner{
+          display:flex;
+          flex-direction:column;
+          gap:6px;
+          padding:8px;
         }
-        .user-item:hover {
-          background: #f3f4f6;
+
+        /* Force block-level row and spacing so items never collapse inline */
+        .user-item{
+          display:block !important;
+          width:100%;
+          padding:10px 14px;
+          border-radius:8px;
+          font-size:14px;
+          line-height:1.25;
+          color:#111827;
+          text-decoration:none;
+          background:transparent;
+          border:0;
+          text-align:left;
+          cursor:pointer;
+          transition:background .15s ease,color .15s ease,transform .02s ease;
         }
-        .user-item:focus-visible {
-          outline: none;
-          background: #eef2ff;
-          box-shadow: inset 0 0 0 2px #6366f1;
+        .user-item:hover{ background:#f3f4f6; }
+        .user-item:focus-visible{
+          outline:none;
+          background:#eef2ff;
+          box-shadow:0 0 0 3px rgba(99,102,241,.25) inset;
         }
-        .user-item:active {
-          background: #e0e7ff;
+        .user-item:active{ transform:scale(.995); }
+        .user-item.danger{ color:#b91c1c; }
+        .user-item.danger:hover{ background:#fee2e2; }
+
+        .user-divider{
+          height:1px;
+          background:#e5e7eb;
+          margin:2px 6px;
+          border-radius:1px;
         }
-        .user-item.danger {
-          color: #b91c1c;
+
+        @keyframes menuPop{
+          from{ transform:translateY(-4px); opacity:0; }
+          to{   transform:translateY(0);    opacity:1; }
         }
-        .user-item.danger:hover {
-          background: #fee2e2;
-        }
-        .user-divider {
-          height: 1px;
-          background: #e5e7eb;
-          margin: 6px 0;
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-4px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @media (max-width: 480px) {
-          .user-menu-dropdown { min-width: 200px; right: -8px; }
-          .user-menu-dropdown::before { right: 24px; }
+
+        /* Mobile tweaks */
+        @media (max-width:480px){
+          .user-menu-dropdown{ min-width:210px; right:-8px; }
+          .user-menu-dropdown::before{ right:24px; }
         }
       `}</style>
     </>
