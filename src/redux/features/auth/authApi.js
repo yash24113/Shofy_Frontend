@@ -3,6 +3,9 @@ import { apiSlice } from "@/redux/api/apiSlice";
 import { userLoggedIn } from "./authSlice";
 import Cookies from "js-cookie";
 
+/** tiny helper so we never forget to include the sid */
+const getSessionId = (sid) => sid || Cookies.get("sessionId") || "";
+
 export const authApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
@@ -37,8 +40,7 @@ export const authApi = apiSlice.injectEndpoints({
      * Login / Session (uses sessionId from your response)
      * ────────────────────────────────────────── */
     loginUser: builder.mutation({
-      // Your actual endpoint: https://test.amrita-fashions.com/shopy/users/login
-      // apiSlice.baseUrl should already include "/shopy/" root if needed.
+      // Your actual endpoint base: https://test.amrita-fashions.com/shopy/
       query: ({ identifier, password }) => ({
         url: "users/login",
         method: "POST",
@@ -48,13 +50,10 @@ export const authApi = apiSlice.injectEndpoints({
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
           const { data } = await queryFulfilled;
-          // Response sample:
-          // { success, message, user: {...}, sessionId: "..." }
           const { user, sessionId } = data || {};
           if (user && sessionId) {
-            Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 }); // 12h
+            Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 }); // ~12h
             Cookies.set("sessionId", sessionId, { expires: 0.5 });
-            // No token in your response — we store sessionId instead
             dispatch(userLoggedIn({ sessionId, user }));
           }
         } catch (err) {
@@ -94,20 +93,16 @@ export const authApi = apiSlice.injectEndpoints({
       },
     }),
 
-    // Fetch session details USING sessionId (not userId)
+    // Fetch session details (tries query param; if your server reads cookie, it still works)
     getSessionInfo: builder.query({
-      // Adjust the path to match your backend. Common patterns:
-      //   GET users/session/:sessionId
-      //   or GET users/session (reading from cookie)
-      // Below assumes :sessionId path.
-      query: ({ sessionId }) => ({
-        url: `users/session/${sessionId}`,
-        credentials: "include",
-      }),
+      query: ({ sessionId } = {}) => {
+        const sid = getSessionId(sessionId);
+        const url = sid ? `users/session?sessionId=${encodeURIComponent(sid)}` : "users/session";
+        return { url, credentials: "include" };
+      },
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
           const { data } = await queryFulfilled;
-          // normalize to { user } if your API wraps it
           const user = data?.session?.user || data?.user || data;
           if (user) dispatch(userLoggedIn({ user }));
         } catch (err) {
@@ -116,20 +111,27 @@ export const authApi = apiSlice.injectEndpoints({
       },
     }),
 
-    // ✅ LOGOUT via sessionId (NOT userId)
+    /* ──────────────────────────────────────────
+     * LOGOUT using sessionId in BODY (+ query fallback)
+     * ────────────────────────────────────────── */
     logoutUser: builder.mutation({
-      // Adjust if your backend expects body or different verb.
-      // Here we use DELETE /users/logout/:sessionId based on your requirement.
-      query: ({ sessionId }) => ({
-        url: `users/logout/${sessionId}`,
-        method: "DELETE",
-        credentials: "include", 
-      }),
+      // Many backends prefer POST for logout; using POST avoids DELETE-body quirks.
+      query: ({ sessionId } = {}) => {
+        const sid = getSessionId(sessionId);
+        return {
+          url: sid ? `users/logout?sessionId=${encodeURIComponent(sid)}` : "users/logout",
+          method: "POST",
+          credentials: "include",
+          body: { sessionId: sid }, // send in body as primary signal
+        };
+      },
       async onQueryStarted(arg, { queryFulfilled }) {
         try {
           await queryFulfilled;
+        } catch (err) {
+          // even if server says "session not found", clear local state
+          console.warn("logoutUser server response:", err?.error || err);
         } finally {
-          // Clear client cookies regardless of server response to avoid stale sessions
           Cookies.remove("sessionId");
           Cookies.remove("userInfo");
         }
@@ -157,9 +159,8 @@ export const authApi = apiSlice.injectEndpoints({
     }),
 
     /* ──────────────────────────────────────────
-     * Extra auth endpoints you added
+     * Extra auth endpoints
      * ────────────────────────────────────────── */
-    // 1) Email verification (Query hook)
     confirmEmail: builder.query({
       query: (token) => ({
         url: `users/verify-email/${token}`,
@@ -168,7 +169,6 @@ export const authApi = apiSlice.injectEndpoints({
       }),
     }),
 
-    // 2) Forgot → send reset mail
     resetPassword: builder.mutation({
       query: ({ verifyEmail }) => ({
         url: "users/password/forgot/request",
@@ -178,7 +178,6 @@ export const authApi = apiSlice.injectEndpoints({
       }),
     }),
 
-    // 3) Forgot → confirm new password with token
     confirmForgotPassword: builder.mutation({
       query: ({ password, token }) => ({
         url: "users/password/forgot/confirm",
@@ -200,8 +199,6 @@ export const {
   useGetSessionInfoQuery,
   useLogoutUserMutation,
   useUpdateProfileMutation,
-
-  // extra
   useConfirmEmailQuery,
   useResetPasswordMutation,
   useConfirmForgotPasswordMutation,
