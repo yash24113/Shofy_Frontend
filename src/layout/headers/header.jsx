@@ -132,7 +132,7 @@ const Header = () => {
               <div className="col-xl-3 col-lg-3 col-md-3 col-6">
                 <div className="logo">
                   <Link href="/">
-                    <Image src={logo} alt="logo" width={120} height={40} priority />
+                    <Image src="https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp" alt="logo" width={120} height={40} priority />
                   </Link>
                 </div>
               </div>
