@@ -178,7 +178,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                         dispatch(openCartMini());
                                       }}
                                     >
-                                      Cart
+                                      My Booking
                                     </button>
                                     <div className="user-divider" />
                                     <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
