@@ -39,13 +39,13 @@ export default function HomePageTwo() {
     };
   }, [socialOpen]);
 
-  // Order maps to 12 → 10 → 8 → 6 → 2 o'clock
+  // Order top → bottom along the “C”
   const socialLinks = [
-    { id: 'ln', icon: <FaLinkedinIn />, color: '#0A66C2', href: 'https://linkedin.com' }, // 12
-    { id: 'fb', icon: <FaFacebookF />,  color: '#1877F2', href: 'https://facebook.com' }, // 10
-    { id: 'ig', icon: <FaInstagram />,  color: '#E1306C', href: 'https://instagram.com' }, // 8
-    { id: 'yt', icon: <FaYoutube />,    color: '#FF0000', href: 'https://youtube.com' },   // 6
-    { id: 'tw', icon: <FaXTwitter />,   color: '#000000', href: 'https://twitter.com' },   // 2
+    { id: 'fb', icon: <FaFacebookF />,  color: '#1877F2', href: 'https://facebook.com' }, // top
+    { id: 'ig', icon: <FaInstagram />,  color: '#E1306C', href: 'https://instagram.com' }, // upper
+    { id: 'ln', icon: <FaLinkedinIn />, color: '#0A66C2', href: 'https://linkedin.com' }, // MIDDLE (aligned with Share)
+    { id: 'yt', icon: <FaYoutube />,    color: '#FF0000', href: 'https://youtube.com' },   // lower
+    { id: 'tw', icon: <FaXTwitter />,   color: '#000000', href: 'https://twitter.com' },   // bottom
   ];
 
   return (
@@ -78,7 +78,7 @@ export default function HomePageTwo() {
         <FiPhoneCall size={24} />
       </a>
 
-      {/* ===== Right-center sticky social (12→10→8→6→2 o'clock) ===== */}
+      {/* ===== Right-center sticky social — “C” pattern ===== */}
       <div id="social-share-root" className="social-root">
         <button
           id="social-toggle"
@@ -173,7 +173,7 @@ export default function HomePageTwo() {
           width: 0; height: 0;
         }
 
-        /* Compact chips */
+        /* Compact, perfectly centered chips */
         .social-items li{
           --size: 44px;
           position: absolute;
@@ -181,7 +181,7 @@ export default function HomePageTwo() {
           height: var(--size);
           border-radius: 50%;
           display: grid;
-          place-items: center;
+          place-items: center;      /* center icon within chip */
           background: #fff;
           color: #111827;
           border: 2px solid var(--clr, #60a5fa);
@@ -195,7 +195,7 @@ export default function HomePageTwo() {
         }
         .social-items li a{
           width: 100%; height: 100%;
-          display: grid; place-items: center;
+          display: grid; place-items: center;  /* keep icons centered like the toggle */
           border-radius: 50%;
           color: #111827; text-decoration: none;
           line-height: 1;
@@ -205,7 +205,7 @@ export default function HomePageTwo() {
         .social-items li:hover{ box-shadow: 0 12px 26px rgba(0,0,0,0.22); }
         .social-items li:hover a{ transform: scale(1.06); color: var(--clr, #0ea5e9); }
 
-        /* Staggered reveal */
+        /* Reveal */
         .social-items.show li{ opacity: 1; }
         .social-items.show li:nth-child(1){ transition-delay: 40ms; }
         .social-items.show li:nth-child(2){ transition-delay: 80ms; }
@@ -213,33 +213,38 @@ export default function HomePageTwo() {
         .social-items.show li:nth-child(4){ transition-delay: 160ms; }
         .social-items.show li:nth-child(5){ transition-delay: 200ms; }
 
-        /* Uniform arc: 12 → 10 → 8 → 6 → 2 o'clock */
-        .social-items.show li:nth-child(1){ transform: translate(-110px, -100px) scale(1); }
-        .social-items.show li:nth-child(2){ transform: translate(-160px,  -50px) scale(1); }
-        .social-items.show li:nth-child(3){ transform: translate(-160px,   50px) scale(1); }
-        .social-items.show li:nth-child(4){ transform: translate(-110px,  100px) scale(1); }
-        .social-items.show li:nth-child(5){ transform: translate( -50px,  -58px) scale(1); }
+        /* ===== “C” pattern (open to the right)
+           Centered on the toggle’s Y — the 3rd (middle) icon sits at Y=0,
+           same vertical alignment as the Share button. Offsets form a C:
+           top -> upper -> middle -> lower -> bottom
+        */
+        .social-items.show li:nth-child(1){ transform: translate(-110px, -90px)  scale(1); } /* top    */
+        .social-items.show li:nth-child(2){ transform: translate(-150px, -45px)  scale(1); } /* upper  */
+        .social-items.show li:nth-child(3){ transform: translate(-170px,   0px)  scale(1); } /* MIDDLE aligned with toggle */
+        .social-items.show li:nth-child(4){ transform: translate(-150px,  45px)  scale(1); } /* lower  */
+        .social-items.show li:nth-child(5){ transform: translate(-110px,  90px)  scale(1); } /* bottom */
 
+        /* ===== Responsive adjustments ===== */
         @media (max-width: 768px){
           .social-root{ right: 16px; width: 230px; height: 230px; }
           .social-toggle{ width: 44px; height: 44px; }
           .social-items li{ --size: 40px; }
-          .social-items.show li:nth-child(1){ transform: translate(-96px, -90px) scale(1); }
-          .social-items.show li:nth-child(2){ transform: translate(-140px, -44px) scale(1); }
-          .social-items.show li:nth-child(3){ transform: translate(-140px,  44px) scale(1); }
-          .social-items.show li:nth-child(4){ transform: translate(-96px,   90px) scale(1); }
-          .social-items.show li:nth-child(5){ transform: translate(-44px,  -54px) scale(1); }
+          .social-items.show li:nth-child(1){ transform: translate(-95px, -78px)  scale(1); }
+          .social-items.show li:nth-child(2){ transform: translate(-130px,-40px)  scale(1); }
+          .social-items.show li:nth-child(3){ transform: translate(-145px,  0px)  scale(1); }
+          .social-items.show li:nth-child(4){ transform: translate(-130px, 40px)  scale(1); }
+          .social-items.show li:nth-child(5){ transform: translate(-95px,  78px)  scale(1); }
         }
 
         @media (max-width: 480px){
           .social-root{ right: 12px; width: 210px; height: 210px; }
           .social-toggle{ width: 42px; height: 42px; }
           .social-items li{ --size: 36px; }
-          .social-items.show li:nth-child(1){ transform: translate(-86px, -80px) scale(1); }
-          .social-items.show li:nth-child(2){ transform: translate(-126px,-38px) scale(1); }
-          .social-items.show li:nth-child(3){ transform: translate(-126px, 38px) scale(1); }
-          .social-items.show li:nth-child(4){ transform: translate(-86px,  80px) scale(1); }
-          .social-items.show li:nth-child(5){ transform: translate(-40px, -50px) scale(1); }
+          .social-items.show li:nth-child(1){ transform: translate(-86px, -70px) scale(1); }
+          .social-items.show li:nth-child(2){ transform: translate(-116px,-36px) scale(1); }
+          .social-items.show li:nth-child(3){ transform: translate(-130px,  0px) scale(1); }
+          .social-items.show li:nth-child(4){ transform: translate(-116px, 36px) scale(1); }
+          .social-items.show li:nth-child(5){ transform: translate(-86px,  70px) scale(1); }
         }
       `}</style>
     </Wrapper>
