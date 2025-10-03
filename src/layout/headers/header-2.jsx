@@ -234,7 +234,7 @@ const HeaderTwo = ({ style_2 = false }: { style_2?: boolean }) => {
                     <div className="logo d-flex align-items-center" style={{ gap: '12px' }}>
                       <Link href="/" className="d-flex align-items-center" style={{ gap: '12px' }}>
                         <Image
-                          src={logoSrc as any}
+                          src={logoSrc}
                           alt={companyAlt}
                           width={140}
                           height={44}
