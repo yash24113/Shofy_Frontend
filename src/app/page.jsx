@@ -75,7 +75,7 @@ export default function HomePageTwo() {
         <FiPhoneCall size={24} />
       </a>
 
-      {/* ===== Right-center sticky social (clockwise ring) ===== */}
+      {/* ===== Right-center sticky social (12→10→8→6→2 o'clock) ===== */}
       <div id="social-share-root" className="social-root">
         <button
           id="social-toggle"
@@ -127,7 +127,7 @@ export default function HomePageTwo() {
           top: 50%;
           transform: translateY(-50%);
           z-index: 1200;
-          width: 260px;   /* canvas area for the arc/ring */
+          width: 260px;
           height: 260px;
           pointer-events: none;
         }
@@ -209,40 +209,36 @@ export default function HomePageTwo() {
         .social-items li:nth-child(4){ transition-delay: 160ms; }
         .social-items li:nth-child(5){ transition-delay: 200ms; }
 
-        /* ========= CLOCKWISE RING LAYOUT =========
-           We place items around a circle whose center is offset to the LEFT
-           of the toggle, so the full ring is visible. Ordering is clockwise:
-           12 → 2 → 4 → 6 → 8 o'clock.
-           Circle center approx at (-100px, 0) from the toggle; radius ~100px.
+        /* ===== 12 → 10 → 8 → 6 → 2 o'clock (clockwise visual order) =====
+           Center is offset left of the toggle; radius ~110px.
         */
-        .social-items.show li:nth-child(1){ --pos: translate(-100px, -100px); } /* 12 o'clock */
-        .social-items.show li:nth-child(2){ --pos: translate(-35px,  -75px); }  /* 2 o'clock  */
-        .social-items.show li:nth-child(3){ --pos: translate(-20px,   10px); }  /* 4 o'clock  */
-        .social-items.show li:nth-child(4){ --pos: translate(-80px,  100px); }  /* 6 o'clock  */
-        .social-items.show li:nth-child(5){ --pos: translate(-160px,  65px); }  /* 8 o'clock  */
+        .social-items.show li:nth-child(1){ --pos: translate(-110px, -105px); } /* 12 */
+        .social-items.show li:nth-child(2){ --pos: translate(-165px,  -45px); } /* 10 */
+        .social-items.show li:nth-child(3){ --pos: translate(-165px,   45px); } /* 8  */
+        .social-items.show li:nth-child(4){ --pos: translate(-110px,  105px); } /* 6  */
+        .social-items.show li:nth-child(5){ --pos: translate( -40px,  -65px); } /* 2  */
 
         /* ===== Responsive ===== */
         @media (max-width: 768px){
           .social-root{ right: 16px; width: 230px; height: 230px; }
           .social-toggle{ width: 44px; height: 44px; }
           .social-items li{ --size: 40px; }
-          /* shrink the circle radius a bit */
-          .social-items.show li:nth-child(1){ --pos: translate(-90px, -90px); }
-          .social-items.show li:nth-child(2){ --pos: translate(-30px, -68px); }
-          .social-items.show li:nth-child(3){ --pos: translate(-18px,  10px); }
-          .social-items.show li:nth-child(4){ --pos: translate(-72px,  90px); }
-          .social-items.show li:nth-child(5){ --pos: translate(-145px, 58px); }
+          .social-items.show li:nth-child(1){ --pos: translate(-96px, -92px); }
+          .social-items.show li:nth-child(2){ --pos: translate(-144px, -40px); }
+          .social-items.show li:nth-child(3){ --pos: translate(-144px,  40px); }
+          .social-items.show li:nth-child(4){ --pos: translate(-96px,   92px); }
+          .social-items.show li:nth-child(5){ --pos: translate(-34px,  -58px); }
         }
 
         @media (max-width: 480px){
           .social-root{ right: 12px; width: 210px; height: 210px; }
           .social-toggle{ width: 42px; height: 42px; }
           .social-items li{ --size: 36px; }
-          .social-items.show li:nth-child(1){ --pos: translate(-82px, -82px); }
-          .social-items.show li:nth-child(2){ --pos: translate(-28px, -60px); }
-          .social-items.show li:nth-child(3){ --pos: translate(-16px,   8px); }
-          .social-items.show li:nth-child(4){ --pos: translate(-66px,  82px); }
-          .social-items.show li:nth-child(5){ --pos: translate(-130px, 52px); }
+          .social-items.show li:nth-child(1){ --pos: translate(-86px, -82px); }
+          .social-items.show li:nth-child(2){ --pos: translate(-128px,-36px); }
+          .social-items.show li:nth-child(3){ --pos: translate(-128px, 36px); }
+          .social-items.show li:nth-child(4){ --pos: translate(-86px,  82px); }
+          .social-items.show li:nth-child(5){ --pos: translate(-30px, -52px); }
           .call-float-btn{ right: 14px; bottom: 14px; }
         }
       `}</style>
