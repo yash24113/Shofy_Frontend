@@ -71,49 +71,16 @@ const WishlistItem = ({ product }) => {
           <span className="wishlist-price">${(salesPrice || 0).toFixed(2)}</span>
         </td>
 
-        {/* quantity */}
-        {/* <td className="tp-cart-quantity wishlist-cell">
-          <div className="tp-product-quantity wishlist-qty">
-            <button
-              onClick={() => handleDecrement(product)}
-              className="tp-cart-minus wishlist-qty-btn"
-              aria-label="Decrease quantity"
-              title="Decrease"
-              type="button"
-            >
-              <Minus />
-            </button>
-
-            <input
-              className="tp-cart-input wishlist-qty-input"
-              type="text"
-              value={isAddToCart ? isAddToCart?.orderQuantity : 0}
-              readOnly
-              aria-label="Quantity in cart"
-            />
-
-            <button
-              onClick={() => handleAddProduct(product)}
-              className="tp-cart-plus wishlist-qty-btn"
-              aria-label="Increase quantity"
-              title="Increase"
-              type="button"
-            >
-              <Plus />
-            </button>
-          </div>
-        </td> */}
-
         {/* add to cart */}
-        <td className="tp-cart-add-to-cart wishlist-cell">
+        <td className="tp-cart-add-to-cart wishlist-cell wishlist-cell-center">
           <button
             onClick={() => handleAddProduct(product)}
             type="button"
-            className={`tp-btn tp-btn-2 tp-btn-blue btn-pressable ${moving ? "btn-loading" : ""}`}
+            className={`btn-add-product ${moving ? "is-loading" : ""}`}
             aria-busy={moving ? "true" : "false"}
-            title="Move to Cart"
+            title="Add Product"
           >
-            {moving ? "Moving…" : "Move to Cart"}
+            {moving ? "Moving…" : "Add Product"}
           </button>
         </td>
 
@@ -146,6 +113,10 @@ const WishlistItem = ({ product }) => {
         .wishlist-cell {
           padding: 14px 12px;
           vertical-align: middle;
+        }
+        /* center the "Add Product" button cell */
+        .wishlist-cell-center {
+          text-align: center;
         }
 
         /* Image */
@@ -180,7 +151,7 @@ const WishlistItem = ({ product }) => {
           color: #0f172a;
         }
 
-        /* Quantity group */
+        /* Quantity group (kept for future use) */
         .wishlist-qty {
           display: inline-flex;
           align-items: center;
@@ -216,7 +187,7 @@ const WishlistItem = ({ product }) => {
           outline: none;
         }
 
-        /* Animated buttons */
+        /* Animated buttons base */
         .btn-pressable {
           position: relative;
           overflow: hidden;
@@ -252,26 +223,59 @@ const WishlistItem = ({ product }) => {
           transition: width 280ms ease, height 280ms ease, opacity 380ms ease;
           opacity: 0;
         }
-        .btn-loading {
-          pointer-events: none;
-          opacity: 0.85;
-        }
 
-        /* Optional richer blue for your existing class */
-        :global(.tp-btn.tp-btn-blue) {
-          background: linear-gradient(180deg, #2ea0ff 0%, #1670ff 100%);
-          color: #fff;
+        /* NEW: Add Product button (navy base -> blue hover) */
+        .btn-add-product {
+          --btn-radius: 10px;
+          --btn-height: 48px;
+          --btn-padding-x: 22px;
+
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 220px;
+          height: var(--btn-height);
+          padding: 0 var(--btn-padding-x);
+          border-radius: var(--btn-radius);
           border: none;
+          outline: none;
+
+          background: #081a2b; /* deep navy (like 2nd image) */
+          color: #ffffff;
+          font-weight: 600;
+          letter-spacing: 0.2px;
+
+          transition: background-color 180ms ease, transform 120ms ease,
+            box-shadow 180ms ease, opacity 180ms ease;
+          box-shadow: 0 6px 18px rgba(8, 26, 43, 0.25);
+          cursor: pointer;
         }
-        :global(.tp-btn.tp-btn-blue:hover) {
-          background: linear-gradient(180deg, #4eb0ff 0%, #2a7dff 100%);
+        .btn-add-product:hover {
+          background: #1486ff; /* bright blue (like 3rd image) */
+          box-shadow: 0 10px 28px rgba(20, 134, 255, 0.35);
+          transform: translateY(-1px);
+        }
+        .btn-add-product:active {
+          transform: translateY(0);
+          box-shadow: 0 6px 16px rgba(8, 26, 43, 0.3);
+        }
+        .btn-add-product:focus-visible {
+          outline: 3px solid rgba(20, 134, 255, 0.45);
+          outline-offset: 2px;
+        }
+        .btn-add-product.is-loading {
+          pointer-events: none;
+          opacity: 0.9;
         }
 
-        /* Remove button style */
+        /* Remove button */
         .wishlist-remove {
           color: #6b7280;
           border: 1px solid #e5e7eb;
           background: #fff;
+          padding: 10px 14px;
+          border-radius: 8px;
+          transition: background 160ms ease, color 160ms ease;
         }
         .wishlist-remove:hover {
           background: #f9fafb;
@@ -288,12 +292,10 @@ const WishlistItem = ({ product }) => {
             height: 80px;
             border-radius: 8px;
           }
-          .wishlist-qty-btn {
-            width: 34px;
-            height: 34px;
-          }
-          .wishlist-qty-input {
-            width: 44px;
+          .btn-add-product {
+            min-width: 180px;
+            height: 44px;
+            --btn-radius: 8px;
           }
         }
       `}</style>
@@ -302,6 +304,3 @@ const WishlistItem = ({ product }) => {
 };
 
 export default WishlistItem;
-
-
-//give fully updated above code including Addtoproduct button css and also display as center   
