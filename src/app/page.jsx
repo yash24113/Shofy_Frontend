@@ -12,41 +12,20 @@ import BestSellerProducts from '@/components/products/fashion/best-seller-produc
 import FashionTestimonial from '@/components/testimonial/fashion-testimonial';
 import BlogArea from '@/components/blog/fashion/blog-area';
 import FeatureAreaTwo from '@/components/features/feature-area-2';
-import { FiMessageCircle, FiShare2 } from 'react-icons/fi';
+import { FiShare2, FiPhoneCall } from 'react-icons/fi';
 import { FaWhatsapp, FaFacebookF, FaInstagram, FaLinkedinIn, FaYoutube } from 'react-icons/fa';
 import { FaXTwitter } from 'react-icons/fa6';
-import { MdEmail } from 'react-icons/md';
 import Footer from '@/layout/footers/footer';
 import styles from './FloatingButtons.module.scss';
 
 export default function HomePageTwo() {
-  const [showTrigger, setShowTrigger] = useState(false);
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ name: '', phone: '', help: '', email: '', location: '' });
+  // chat removed from the UI per request; (kept state code minimal)
+  const [showTrigger] = useState(false);
 
-  // Sticky social toggle state
+  // sticky social toggle state
   const [socialOpen, setSocialOpen] = useState(false);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-  const handleClose = () => { setShowTrigger(false); setStep(0); setForm({ name: '', phone: '', help: '', email: '', location: '' }); };
-
-  // Close chat trigger on outside click
-  useEffect(() => {
-    if (!showTrigger) return;
-    const handleClick = (e) => {
-      const trigger = document.getElementById('chat-trigger-bubble');
-      const btn = document.getElementById('chat-float-btn');
-      if (trigger && !trigger.contains(e.target) && btn && !btn.contains(e.target)) {
-        setShowTrigger(false);
-        setStep(0);
-        setForm({ name: '', phone: '', help: '', email: '', location: '' });
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showTrigger]);
-
-  // Close social menu on outside click / ESC
+  // close social on outside click / ESC
   useEffect(() => {
     if (!socialOpen) return;
     const onDocClick = (e) => {
@@ -62,119 +41,30 @@ export default function HomePageTwo() {
     };
   }, [socialOpen]);
 
-  const renderChatStep = () => {
-    const botBubble = {
-      background: '#e3f2fd', color: '#1976d2', borderRadius: 18, padding: '10px 16px', marginBottom: 10, maxWidth: '90%', boxShadow: '0 2px 8px rgba(33,150,243,0.08)', alignSelf: 'flex-start', fontSize: 15, lineHeight: 1.5
-    };
-    const submitBtn = { background: '#1976d2', color: 'white', border: 'none', borderRadius: 14, padding: '7px 16px', fontWeight: 600, fontSize: 14, cursor: 'pointer', boxShadow: '0 2px 8px rgba(25,118,210,0.10)', height: 34 };
-    const skipBtn = { background: '#e0e0e0', color: '#333', border: 'none', borderRadius: 14, padding: '7px 16px', fontWeight: 600, fontSize: 14, marginLeft: 4, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', height: 34 };
-    const closeBtn = { background: '#e53935', color: 'white', border: 'none', borderRadius: 14, padding: '9px 0', fontWeight: 600, fontSize: 15, marginTop: 16, width: '100%', cursor: 'pointer', boxShadow: '0 2px 8px rgba(229,57,53,0.10)', height: 38 };
-    const formRow = { display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' };
-    const inputStyle = { borderRadius: 14, border: '1.2px solid #e0e0e0', padding: '7px 12px', fontSize: 14, boxShadow: '0 1px 4px rgba(0,0,0,0.03)', flex: 1 };
-
-    switch (step) {
-      case 0:
-        return (
-          <div className="chat-step" style={{display: 'flex', flexDirection: 'column'}}>
-            <div className="chat-message bot-message" style={botBubble}>
-              <p style={{margin: 0}}>👋 Hi there! Welcome to Amrita Global Enterprise.</p>
-              <p style={{margin: 0}}>What&apos;s your name?</p>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); setStep(1); }} style={formRow}>
-              <input type="text" name="name" value={form.name} onChange={handleChange} placeholder="Your name" className="chat-input" style={inputStyle} autoFocus />
-              <button type="submit" className="chat-submit-btn" style={{...submitBtn, opacity: form.name.trim() ? 1 : 0.6, cursor: form.name.trim() ? 'pointer' : 'not-allowed'}} disabled={!form.name.trim()}>Submit</button>
-            </form>
-          </div>
-        );
-      case 1:
-        return (
-          <div className="chat-step" style={{display: 'flex', flexDirection: 'column'}}>
-            <div className="chat-message bot-message" style={botBubble}>
-              <p style={{margin: 0}}>Nice to meet you, <b>{form.name}</b>! 😊</p>
-              <p style={{margin: 0}}>How can I help you today?</p>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); setStep(2); }} style={formRow}>
-              <input type="text" name="help" value={form.help} onChange={handleChange} placeholder="Type your message..." className="chat-input" style={inputStyle} autoFocus />
-              <button type="submit" className="chat-submit-btn" style={{...submitBtn, opacity: form.help.trim() ? 1 : 0.6, cursor: form.help.trim() ? 'pointer' : 'not-allowed'}} disabled={!form.help.trim()}>Submit</button>
-            </form>
-          </div>
-        );
-      case 2:
-        return (
-          <div className="chat-step" style={{display: 'flex', flexDirection: 'column'}}>
-            <div className="chat-message bot-message" style={botBubble}>
-              <p style={{margin: 0}}>Thank you for sharing, <b>{form.name}</b>!</p>
-              <p style={{margin: 0}}>Could you please share your mobile number?</p>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); setStep(3); }} style={formRow}>
-              <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="Mobile number" className="chat-input" style={inputStyle} autoFocus />
-              <button type="submit" className="chat-submit-btn" style={{...submitBtn, opacity: form.phone.trim() ? 1 : 0.6, cursor: form.phone.trim() ? 'pointer' : 'not-allowed'}} disabled={!form.phone.trim()}>Submit</button>
-            </form>
-          </div>
-        );
-      case 3:
-        return (
-          <div className="chat-step" style={{display: 'flex', flexDirection: 'column'}}>
-            <div className="chat-message bot-message" style={botBubble}>
-              <p style={{margin: 0}}>Awesome! At Amrita Global Enterprise, we connect you with the best products and services tailored to your needs.</p>
-              <p style={{margin: 0}}>Could you please share your email address?</p>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); setStep(4); }} style={formRow}>
-              <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="Email address" className="chat-input" style={inputStyle} autoFocus />
-              <button type="submit" className="chat-submit-btn" style={{...submitBtn, opacity: form.email.trim() ? 1 : 0.6, cursor: form.email.trim() ? 'pointer' : 'not-allowed'}} disabled={!form.email.trim()}>Submit</button>
-              <button type="button" className="chat-skip-btn" style={skipBtn} onClick={() => setStep(4)}>Skip</button>
-            </form>
-          </div>
-        );
-      case 4:
-        return (
-          <div className="chat-step" style={{display: 'flex', flexDirection: 'column'}}>
-            <div className="chat-message bot-message" style={botBubble}>
-              <p style={{margin: 0}}>Thank you! Could you let us know your location?</p>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); setStep(5); }} style={formRow}>
-              <input type="text" name="location" value={form.location} onChange={handleChange} placeholder="Your city or area" className="chat-input" style={inputStyle} autoFocus />
-              <button type="submit" className="chat-submit-btn" style={{...submitBtn, opacity: form.location.trim() ? 1 : 0.6, cursor: form.location.trim() ? 'pointer' : 'not-allowed'}} disabled={!form.location.trim()}>Submit</button>
-            </form>
-          </div>
-        );
-      case 5:
-        return (
-          <div className="chat-step" style={{display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
-            <div className="chat-message bot-message" style={botBubble}>
-              <p style={{margin: 0}}>Thank you, <b>{form.name}</b>! Our team will connect with you soon.</p>
-              <p style={{marginTop: 8, fontWeight: 500}}>📞 +91 9999999999<br/>📧 info@amritaglobal.com<br/>🌐 www.amritaglobal.com</p>
-            </div>
-            <button className="chat-close-btn" style={closeBtn} onClick={handleClose}>Close</button>
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
-  // Social links (order: facebook, instagram, youtube, x/twitter, linkedin)
+  // social links (Facebook, Instagram, YouTube, X/Twitter, LinkedIn)
   const socialLinks = [
-    { id: 'fb',   icon: <FaFacebookF />, color: '#1877F2', href: 'https://facebook.com' },
-    { id: 'ig',   icon: <FaInstagram />, color: '#E1306C', href: 'https://instagram.com' },
-    { id: 'yt',   icon: <FaYoutube />,   color: '#FF0000', href: 'https://youtube.com' },
-    { id: 'tw',   icon: <FaXTwitter />,  color: '#000000', href: 'https://twitter.com' },
-    { id: 'ln',   icon: <FaLinkedinIn />,color: '#0A66C2', href: 'https://linkedin.com' },
+    { id: 'fb', icon: <FaFacebookF />,  color: '#1877F2', href: 'https://facebook.com' },
+    { id: 'ig', icon: <FaInstagram />,  color: '#E1306C', href: 'https://instagram.com' },
+    { id: 'yt', icon: <FaYoutube />,    color: '#FF0000', href: 'https://youtube.com' },
+    { id: 'tw', icon: <FaXTwitter />,   color: '#000000', href: 'https://twitter.com' },
+    { id: 'ln', icon: <FaLinkedinIn />, color: '#0A66C2', href: 'https://linkedin.com' },
   ];
 
   return (
     <Wrapper>
       <HeaderTwo />
-      <h1 style={{position: 'absolute', left: '-9999px', top: 'auto', width: '1px', height: '1px', overflow: 'hidden'}}>Welcome to Amrita Global Enterprise - Quality Products & Services</h1>
+      <h1 style={{position: 'absolute', left: '-9999px', top: 'auto', width: '1px', height: '1px', overflow: 'hidden'}}>
+        Welcome to Amrita Global Enterprise - Quality Products & Services
+      </h1>
+
       <FashionBanner />
       <PopularProducts />
-      {/* <ProductArea /> */}
       <WeeksFeatured />
       <FashionTestimonial />
       <BlogArea />
       <FeatureAreaTwo />
 
-      {/* WhatsApp Floating Button (existing) */}
+      {/* WhatsApp Floating Button (kept on left bottom per your styles file) */}
       <a
         href="https://wa.me/919999999999"
         target="_blank"
@@ -185,58 +75,24 @@ export default function HomePageTwo() {
         <FaWhatsapp size={28} />
       </a>
 
-      {/* Floating Chat Button (existing) */}
-      <button
-        id="chat-float-btn"
-        className={styles['message-float-btn']}
-        onClick={() => setShowTrigger(true)}
-        aria-label="Contact Us"
+      {/* ===== Call button at bottom-right (replaces message icon) ===== */}
+      <a
+        href="tel:+919999999999"
+        aria-label="Call us"
+        className="call-float-btn"
       >
-        <FiMessageCircle size={28} />
-      </button>
+        <FiPhoneCall size={26} />
+      </a>
 
-      {/* Chat bubble */}
-      {showTrigger && (
-        <div
-          id="chat-trigger-bubble"
-          style={{
-            position: 'fixed',
-            right: 40,
-            bottom: 100,
-            zIndex: 1100,
-            background: 'white',
-            borderRadius: 16,
-            boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-            padding: 20,
-            minWidth: 260,
-            maxWidth: 340,
-            animation: 'fadeIn 0.2s',
-          }}
-        >
-          <div className="custom-chat-content">{renderChatStep()}</div>
-          <div
-            style={{
-              position: 'absolute',
-              right: 24,
-              bottom: -12,
-              width: 0, height: 0,
-              borderLeft: '12px solid transparent',
-              borderRight: '12px solid transparent',
-              borderTop: '12px solid white',
-              filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))',
-            }}
-          />
-        </div>
-      )}
-
-      {/* ===== Right-side Center Sticky Social Share ===== */}
+      {/* ===== Right-center sticky social menu ===== */}
       <div id="social-share-root" className="social-root">
         {/* Toggle Button (Share icon) */}
         <button
           id="social-toggle"
           className={`social-toggle ${socialOpen ? 'open' : ''}`}
           aria-label="Share"
-          onClick={() => setSocialOpen((v) => !v)}
+          onClick={() => setSocialOpen(v => !v)}
+          title="Share"
         >
           <FiShare2 size={22} />
         </button>
@@ -245,7 +101,7 @@ export default function HomePageTwo() {
         <ul className={`social-items ${socialOpen ? 'show' : ''}`} aria-hidden={!socialOpen}>
           {socialLinks.map((s, idx) => (
             <li key={s.id} style={{ '--i': idx, '--clr': s.color }}>
-              <a href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.id}>
+              <a href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.id} title={s.id}>
                 {s.icon}
               </a>
             </li>
@@ -255,141 +111,161 @@ export default function HomePageTwo() {
 
       <Footer />
 
-      {/* Styles: sticky social menu + animations + responsive chat bubble */}
+      {/* Styles */}
       <style jsx>{`
-        .social-root {
+        /* ======= CALL BUTTON (bottom-right) ======= */
+        .call-float-btn{
           position: fixed;
-          right: 28px;
+          right: 24px;
+          bottom: 24px;
+          z-index: 1300;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          display: grid;
+          place-items: center;
+          color: #fff;
+          background: #0ea5e9; /* light blue */
+          box-shadow: 0 12px 28px rgba(14,165,233,.35);
+          text-decoration: none;
+          transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+        }
+        .call-float-btn:hover{
+          transform: translateY(-2px) scale(1.03);
+          background: #0284c7;
+          box-shadow: 0 16px 34px rgba(2,132,199,.35);
+        }
+        .call-float-btn:active{
+          transform: translateY(0);
+        }
+
+        /* ======= RIGHT-CENTER STICKY SOCIAL ======= */
+        .social-root{
+          position: fixed;
+          right: 34px;             /* give more breathing room from edge */
           top: 50%;
           transform: translateY(-50%);
           z-index: 1200;
-          width: 280px;
-          height: 280px;
-          pointer-events: none;
+          width: 360px;            /* larger canvas so items never clip */
+          height: 360px;
+          pointer-events: none;    /* children will re-enable */
         }
 
-        .social-toggle {
+        .social-toggle{
           pointer-events: auto;
           position: absolute;
           right: 0;
           top: 50%;
           transform: translateY(-50%) rotate(0deg);
-          width: 56px;
-          height: 56px;
+          width: 60px;
+          height: 60px;
           border-radius: 50%;
           border: 0;
-          background: #111827;
+          background: #111827;     /* dark pill as in screenshot */
           color: #fff;
-          box-shadow: 0 12px 28px rgba(0,0,0,0.25);
+          box-shadow: 0 14px 34px rgba(0,0,0,0.28);
           cursor: pointer;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           transition: transform .35s ease, box-shadow .35s ease, background .2s ease;
         }
-        .social-toggle:hover {
-          transform: translateY(-50%) scale(1.04);
-          box-shadow: 0 16px 32px rgba(0,0,0,0.28);
+        .social-toggle:hover{
+          transform: translateY(-50%) scale(1.05);
         }
-        .social-toggle.open {
+        .social-toggle.open{
           background: #60a5fa;
           color: #0b1b2a;
-          transform: translateY(-50%) rotate(45deg) scale(1.02);
+          transform: translateY(-50%) rotate(45deg) scale(1.03);
         }
 
-        .social-items {
+        .social-items{
           pointer-events: auto;
           list-style: none;
           padding: 0;
           margin: 0;
           position: absolute;
-          right: 28px;
+          right: 34px;             /* from the same anchor as toggle */
           top: 50%;
           transform: translateY(-50%);
           width: 0; height: 0;
         }
 
-        .social-items li {
-          --size: 48px;
+        /* Each item is a crisp, perfectly round white chip with colored ring */
+        .social-items li{
+          --size: 64px;                           /* bigger circle like screenshot */
           position: absolute;
           width: var(--size);
           height: var(--size);
           border-radius: 50%;
           display: grid;
           place-items: center;
-          background: #fff;
+          background: #ffffff;
           color: #111827;
-          box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+          border: 3px solid var(--clr, #60a5fa);  /* colored ring */
+          box-shadow: 0 12px 30px rgba(0,0,0,0.16),
+                      inset 0 0 0 2px rgba(255,255,255,.9);
           opacity: 0;
-          transform: translate(0,0) scale(0.6);
-          transition: transform 560ms cubic-bezier(.22,.8,.27,1), opacity 420ms ease;
+          transform: translate(0,0) scale(.6);
+          transition: transform 560ms cubic-bezier(.22,.8,.27,1),
+                      opacity 420ms ease,
+                      box-shadow .25s ease;
+          backdrop-filter: blur(1px);
         }
 
-        /* Staggered animation delays for a \"magic\" pop */
-        .social-items li:nth-child(1) { transition-delay: 40ms; }
-        .social-items li:nth-child(2) { transition-delay: 80ms; }
-        .social-items li:nth-child(3) { transition-delay: 120ms; }
-        .social-items li:nth-child(4) { transition-delay: 160ms; }
-        .social-items li:nth-child(5) { transition-delay: 200ms; }
-
-        .social-items.show li {
-          opacity: 1;
-          transform: var(--pos, translate(0,0)) scale(1);
-        }
-
-        /* Clockwise arc positions (like your screenshot) */
-        .social-items.show li:nth-child(1) { --pos: translate(-110px, -90px); }
-        .social-items.show li:nth-child(2) { --pos: translate(-145px, -15px); }
-        .social-items.show li:nth-child(3) { --pos: translate(-115px,  65px); }
-        .social-items.show li:nth-child(4) { --pos: translate(-40px,  115px); }
-        .social-items.show li:nth-child(5) { --pos: translate( 30px,   85px); }
-
-        .social-items li a {
-          width: 100%; height: 100%;
-          display: grid; place-items: center;
-          color: #111827;
+        /* icon inside */
+        .social-items li a{
+          width: 100%;
+          height: 100%;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
           text-decoration: none;
-          border-radius: 50%;
-          transition: transform .2s ease;
-          position: relative;
+          color: #111827;
+          transition: transform .2s ease, color .2s ease;
         }
-        .social-items li a::after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          box-shadow: inset 0 0 0 2px var(--clr, #60a5fa);
-          opacity: .6;
+        .social-items li svg{
+          font-size: 22px;
         }
-        .social-items li svg { font-size: 18px; }
-        .social-items li:hover a { transform: scale(1.08); }
-        .social-items li:hover { box-shadow: 0 16px 36px rgba(0,0,0,0.22); }
-        .social-items li:hover a { color: var(--clr, #0ea5e9); }
+        .social-items li:hover{ box-shadow: 0 18px 40px rgba(0,0,0,0.22); }
+        .social-items li:hover a{ transform: scale(1.06); color: var(--clr, #0ea5e9); }
 
-        @media (max-width: 768px) {
-          .social-root { right: 16px; width: 240px; height: 240px; }
-          .social-toggle { width: 52px; height: 52px; }
-          .social-items.show li:nth-child(1) { --pos: translate(-95px, -75px); }
-          .social-items.show li:nth-child(2) { --pos: translate(-120px, -10px); }
-          .social-items.show li:nth-child(3) { --pos: translate(-95px,  55px); }
-          .social-items.show li:nth-child(4) { --pos: translate(-30px,  95px); }
-          .social-items.show li:nth-child(5) { --pos: translate( 26px,  70px); }
+        /* show state + stagger animation */
+        .social-items.show li{ opacity: 1; transform: var(--pos, translate(0,0)) scale(1); }
+        .social-items li:nth-child(1){ transition-delay: 60ms; }
+        .social-items li:nth-child(2){ transition-delay: 110ms; }
+        .social-items li:nth-child(3){ transition-delay: 160ms; }
+        .social-items li:nth-child(4){ transition-delay: 210ms; }
+        .social-items li:nth-child(5){ transition-delay: 260ms; }
+
+        /* Radial layout with more spacing so circles never overlap */
+        .social-items.show li:nth-child(1){ --pos: translate(-150px, -120px); }
+        .social-items.show li:nth-child(2){ --pos: translate(-200px,  -20px); }
+        .social-items.show li:nth-child(3){ --pos: translate(-160px,   90px); }
+        .social-items.show li:nth-child(4){ --pos: translate( -70px,  150px); }
+        .social-items.show li:nth-child(5){ --pos: translate(  30px,  115px); }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 768px){
+          .social-root{ right: 16px; width: 300px; height: 300px; }
+          .social-toggle{ width: 56px; height: 56px; }
+          .social-items li{ --size: 56px; }
+          .social-items.show li:nth-child(1){ --pos: translate(-130px, -100px); }
+          .social-items.show li:nth-child(2){ --pos: translate(-170px,  -10px); }
+          .social-items.show li:nth-child(3){ --pos: translate(-135px,   80px); }
+          .social-items.show li:nth-child(4){ --pos: translate( -55px,  130px); }
+          .social-items.show li:nth-child(5){ --pos: translate(  20px,  100px); }
         }
 
-        @media (max-width: 600px) {
-          #chat-trigger-bubble {
-            right: 2vw !important;
-            left: 2vw !important;
-            width: 96vw !important;
-            min-width: unset !important;
-            max-width: 98vw !important;
-            padding: 10px 6px !important;
-          }
-          .chat-input { font-size: 13px !important; padding: 6px 8px !important; }
-          .chat-submit-btn, .chat-skip-btn, .chat-close-btn {
-            font-size: 13px !important; padding: 6px 10px !important; height: 30px !important;
-          }
-          .chat-message.bot-message { font-size: 13px !important; padding: 8px 10px !important; }
+        @media (max-width: 480px){
+          .social-root{ right: 12px; width: 260px; height: 260px; }
+          .social-items li{ --size: 52px; }
+          .social-items.show li:nth-child(1){ --pos: translate(-110px, -90px); }
+          .social-items.show li:nth-child(2){ --pos: translate(-145px,  -5px); }
+          .social-items.show li:nth-child(3){ --pos: translate(-115px,  70px); }
+          .social-items.show li:nth-child(4){ --pos: translate( -45px, 115px); }
+          .social-items.show li:nth-child(5){ --pos: translate(  15px,  88px); }
+          .call-float-btn{ right: 16px; bottom: 16px; }
         }
       `}</style>
     </Wrapper>
