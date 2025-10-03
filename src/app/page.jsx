@@ -75,7 +75,7 @@ export default function HomePageTwo() {
         <FiPhoneCall size={24} />
       </a>
 
-      {/* ===== Right-center sticky social (compact “C” arc) ===== */}
+      {/* ===== Right-center sticky social (clockwise ring) ===== */}
       <div id="social-share-root" className="social-root">
         <button
           id="social-toggle"
@@ -120,14 +120,14 @@ export default function HomePageTwo() {
         }
         .call-float-btn:hover{ transform: translateY(-2px); background:#0284c7; }
 
-        /* ===== Sticky social root (smaller canvas) ===== */
+        /* ===== Sticky social root ===== */
         .social-root{
           position: fixed;
           right: 24px;
           top: 50%;
           transform: translateY(-50%);
           z-index: 1200;
-          width: 260px;   /* tighter area */
+          width: 260px;   /* canvas area for the arc/ring */
           height: 260px;
           pointer-events: none;
         }
@@ -170,9 +170,9 @@ export default function HomePageTwo() {
           width: 0; height: 0;
         }
 
-        /* Smaller, clean chips */
+        /* Compact chips */
         .social-items li{
-          --size: 44px; /* 👈 reduced size */
+          --size: 44px;
           position: absolute;
           width: var(--size);
           height: var(--size);
@@ -209,37 +209,40 @@ export default function HomePageTwo() {
         .social-items li:nth-child(4){ transition-delay: 160ms; }
         .social-items li:nth-child(5){ transition-delay: 200ms; }
 
-        /* ===== Perfect compact “C” arc (relative to toggle) =====
-           Higher is negative Y, lower is positive Y.
-           These positions form a smooth C sweeping around the toggle.
+        /* ========= CLOCKWISE RING LAYOUT =========
+           We place items around a circle whose center is offset to the LEFT
+           of the toggle, so the full ring is visible. Ordering is clockwise:
+           12 → 2 → 4 → 6 → 8 o'clock.
+           Circle center approx at (-100px, 0) from the toggle; radius ~100px.
         */
-        .social-items.show li:nth-child(1){ --pos: translate(-110px, -85px); }  /* top-left */
-        .social-items.show li:nth-child(2){ --pos: translate(-145px, -25px); }  /* upper mid */
-        .social-items.show li:nth-child(3){ --pos: translate(-155px,  40px); }  /* deepest left */
-        .social-items.show li:nth-child(4){ --pos: translate(-145px, 105px); }  /* lower mid */
-        .social-items.show li:nth-child(5){ --pos: translate(-110px, 165px); }  /* bottom-left */
+        .social-items.show li:nth-child(1){ --pos: translate(-100px, -100px); } /* 12 o'clock */
+        .social-items.show li:nth-child(2){ --pos: translate(-35px,  -75px); }  /* 2 o'clock  */
+        .social-items.show li:nth-child(3){ --pos: translate(-20px,   10px); }  /* 4 o'clock  */
+        .social-items.show li:nth-child(4){ --pos: translate(-80px,  100px); }  /* 6 o'clock  */
+        .social-items.show li:nth-child(5){ --pos: translate(-160px,  65px); }  /* 8 o'clock  */
 
         /* ===== Responsive ===== */
         @media (max-width: 768px){
           .social-root{ right: 16px; width: 230px; height: 230px; }
           .social-toggle{ width: 44px; height: 44px; }
           .social-items li{ --size: 40px; }
-          .social-items.show li:nth-child(1){ --pos: translate(-95px, -75px); }
-          .social-items.show li:nth-child(2){ --pos: translate(-125px, -18px); }
-          .social-items.show li:nth-child(3){ --pos: translate(-135px,  36px); }
-          .social-items.show li:nth-child(4){ --pos: translate(-125px,  92px); }
-          .social-items.show li:nth-child(5){ --pos: translate(-95px,  145px); }
+          /* shrink the circle radius a bit */
+          .social-items.show li:nth-child(1){ --pos: translate(-90px, -90px); }
+          .social-items.show li:nth-child(2){ --pos: translate(-30px, -68px); }
+          .social-items.show li:nth-child(3){ --pos: translate(-18px,  10px); }
+          .social-items.show li:nth-child(4){ --pos: translate(-72px,  90px); }
+          .social-items.show li:nth-child(5){ --pos: translate(-145px, 58px); }
         }
 
         @media (max-width: 480px){
           .social-root{ right: 12px; width: 210px; height: 210px; }
           .social-toggle{ width: 42px; height: 42px; }
           .social-items li{ --size: 36px; }
-          .social-items.show li:nth-child(1){ --pos: translate(-86px, -66px); }
-          .social-items.show li:nth-child(2){ --pos: translate(-110px, -14px); }
-          .social-items.show li:nth-child(3){ --pos: translate(-120px,  32px); }
-          .social-items.show li:nth-child(4){ --pos: translate(-110px,  82px); }
-          .social-items.show li:nth-child(5){ --pos: translate(-86px,  128px); }
+          .social-items.show li:nth-child(1){ --pos: translate(-82px, -82px); }
+          .social-items.show li:nth-child(2){ --pos: translate(-28px, -60px); }
+          .social-items.show li:nth-child(3){ --pos: translate(-16px,   8px); }
+          .social-items.show li:nth-child(4){ --pos: translate(-66px,  82px); }
+          .social-items.show li:nth-child(5){ --pos: translate(-130px, 52px); }
           .call-float-btn{ right: 14px; bottom: 14px; }
         }
       `}</style>
