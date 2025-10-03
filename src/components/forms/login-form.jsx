@@ -11,7 +11,7 @@ import { notifyError, notifySuccess } from '@/utils/toast';
 
 // validation schemas
 const passwordSchema = Yup.object().shape({
-  email:    Yup.string().required('Email is required').email('Enter a valid email'),
+  email: Yup.string().required('Email is required').email('Enter a valid email'),
   password: Yup.string().required('Password is required').min(6, 'At least 6 characters'),
 });
 const otpRequestSchema = Yup.object().shape({
@@ -24,20 +24,20 @@ export default function LoginForm() {
   const redirect = searchParams.get('redirect') || '/profile';
 
   // modes: 'password' | 'otpRequest' | 'otpVerify'
-  const [mode,       setMode]       = useState<'password' | 'otpRequest' | 'otpVerify'>('password');
+  const [mode, setMode] = useState('password');
   const [savedEmail, setSavedEmail] = useState('');
-  const [otp,        setOtp]        = useState('');
+  const [otp, setOtp] = useState('');
 
-  // ✅ missing pieces for ESLint errors
+  // UI state
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
+  const [error, setError] = useState('');
 
   // password form
   const {
     register: regPass,
     handleSubmit: onPassSubmit,
     formState: { errors: passErr },
-    reset: resetPass
+    reset: resetPass,
   } = useForm({ resolver: yupResolver(passwordSchema) });
 
   // OTP request form
@@ -45,28 +45,31 @@ export default function LoginForm() {
     register: regOtp,
     handleSubmit: onOtpReqSubmit,
     formState: { errors: otpErrReq },
-    reset: resetOtpReq
+    reset: resetOtpReq,
   } = useForm({ resolver: yupResolver(otpRequestSchema) });
 
   const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const KEY = process.env.NEXT_PUBLIC_API_KEY;
 
-  // 1️⃣ Email/password login
-  const handlePasswordLogin = async (data: { email: string; password: string }) => {
+  // 1) Email/password login
+  const handlePasswordLogin = async (data) => {
     try {
       const res = await fetch(`${API}/users/login`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type':'application/json', 'x-api-key':KEY as string },
-        body: JSON.stringify({ identifier: data.email, password: data.password })
+        headers: {
+          'Content-Type': 'application/json',
+          ...(KEY ? { 'x-api-key': KEY } : {}),
+        },
+        body: JSON.stringify({ identifier: data.email, password: data.password }),
       });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message||'Login failed');
+      if (!res.ok || !json.success) throw new Error(json.message || 'Login failed');
 
-      // store user info cookie (for UI)
+      // store user for UI
       Cookies.set('userInfo', JSON.stringify({ user: json.user }), { expires: 0.5 });
 
-      // store sessionId in localStorage (for logout)
+      // store sessionId for logout
       if (typeof window !== 'undefined' && json.sessionId) {
         localStorage.setItem('sessionId', json.sessionId);
       }
@@ -74,50 +77,58 @@ export default function LoginForm() {
       notifySuccess(json.message || 'Login successful');
       resetPass();
       router.push(redirect);
-    } catch(err: any) {
-      notifyError(err.message || 'Login failed');
+    } catch (err) {
+      notifyError(err?.message || 'Login failed');
     }
   };
 
-  // 2️⃣ Request OTP
-  const handleOtpRequest = async (data: { email: string }) => {
+  // 2) Request OTP
+  const handleOtpRequest = async (data) => {
     try {
       setSavedEmail(data.email);
       const res = await fetch(`${API}/users/request-login-otp`, {
-        method:'POST', credentials:'include',
-        headers:{ 'Content-Type':'application/json', 'x-api-key':KEY as string },
-        body: JSON.stringify({ email: data.email })
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(KEY ? { 'x-api-key': KEY } : {}),
+        },
+        body: JSON.stringify({ email: data.email }),
       });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message||'OTP send failed');
+      if (!res.ok || !json.success) throw new Error(json.message || 'OTP send failed');
 
       notifySuccess('OTP sent to your email');
       setMode('otpVerify');
       resetOtpReq();
-    } catch(err: any) {
-      notifyError(err.message || 'OTP request failed');
+    } catch (err) {
+      notifyError(err?.message || 'OTP request failed');
     }
   };
 
-  // 3️⃣ Verify OTP & login
-  const handleOtpVerify = async (e: React.FormEvent<HTMLFormElement>) => {
+  // 3) Verify OTP & login
+  const handleOtpVerify = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
       const res = await fetch(`${API}/users/verify-login-otp`, {
-        method:'POST', credentials:'include',
-        headers:{ 'Content-Type':'application/json', 'x-api-key':KEY as string },
-        body: JSON.stringify({ email: savedEmail, otp })
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(KEY ? { 'x-api-key': KEY } : {}),
+        },
+        body: JSON.stringify({ email: savedEmail, otp }),
       });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message||'Invalid OTP');
+      if (!res.ok || !json.success) throw new Error(json.message || 'Invalid OTP');
 
-      // store user info cookie (for UI)
+      // store user for UI
       Cookies.set('userInfo', JSON.stringify({ user: json.user }), { expires: 0.5 });
 
-      // store sessionId in localStorage (for logout)
+      // store sessionId for logout
       if (typeof window !== 'undefined' && json.sessionId) {
         localStorage.setItem('sessionId', json.sessionId);
       }
@@ -129,7 +140,7 @@ export default function LoginForm() {
       } else {
         router.push('/');
       }
-    } catch(err: any) {
+    } catch (err) {
       console.error('Login error:', err);
       setError(err?.message || 'Login failed. Please try again.');
     } finally {
@@ -139,16 +150,15 @@ export default function LoginForm() {
 
   return (
     <div>
-      {/* ───────── Email & Password Login ───────────── */}
+      {/* Email & Password Login */}
       {mode === 'password' && (
         <form onSubmit={onPassSubmit(handlePasswordLogin)} className="space-y-4">
-
           <div className="tp-login-input-box">
             <div className="tp-login-input">
               <input {...regPass('email')} type="email" placeholder="Your Email" />
             </div>
             <div className="tp-login-input-title"><label>Email</label></div>
-            <ErrorMsg msg={passErr.email?.message}/>
+            <ErrorMsg msg={passErr?.email?.message} />
           </div>
 
           <div className="tp-login-input-box">
@@ -156,7 +166,7 @@ export default function LoginForm() {
               <input {...regPass('password')} type="password" placeholder="Your Password" />
             </div>
             <div className="tp-login-input-title"><label>Password</label></div>
-            <ErrorMsg msg={passErr.password?.message}/>
+            <ErrorMsg msg={passErr?.password?.message} />
           </div>
 
           <div className="tp-login-bottom">
@@ -165,7 +175,7 @@ export default function LoginForm() {
         </form>
       )}
 
-      {/* ───────── Divider + Toggle ────────────────── */}
+      {/* Divider + Toggle */}
       <div className="tp-login-mail text-center my-6">
         {mode === 'password' ? (
           <button
@@ -186,7 +196,7 @@ export default function LoginForm() {
         )}
       </div>
 
-      {/* ───────── OTP Request ────────────────────── */}
+      {/* OTP Request */}
       {mode === 'otpRequest' && (
         <form onSubmit={onOtpReqSubmit(handleOtpRequest)} className="space-y-4 mb-6">
           <div className="tp-login-input-box">
@@ -194,7 +204,7 @@ export default function LoginForm() {
               <input {...regOtp('email')} type="email" placeholder="Your Email" />
             </div>
             <div className="tp-login-input-title"><label>Email</label></div>
-            <ErrorMsg msg={otpErrReq.email?.message}/>
+            <ErrorMsg msg={otpErrReq?.email?.message} />
           </div>
 
           <div className="tp-login-bottom">
@@ -203,14 +213,14 @@ export default function LoginForm() {
         </form>
       )}
 
-      {/* ───────── OTP Verify ─────────────────────── */}
+      {/* OTP Verify */}
       {mode === 'otpVerify' && (
         <form onSubmit={handleOtpVerify} className="space-y-4 mb-6">
           <div className="tp-login-input-box">
             <div className="tp-login-input">
               <input
                 value={otp}
-                onChange={e => setOtp(e.target.value)}
+                onChange={(e) => setOtp(e.target.value)}
                 placeholder="Enter OTP"
                 required
               />
