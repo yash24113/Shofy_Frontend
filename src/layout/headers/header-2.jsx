@@ -72,7 +72,9 @@ const HeaderTwo = ({ style_2 = false }) => {
           import('js-cookie')
             .then((Cookies) => Cookies.default.remove('userInfo'))
             .catch(() => {});
-        } catch {}
+        } catch {
+          // No operation if js-cookie import fails
+        }
       }
     } finally {
       setHasSession(false);
@@ -81,7 +83,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     }
   };
 
-  const phonePrimary = sanitizePhone('+919925155141');
+  // const phonePrimary = sanitizePhone('+919925155141');
 
   return (
     <>
@@ -161,10 +163,10 @@ const HeaderTwo = ({ style_2 = false }) => {
                                 {hasSession ? (
                                   <>
                                     <Link className="user-item" href="/profile" role="menuitem" onClick={() => setUserOpen(false)}>
-                                      <span>My Account</span>
+                                      My Account
                                     </Link>
                                     <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
-                                      <span>Wishlist</span>
+                                      Wishlist
                                     </Link>
                                     <button
                                       className="user-item"
@@ -175,23 +177,23 @@ const HeaderTwo = ({ style_2 = false }) => {
                                         dispatch(openCartMini());
                                       }}
                                     >
-                                      <span>Cart</span>
+                                      Cart
                                     </button>
                                     <div className="user-divider" />
                                     <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
-                                      <span>Logout</span>
+                                      Logout
                                     </button>
                                   </>
                                 ) : (
                                   <>
                                     <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
-                                      <span>Wishlist</span>
+                                      Wishlist
                                     </Link>
                                     <Link className="user-item" href="/login" role="menuitem" onClick={() => setUserOpen(false)}>
-                                      <span>Login</span>
+                                      Login
                                     </Link>
                                     <Link className="user-item" href="/register" role="menuitem" onClick={() => setUserOpen(false)}>
-                                      <span>Sign Up</span>
+                                      Sign Up
                                     </Link>
                                   </>
                                 )}
@@ -200,7 +202,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                           )}
                         </div>
 
-                        {/* Wishlist icon (header) */}
+                        {/* Wishlist icon */}
                         <div className="tp-header-action-item d-none d-lg-block me-2">
                           <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
                             <FaHeart />
@@ -249,7 +251,7 @@ const HeaderTwo = ({ style_2 = false }) => {
         categoryType="fashion"
       />
 
-      {/* Polished dropdown styles */}
+      {/* Dropdown styles */}
       <style jsx>{`
         .user-menu-dropdown {
           position: absolute;
@@ -257,57 +259,46 @@ const HeaderTwo = ({ style_2 = false }) => {
           top: calc(100% + 12px);
           z-index: 1000;
           min-width: 220px;
-          background: #ffffff;
+          background: #fff;
           border-radius: 12px;
-          box-shadow:
-            0 20px 40px rgba(0,0,0,.14),
-            0 2px 6px rgba(0,0,0,.06);
-          overflow: hidden; /* keep rounded corners on focus ring */
-          animation: menuPop .14s ease-out;
+          box-shadow: 0 8px 20px rgba(0,0,0,.15);
+          overflow: hidden;
+          animation: fadeIn 0.15s ease-out;
         }
         .user-menu-dropdown::before {
-          /* caret triangle */
           content: "";
           position: absolute;
-          right: 16px;
-          top: -8px;
-          width: 14px;
-          height: 14px;
-          background: #ffffff;
+          right: 18px;
+          top: -6px;
+          width: 12px;
+          height: 12px;
+          background: #fff;
           transform: rotate(45deg);
-          box-shadow: -2px -2px 6px rgba(0,0,0,.05);
+          box-shadow: -2px -2px 4px rgba(0,0,0,.05);
         }
-        .user-menu-inner {
-          padding: 6px;
-        }
+        .user-menu-inner { padding: 6px; }
 
         .user-item {
-          display: flex;
-          align-items: center;
-          gap: 10px;
+          display: block;
           width: 100%;
-          padding: 10px 12px;
-          border-radius: 8px;
+          padding: 10px 14px;
           font-size: 14px;
-          line-height: 1.2;
           color: #111827;
           text-decoration: none;
-          text-align: left;
-          background: transparent;
-          border: 0;
+          border-radius: 8px;
           cursor: pointer;
-          outline: none;
-          transition: background .15s ease, color .15s ease, transform .02s ease;
+          transition: background 0.2s, color 0.2s;
         }
         .user-item:hover {
           background: #f3f4f6;
         }
         .user-item:focus-visible {
+          outline: none;
           background: #eef2ff;
-          box-shadow: 0 0 0 3px rgba(99,102,241,.25) inset;
+          box-shadow: inset 0 0 0 2px #6366f1;
         }
         .user-item:active {
-          transform: scale(.995);
+          background: #e0e7ff;
         }
         .user-item.danger {
           color: #b91c1c;
@@ -315,25 +306,17 @@ const HeaderTwo = ({ style_2 = false }) => {
         .user-item.danger:hover {
           background: #fee2e2;
         }
-
         .user-divider {
           height: 1px;
           background: #e5e7eb;
-          margin: 6px 8px;
-          border-radius: 1px;
+          margin: 6px 0;
         }
-
-        @keyframes menuPop {
-          from { transform: translateY(-4px); opacity: .0; }
-          to   { transform: translateY(0);    opacity: 1; }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
-
-        /* Small screens: make sure menu doesn't overflow the edge */
         @media (max-width: 480px) {
-          .user-menu-dropdown {
-            min-width: 200px;
-            right: -8px;
-          }
+          .user-menu-dropdown { min-width: 200px; right: -8px; }
           .user-menu-dropdown::before { right: 24px; }
         }
       `}</style>
