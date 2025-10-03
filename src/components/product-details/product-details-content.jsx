@@ -9,27 +9,37 @@ import RelatedProducts     from './related-products';
 
 import { useGetSeoByProductQuery } from '@/redux/features/seoApi';
 
-
 export default function ProductDetailsContent({ productItem }) {
-  const { _id, img, imageURLs, videoId, status, groupcodeId } = productItem ?? {};
+  const {
+    _id,
+    img,
+    image1,
+    image2,
+    imageURLs,          // existing array source (kept; will be merged & deduped)
+    videoId,            // fallback video url
+    video,              // optional (if present on productItem)
+    videoThumbnail,     // optional (if present on productItem)
+    status,
+    groupcodeId,
+  } = productItem ?? {};
 
-  const [activeImg, setActiveImg] = useState(img);
-  useEffect(() => { setActiveImg(img); }, [img]);
+  const [activeImg, setActiveImg] = useState(img || null);
+  useEffect(() => { setActiveImg(img || null); }, [img]);
 
-  const handleImageActive = (item) => setActiveImg(item.img);
+  const handleImageActive = (item) => setActiveImg(item?.img ?? img ?? null);
 
   const {
-    data:    seoPayload,
+    data: seoPayload,
     isLoading: seoLoading,
-    isError:   seoError,
+    isError: seoError,
   } = useGetSeoByProductQuery(_id, { skip: !_id });
 
   const seoData = seoPayload?.data ?? null;
 
   const SeoStatus = () => {
     if (seoLoading) return <span className="text-muted small">Loading SEO…</span>;
-    if (seoError)   return null;              
-    return null;                              
+    if (seoError)   return null;
+    return null;
   };
 
   return (
@@ -37,23 +47,34 @@ export default function ProductDetailsContent({ productItem }) {
       <div className="tp-product-details-top pb-115">
         <div className="container">
           <div className="row">
+            {/* Left: gallery */}
             <div className="col-xl-7 col-lg-6">
               <DetailsThumbWrapper
-                activeImg={activeImg}
+                /* Auto-render thumbnails from API fields */
+                apiImages={{
+                  img,
+                  image1,
+                  image2,
+                  video,           // optional
+                  videoThumbnail,  // optional
+                }}
+                /* Keep existing props */
+                activeImg={activeImg || img}
                 handleImageActive={handleImageActive}
-                imageURLs={imageURLs}
+                imageURLs={imageURLs}   /* merged & de-duplicated with apiImages */
                 imgWidth={580}
                 imgHeight={670}
-                videoId={videoId}
+                videoId={videoId}       /* fallback if video not in apiImages */
                 status={status}
               />
             </div>
 
+            {/* Right: details */}
             <div className="col-xl-5 col-lg-6">
               <DetailsWrapper
                 productItem={productItem}
                 handleImageActive={handleImageActive}
-                activeImg={activeImg}
+                activeImg={activeImg || img}
                 detailsBottom
               />
               <SeoStatus />
@@ -62,6 +83,7 @@ export default function ProductDetailsContent({ productItem }) {
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="tp-product-details-bottom pb-140">
         <div className="container">
           <div className="row">
@@ -72,6 +94,7 @@ export default function ProductDetailsContent({ productItem }) {
         </div>
       </div>
 
+      {/* Related */}
       <section className="tp-related-product pt-95 pb-50">
         <div className="container">
           <div className="row">

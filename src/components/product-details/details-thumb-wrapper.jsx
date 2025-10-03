@@ -18,7 +18,12 @@ const processImageUrl = (url) => {
 
 /* ---------------- component ---------------- */
 const DetailsThumbWrapper = ({
+  /** Existing source: custom list of items */
   imageURLs,           // [{ type:'image'|'video', img:<thumb>, video?:<url> }, ...]
+
+  /** NEW: supply raw API fields and we'll build the left panel automatically */
+  apiImages,           // { img?, image1?, image2?, video?, videoThumbnail? }
+
   handleImageActive,   // optional callback when user clicks an image thumb
   activeImg,           // default large image (use product.img)
   imgWidth = 416,
@@ -35,30 +40,52 @@ const DetailsThumbWrapper = ({
   const [isVideoActive, setIsVideoActive] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
 
-  // 1) normalize + process all items
-  const processedImageURLs = useMemo(() => {
+  /* ---------- Build list from apiImages (img, image1, image2, optional video) ---------- */
+  const fromApiImages = useMemo(() => {
+    const out = [];
+    const src = apiImages || {};
+    const pics = [src.img, src.image1, src.image2].map(processImageUrl).filter(Boolean);
+
+    pics.forEach((p) => out.push({ type: 'image', img: p }));
+
+    if (src.video) {
+      const videoUrl = isRemote(src.video) ? src.video : processImageUrl(src.video);
+      const poster = processImageUrl(src.videoThumbnail) || pics[0] || null;
+      out.push({ type: 'video', img: poster, video: videoUrl });
+    }
+    return out;
+  }, [apiImages]);
+
+  /* ---------- Normalize the provided imageURLs prop ---------- */
+  const fromImageURLsProp = useMemo(() => {
     const list = Array.isArray(imageURLs) ? imageURLs : [];
-    const seen = new Set();
     return list
       .map((item) => {
         if (!item) return null;
         const type = item.type === 'video' ? 'video' : 'image';
         const img = processImageUrl(item.img || item.thumbnail || item.poster);
-        const video = type === 'video'
-          ? (isRemote(item.video) ? item.video : processImageUrl(item.video))
-          : null;
+        const video =
+          type === 'video'
+            ? (isRemote(item.video) ? item.video : processImageUrl(item.video))
+            : null;
         return img ? { ...item, type, img, video } : null;
       })
-      .filter(Boolean)
-      .filter((it) => {
-        const k = `${it.type}|${it.img}|${it.video || ''}`;
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
+      .filter(Boolean);
   }, [imageURLs]);
 
-  // 2) default main image
+  /* ---------- Merge + de-duplicate (API first, then prop) ---------- */
+  const processedImageURLs = useMemo(() => {
+    const merged = [...fromApiImages, ...fromImageURLsProp];
+    const seen = new Set();
+    return merged.filter((it) => {
+      const key = `${it.type}|${it.img}|${it.video || ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [fromApiImages, fromImageURLsProp]);
+
+  /* ---------- Default main image ---------- */
   const processedActiveImg = useMemo(() => processImageUrl(activeImg), [activeImg]);
   const firstImageUrl = useMemo(() => {
     const first = processedImageURLs.find((x) => x.type === 'image');
@@ -272,12 +299,18 @@ const DetailsThumbWrapper = ({
 
         /* Thumbs */
         .pdw-thumbs { width: 96px; }
-        .pdw-thumbs-inner { display: flex; flex-direction: column; gap: 12px; }
+        .pdw-thumbs-inner {
+          display: flex; flex-direction: column; gap: 12px;
+          max-height: ${zoomPaneHeight}px;
+          overflow: auto; /* scroll if many images */
+          padding-right: 4px;
+        }
         .pdw-thumb {
           position: relative; width: 80px; height: 80px;
           padding: 0; border: 2px solid transparent; border-radius: 8px;
           overflow: hidden; background: #fff; cursor: pointer;
           transition: border-color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
+          flex: 0 0 auto;
         }
         .pdw-thumb:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,.08); }
         .pdw-thumb.is-active { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.25); }

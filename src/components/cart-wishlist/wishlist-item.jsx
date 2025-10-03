@@ -78,9 +78,9 @@ const WishlistItem = ({ product }) => {
             type="button"
             className={`btn-add-product ${moving ? "is-loading" : ""}`}
             aria-busy={moving ? "true" : "false"}
-            title="Add Product"
+            title="Move to Cart"
           >
-            {moving ? "Moving…" : "Add Product"}
+            {moving ? "Moving…" : "Move to Cart"}
           </button>
         </td>
 
