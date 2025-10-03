@@ -15,7 +15,7 @@ export default function ProductDetailsContent({ productItem }) {
     img,
     image1,
     image2,
-    imageURLs,          // existing array source (kept; will be merged & deduped)
+    imageURLs,          // optional extra images (merged & deduped)
     videoId,            // fallback video url
     video,              // optional (if present on productItem)
     videoThumbnail,     // optional (if present on productItem)
@@ -23,6 +23,7 @@ export default function ProductDetailsContent({ productItem }) {
     groupcodeId,
   } = productItem ?? {};
 
+  // Keep a separate active image for DetailsWrapper (right side specs)
   const [activeImg, setActiveImg] = useState(img || null);
   useEffect(() => { setActiveImg(img || null); }, [img]);
 
@@ -50,21 +51,22 @@ export default function ProductDetailsContent({ productItem }) {
             {/* Left: gallery */}
             <div className="col-xl-7 col-lg-6">
               <DetailsThumbWrapper
-                /* Auto-render thumbnails from API fields */
-                apiImages={{
-                  img,
-                  image1,
-                  image2,
-                  video,           // optional
-                  videoThumbnail,  // optional
-                }}
-                /* Keep existing props */
-                activeImg={activeImg || img}
+                key={_id}                 // ensure re-mount per product
+                /* Default main image will be `img` */
+                activeImg={img}
+                /* Left sidebar thumbnails come from these fields in order: img, image1, image2 */
+                img={img}
+                image1={image1}
+                image2={image2}
+                /* Optional video support */
+                video={video}
+                videoThumbnail={videoThumbnail}
+                /* Keep your existing extras */
                 handleImageActive={handleImageActive}
-                imageURLs={imageURLs}   /* merged & de-duplicated with apiImages */
+                imageURLs={imageURLs}     /* merged & de-duplicated with above */
                 imgWidth={580}
                 imgHeight={670}
-                videoId={videoId}       /* fallback if video not in apiImages */
+                videoId={videoId}         /* fallback if video not provided above */
                 status={status}
               />
             </div>
