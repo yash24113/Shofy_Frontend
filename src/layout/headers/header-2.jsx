@@ -1,4 +1,5 @@
 'use client';
+
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useDispatch, useSelector } from 'react-redux';
@@ -28,42 +29,25 @@ import {
 } from 'react-icons/fa';
 import { FiPhone, FiMenu } from 'react-icons/fi';
 
-type OfficeInfo = {
-  companyName?: string;
-  companyPhone1?: string;
-  companyPhone2?: string;
-  companyEmail?: string;
-  companyAddress?: string;
-  companyLanguages?: string[];
-  companyFoundingDate?: string;
-  companyEmployeeRange?: string;
-  companyAwards?: string;
-  whatsappNumber?: string;
-  gaId?: string;
-  clarityId?: string;
-  companyLogoUrl?: string;
-  facebook?: string;
-  instagram?: string;
-  linkedin?: string;
-  twitter?: string;
-  youtube?: string;
-};
+/* ----------------------- helpers ----------------------- */
+const sanitizePhone = (v) => (v || '').replace(/[^\d+]/g, ''); // keep digits and leading +
 
-const sanitizePhone = (v?: string) =>
-  (v || '').replace(/[^\d+]/g, ''); // keep digits and leading + t
+const isHttpUrl = (v) => typeof v === 'string' && /^https?:\/\//i.test(v);
 
-const HeaderTwo = ({ style_2 = false }: { style_2?: boolean }) => {
+/* ========================================================
+   Component (JSX, no TS)
+======================================================== */
+const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
-  const { wishlist } = useSelector((state: any) => state.wishlist);
+  const { wishlist } = useSelector((state) => state.wishlist);
   const { quantity } = useCartInfo();
+
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
   const { searchText, setSearchText, handleSubmit: handleSearchSubmit } =
     useSearchFormSubmit();
 
-  /* ------------------------------------------------------------------ */
-  /*  (1) form-validation schema (kept as-is)                           */
-  /* ------------------------------------------------------------------ */
+  /* ---------------- form-validation schema --------------- */
   const schema = Yup.object().shape({
     name: Yup.string().required('Name is required'),
     mobileNumber: Yup.string().required('Mobile number is required'),
@@ -77,57 +61,70 @@ const HeaderTwo = ({ style_2 = false }: { style_2?: boolean }) => {
     mode: 'onTouched',
   });
 
-  /* ------------------------------------------------------------------ */
-  /*  (2) Office / Social info from API (public fields only)            */
-  /* ------------------------------------------------------------------ */
-  const [info, setInfo] = useState<OfficeInfo>({});
-  const [loadingInfo, setLoadingInfo] = useState<boolean>(false);
+  /* ---------------- office / social info ----------------- */
+  const [info, setInfo] = useState({
+    companyName: '',
+    companyPhone1: '',
+    companyPhone2: '',
+    companyEmail: '',
+    companyAddress: '',
+    companyLanguages: [],
+    companyFoundingDate: '',
+    companyEmployeeRange: '',
+    companyAwards: '',
+    whatsappNumber: '',
+    gaId: '',
+    clarityId: '',
+    companyLogoUrl: '',
+    facebook: '',
+    instagram: '',
+    linkedin: '',
+    twitter: '',
+    youtube: '',
+  });
+  const [loadingInfo, setLoadingInfo] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-
     const fetchOfficeInfo = async () => {
       try {
         setLoadingInfo(true);
         const res = await fetch(
-          // You can move this to an env var: process.env.NEXT_PUBLIC_OFFICEINFO_URL
-          'https://test.amrita-fashions.com/landing/officeinformation',
+          process.env.NEXT_PUBLIC_OFFICEINFO_URL ||
+            'https://test.amrita-fashions.com/landing/officeinformation',
           { signal: controller.signal, cache: 'no-store' }
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-
-        // Your sample structure: { success, data: [ {...} ] }
-        const first: any =
+        const first =
           json && Array.isArray(json.data) && json.data.length > 0
             ? json.data[0]
             : {};
 
-        // Extract ONLY safe/public fields (skip tokens/keys)
-        const publicInfo: OfficeInfo = {
-          companyName: first.companyName,
-          companyPhone1: first.companyPhone1,
-          companyPhone2: first.companyPhone2,
-          companyEmail: first.companyEmail,
-          companyAddress: first.companyAddress,
-          companyLanguages: first.companyLanguages,
-          companyFoundingDate: first.companyFoundingDate,
-          companyEmployeeRange: first.companyEmployeeRange,
-          companyAwards: first.companyAwards,
-          whatsappNumber: first.whatsappNumber,
-          gaId: first.gaId,
-          clarityId: first.clarityId,
-          companyLogoUrl: first.companyLogoUrl,
-          facebook: first.facebook,
-          instagram: first.instagram,
-          linkedin: first.linkedin,
-          twitter: first.twitter,
-          youtube: first.youtube,
-        };
-
-        setInfo(publicInfo);
+        setInfo({
+          companyName: first.companyName || '',
+          companyPhone1: first.companyPhone1 || '',
+          companyPhone2: first.companyPhone2 || '',
+          companyEmail: first.companyEmail || '',
+          companyAddress: first.companyAddress || '',
+          companyLanguages: Array.isArray(first.companyLanguages)
+            ? first.companyLanguages
+            : [],
+          companyFoundingDate: first.companyFoundingDate || '',
+          companyEmployeeRange: first.companyEmployeeRange || '',
+          companyAwards: first.companyAwards || '',
+          whatsappNumber: first.whatsappNumber || '',
+          gaId: first.gaId || '',
+          clarityId: first.clarityId || '',
+          companyLogoUrl: first.companyLogoUrl || '',
+          facebook: first.facebook || '',
+          instagram: first.instagram || '',
+          linkedin: first.linkedin || '',
+          twitter: first.twitter || '',
+          youtube: first.youtube || '',
+        });
       } catch (err) {
-        if ((err as any)?.name !== 'AbortError') {
+        if (err?.name !== 'AbortError') {
           console.error('Office info fetch failed:', err);
         }
       } finally {
@@ -144,12 +141,11 @@ const HeaderTwo = ({ style_2 = false }: { style_2?: boolean }) => {
   const whatsappDigits = sanitizePhone(info.whatsappNumber) || phonePrimary;
   const waLink = `https://wa.me/${whatsappDigits}`;
 
-  const logoSrc = info.companyLogoUrl || localLogo;
+  // allow either static import or remote string
+  const logoSrc = isHttpUrl(info.companyLogoUrl) ? info.companyLogoUrl : localLogo;
   const companyAlt = info.companyName || 'Company Logo';
 
-  /* ------------------------------------------------------------------ */
-  /*  RENDER                                                            */
-  /* ------------------------------------------------------------------ */
+  /* -------------------------- render --------------------- */
   return (
     <>
       <header>
@@ -166,37 +162,36 @@ const HeaderTwo = ({ style_2 = false }: { style_2?: boolean }) => {
                   <div className="tp-header-info d-flex align-items-center flex-wrap">
                     <div className="tp-header-info-item social-icons d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2">
                       <span className="tp-social-icons">
-                        {info.facebook && (
+                        {info.facebook ? (
                           <a href={info.facebook} target="_blank" rel="noreferrer" aria-label="Facebook">
                             <FaFacebookF />
                           </a>
-                        )}
-                        {info.instagram && (
+                        ) : null}
+                        {info.instagram ? (
                           <a href={info.instagram} target="_blank" rel="noreferrer" aria-label="Instagram">
                             <FaInstagram />
                           </a>
-                        )}
-                        {info.youtube && (
+                        ) : null}
+                        {info.youtube ? (
                           <a href={info.youtube} target="_blank" rel="noreferrer" aria-label="YouTube">
                             <FaYoutube />
                           </a>
-                        )}
-                        {info.linkedin && (
+                        ) : null}
+                        {info.linkedin ? (
                           <a href={info.linkedin} target="_blank" rel="noreferrer" aria-label="LinkedIn">
                             <FaLinkedinIn />
                           </a>
-                        )}
-                        {/* WhatsApp from number */}
-                        {whatsappDigits && (
+                        ) : null}
+                        {whatsappDigits ? (
                           <a href={waLink} target="_blank" rel="noreferrer" aria-label="WhatsApp">
                             <FaWhatsapp />
                           </a>
-                        )}
-                        {info.twitter && (
+                        ) : null}
+                        {info.twitter ? (
                           <a href={info.twitter} target="_blank" rel="noreferrer" aria-label="Twitter/X">
                             <FaTwitter />
                           </a>
-                        )}
+                        ) : null}
                       </span>
 
                       {/* Mobile phone (visible on md-) */}
