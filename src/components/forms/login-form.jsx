@@ -76,7 +76,7 @@ export default function LoginForm() {
   const handleOtpRequest = async (data) => {
     try {
       setSavedEmail(data.email);
-      const res = await fetch(`${API}/users/login/otp/request`, {
+      const res = await fetch(`${API}/users/request-login-otp`, {
         method:'POST', credentials:'include',
         headers:{ 'Content-Type':'application/json', 'x-api-key':KEY },
         body: JSON.stringify({ email: data.email })
@@ -99,7 +99,7 @@ export default function LoginForm() {
     setError('');
 
     try {
-      const res = await fetch(`${API}/users/login/otp/verify`, {
+      const res = await fetch(`${API}/users/verify-login-otp`, {
         method:'POST', credentials:'include',
         headers:{ 'Content-Type':'application/json', 'x-api-key':KEY },
         body: JSON.stringify({ email: savedEmail, otp })
