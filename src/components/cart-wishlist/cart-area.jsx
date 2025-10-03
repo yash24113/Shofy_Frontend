@@ -56,7 +56,7 @@ const CartArea = () => {
                   <div className="row align-items-end justify-content-between g-3">
                     {/* LEFT: Add Product */}
                     <div className="col-md-6">
-                      <div className="tp-cart-actions-left">
+                      <div className="tp-cart-actions-left center-left">
                         <Link
                           href="/shop"
                           className="btn-base btn-primary btn-pressable"
@@ -102,16 +102,17 @@ const CartArea = () => {
           display: inline-flex;
           align-items: center;
           gap: 10px;
-          min-height: 44px;
-          padding: 10px 18px;
-          border-radius: 12px;
+          min-height: 48px;
+          padding: 12px 22px;
+          border-radius: 10px;
           font-weight: 600;
           font-size: 15px;
           line-height: 1;
           text-decoration: none;
           cursor: pointer;
           user-select: none;
-          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+          transition: transform 160ms ease, box-shadow 160ms ease,
+                      background 160ms ease, border-color 160ms ease, color 160ms ease;
         }
         .btn-pressable:hover {
           transform: translateY(-1px);
@@ -123,7 +124,7 @@ const CartArea = () => {
         }
         .btn-pressable:focus-visible {
           outline: 0;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45);
+          box-shadow: 0 0 0 3px rgba(46, 160, 255, 0.45);
         }
         .btn-icon {
           display: inline-flex;
@@ -131,17 +132,19 @@ const CartArea = () => {
           line-height: 0;
         }
 
-        /* Primary (Add Product) */
+        /* Primary (Add Product) — black base, light-blue hover */
         .btn-primary {
           color: #fff;
           border: none;
-          background: linear-gradient(180deg, #2ea0ff 0%, #1670ff 100%);
+          background: #000;          /* black base */
+          box-shadow: 0 6px 18px rgba(0,0,0,0.25);
         }
         .btn-primary:hover {
-          background: linear-gradient(180deg, #4eb0ff 0%, #2a7dff 100%);
+          background: #2ea0ff;       /* light blue hover */
+          box-shadow: 0 10px 28px rgba(46,160,255,0.35);
         }
         .btn-primary:active {
-          background: linear-gradient(180deg, #2a7dff 0%, #165cff 100%);
+          background: #1670ff;       /* pressed */
         }
 
         /* Outline (Clear Cart) */
@@ -160,21 +163,21 @@ const CartArea = () => {
         }
 
         /* Layout helpers */
-        .tp-cart-actions-left {
+        .tp-cart-actions-left,
+        .tp-cart-update {
           display: flex;
           align-items: center;
         }
+        /* Center the Add Product button in its column */
+        .center-left {
+          justify-content: center;
+        }
         .tp-cart-update {
-          display: flex;
           justify-content: flex-end;
-          align-items: center;
         }
 
         @media (max-width: 640px) {
-          .tp-cart-actions-left,
-          .tp-cart-update {
-            justify-content: flex-start;
-          }
+          .tp-cart-update { justify-content: flex-start; }
         }
       `}</style>
     </>
