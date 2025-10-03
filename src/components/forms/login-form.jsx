@@ -24,7 +24,7 @@ export default function LoginForm() {
   const redirect = searchParams.get('redirect') || '/profile';
 
   // modes: 'password' | 'otpRequest' | 'otpVerify'
-  const [mode,       setMode]       = useState('password');
+  const [mode,       setMode]       = useState<'password' | 'otpRequest' | 'otpVerify'>('password');
   const [savedEmail, setSavedEmail] = useState('');
   const [otp,        setOtp]        = useState('');
 
@@ -52,33 +52,40 @@ export default function LoginForm() {
   const KEY = process.env.NEXT_PUBLIC_API_KEY;
 
   // 1️⃣ Email/password login
-  const handlePasswordLogin = async (data) => {
+  const handlePasswordLogin = async (data: { email: string; password: string }) => {
     try {
       const res = await fetch(`${API}/users/login`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type':'application/json', 'x-api-key':KEY },
+        headers: { 'Content-Type':'application/json', 'x-api-key':KEY as string },
         body: JSON.stringify({ identifier: data.email, password: data.password })
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.message||'Login failed');
 
+      // store user info cookie (for UI)
       Cookies.set('userInfo', JSON.stringify({ user: json.user }), { expires: 0.5 });
-      notifySuccess(json.message);
+
+      // store sessionId in localStorage (for logout)
+      if (typeof window !== 'undefined' && json.sessionId) {
+        localStorage.setItem('sessionId', json.sessionId);
+      }
+
+      notifySuccess(json.message || 'Login successful');
       resetPass();
       router.push(redirect);
-    } catch(err) {
-      notifyError(err.message);
+    } catch(err: any) {
+      notifyError(err.message || 'Login failed');
     }
   };
 
   // 2️⃣ Request OTP
-  const handleOtpRequest = async (data) => {
+  const handleOtpRequest = async (data: { email: string }) => {
     try {
       setSavedEmail(data.email);
       const res = await fetch(`${API}/users/request-login-otp`, {
         method:'POST', credentials:'include',
-        headers:{ 'Content-Type':'application/json', 'x-api-key':KEY },
+        headers:{ 'Content-Type':'application/json', 'x-api-key':KEY as string },
         body: JSON.stringify({ email: data.email })
       });
       const json = await res.json();
@@ -87,13 +94,13 @@ export default function LoginForm() {
       notifySuccess('OTP sent to your email');
       setMode('otpVerify');
       resetOtpReq();
-    } catch(err) {
-      notifyError(err.message);
+    } catch(err: any) {
+      notifyError(err.message || 'OTP request failed');
     }
   };
 
   // 3️⃣ Verify OTP & login
-  const handleOtpVerify = async (e) => {
+  const handleOtpVerify = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError('');
@@ -101,13 +108,20 @@ export default function LoginForm() {
     try {
       const res = await fetch(`${API}/users/verify-login-otp`, {
         method:'POST', credentials:'include',
-        headers:{ 'Content-Type':'application/json', 'x-api-key':KEY },
+        headers:{ 'Content-Type':'application/json', 'x-api-key':KEY as string },
         body: JSON.stringify({ email: savedEmail, otp })
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.message||'Invalid OTP');
 
+      // store user info cookie (for UI)
       Cookies.set('userInfo', JSON.stringify({ user: json.user }), { expires: 0.5 });
+
+      // store sessionId in localStorage (for logout)
+      if (typeof window !== 'undefined' && json.sessionId) {
+        localStorage.setItem('sessionId', json.sessionId);
+      }
+
       notifySuccess('Logged in successfully');
       setOtp('');
       if (redirect) {
@@ -115,7 +129,7 @@ export default function LoginForm() {
       } else {
         router.push('/');
       }
-    } catch(err) {
+    } catch(err: any) {
       console.error('Login error:', err);
       setError(err?.message || 'Login failed. Please try again.');
     } finally {
