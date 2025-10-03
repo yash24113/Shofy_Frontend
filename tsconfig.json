@@ -20,6 +20,6 @@
       "@assets/*": ["public/assets/*"]
     }
   },
-  "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx", "src/layout/headers/header-2.tsx", "src/components/cart-wishlist/wishlist-item.jsx"],
+  "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx", "src/layout/headers/header-2.tsx", "src/components/cart-wishlist/wishlist-item.jsx", "src/app/page.jsx"],
   "exclude": ["node_modules"]
 }

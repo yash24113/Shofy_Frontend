@@ -26,16 +26,16 @@ export default function HomePageTwo() {
   // NEW: social share toggle state
   const [socialOpen, setSocialOpen] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
   const handleClose = () => { setShowTrigger(false); setStep(0); setForm({ name: '', phone: '', help: '', email: '', location: '' }); };
 
   // Close chat trigger on outside click
   useEffect(() => {
     if (!showTrigger) return;
-    const handleClick = (e: MouseEvent) => {
+    const handleClick = (e) => {
       const trigger = document.getElementById('chat-trigger-bubble');
       const btn = document.getElementById('chat-float-btn');
-      if (trigger && !trigger.contains(e.target as Node) && btn && !btn.contains(e.target as Node)) {
+      if (trigger && !trigger.contains(e.target) && btn && !btn.contains(e.target)) {
         setShowTrigger(false);
         setStep(0);
         setForm({ name: '', phone: '', help: '', email: '', location: '' });
@@ -48,11 +48,11 @@ export default function HomePageTwo() {
   // Close social menu on outside click / ESC
   useEffect(() => {
     if (!socialOpen) return;
-    const onDocClick = (e: MouseEvent) => {
+    const onDocClick = (e) => {
       const root = document.getElementById('social-share-root');
-      if (root && !root.contains(e.target as Node)) setSocialOpen(false);
+      if (root && !root.contains(e.target)) setSocialOpen(false);
     };
-    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setSocialOpen(false); };
+    const onEsc = (e) => { if (e.key === 'Escape') setSocialOpen(false); };
     document.addEventListener('mousedown', onDocClick);
     document.addEventListener('keydown', onEsc);
     return () => {
@@ -62,14 +62,14 @@ export default function HomePageTwo() {
   }, [socialOpen]);
 
   const renderChatStep = () => {
-    const botBubble: React.CSSProperties = {
+    const botBubble = {
       background: '#e3f2fd', color: '#1976d2', borderRadius: 18, padding: '10px 16px', marginBottom: 10, maxWidth: '90%', boxShadow: '0 2px 8px rgba(33,150,243,0.08)', alignSelf: 'flex-start', fontSize: 15, lineHeight: 1.5
     };
-    const submitBtn: React.CSSProperties = { background: '#1976d2', color: 'white', border: 'none', borderRadius: 14, padding: '7px 16px', fontWeight: 600, fontSize: 14, cursor: 'pointer', boxShadow: '0 2px 8px rgba(25,118,210,0.10)', height: 34 };
-    const skipBtn: React.CSSProperties = { background: '#e0e0e0', color: '#333', border: 'none', borderRadius: 14, padding: '7px 16px', fontWeight: 600, fontSize: 14, marginLeft: 4, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', height: 34 };
-    const closeBtn: React.CSSProperties = { background: '#e53935', color: 'white', border: 'none', borderRadius: 14, padding: '9px 0', fontWeight: 600, fontSize: 15, marginTop: 16, width: '100%', cursor: 'pointer', boxShadow: '0 2px 8px rgba(229,57,53,0.10)', height: 38 };
-    const formRow: React.CSSProperties = { display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' };
-    const inputStyle: React.CSSProperties = { borderRadius: 14, border: '1.2px solid #e0e0e0', padding: '7px 12px', fontSize: 14, boxShadow: '0 1px 4px rgba(0,0,0,0.03)', flex: 1 };
+    const submitBtn = { background: '#1976d2', color: 'white', border: 'none', borderRadius: 14, padding: '7px 16px', fontWeight: 600, fontSize: 14, cursor: 'pointer', boxShadow: '0 2px 8px rgba(25,118,210,0.10)', height: 34 };
+    const skipBtn = { background: '#e0e0e0', color: '#333', border: 'none', borderRadius: 14, padding: '7px 16px', fontWeight: 600, fontSize: 14, marginLeft: 4, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', height: 34 };
+    const closeBtn = { background: '#e53935', color: 'white', border: 'none', borderRadius: 14, padding: '9px 0', fontWeight: 600, fontSize: 15, marginTop: 16, width: '100%', cursor: 'pointer', boxShadow: '0 2px 8px rgba(229,57,53,0.10)', height: 38 };
+    const formRow = { display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' };
+    const inputStyle = { borderRadius: 14, border: '1.2px solid #e0e0e0', padding: '7px 12px', fontSize: 14, boxShadow: '0 1px 4px rgba(0,0,0,0.03)', flex: 1 };
 
     switch (step) {
       case 0:
@@ -231,7 +231,7 @@ export default function HomePageTwo() {
         </div>
       )}
 
-      {/* ===== New: Right-side Center Sticky Social Share ===== */}
+      {/* ===== Right-side Center Sticky Social Share ===== */}
       <div id="social-share-root" className="social-root">
         {/* Toggle Button */}
         <button
@@ -240,7 +240,6 @@ export default function HomePageTwo() {
           aria-label="Share"
           onClick={() => setSocialOpen((v) => !v)}
         >
-          {/* Share icon made of 3 dots */}
           <span className="dot" />
           <span className="dot" />
           <span className="dot" />
@@ -249,7 +248,7 @@ export default function HomePageTwo() {
         {/* Radial Items */}
         <ul className={`social-items ${socialOpen ? 'show' : ''}`} aria-hidden={!socialOpen}>
           {socialLinks.map((s, idx) => (
-            <li key={s.id} style={{ ['--i' as any]: idx, ['--clr' as any]: s.color } as React.CSSProperties}>
+            <li key={s.id} style={{ '--i': idx, '--clr': s.color }}>
               <a href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.id}>
                 {s.icon}
               </a>
@@ -262,19 +261,17 @@ export default function HomePageTwo() {
 
       {/* Page-level styles for the social menu & responsive chat bubble */}
       <style jsx>{`
-        /* Right-center sticky root */
         .social-root {
           position: fixed;
           right: 28px;
           top: 50%;
           transform: translateY(-50%);
           z-index: 1200;
-          width: 280px; /* enough to render the full radial spread */
+          width: 280px;
           height: 280px;
-          pointer-events: none; /* so clicks pass through except children that re-enable */
+          pointer-events: none;
         }
 
-        /* Toggle button */
         .social-toggle {
           pointer-events: auto;
           position: absolute;
@@ -299,7 +296,7 @@ export default function HomePageTwo() {
           box-shadow: 0 14px 28px rgba(0,0,0,0.18);
         }
         .social-toggle.open {
-          background: #60a5fa; /* light blue like in your UI */
+          background: #60a5fa;
           color: #0b1b2a;
         }
         .social-toggle .dot {
@@ -309,14 +306,13 @@ export default function HomePageTwo() {
           display: inline-block;
         }
 
-        /* Items list */
         .social-items {
           pointer-events: auto;
           list-style: none;
           padding: 0;
           margin: 0;
           position: absolute;
-          right: 28px; /* emanate from near toggle center */
+          right: 28px;
           top: 50%;
           transform: translateY(-50%);
           width: 0; height: 0;
@@ -342,8 +338,6 @@ export default function HomePageTwo() {
           transform: var(--pos, translate(0,0)) scale(1);
         }
 
-        /* Position each item in a radial (clockwise 8 positions) */
-        /* We compute positions with CSS using index --i */
         .social-items.show li:nth-child(1) { --pos: translate(-70px, -110px); }
         .social-items.show li:nth-child(2) { --pos: translate(-120px, -55px); }
         .social-items.show li:nth-child(3) { --pos: translate(-135px,   5px); }
@@ -381,7 +375,6 @@ export default function HomePageTwo() {
         }
         .social-items li:hover a { color: var(--clr, #0ea5e9); }
 
-        /* Responsive tweaks: bring menu a bit inward and shrink */
         @media (max-width: 768px) {
           .social-root {
             right: 16px;
@@ -398,7 +391,6 @@ export default function HomePageTwo() {
           .social-items.show li:nth-child(8) { --pos: translate( 80px,   60px); }
         }
 
-        /* Existing responsive chat trigger styles */
         @media (max-width: 600px) {
           #chat-trigger-bubble {
             right: 2vw !important;
