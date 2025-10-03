@@ -19,13 +19,9 @@ import Footer from '@/layout/footers/footer';
 import styles from './FloatingButtons.module.scss';
 
 export default function HomePageTwo() {
-  // chat removed from the UI per request; (kept state code minimal)
-  const [showTrigger] = useState(false);
-
-  // sticky social toggle state
   const [socialOpen, setSocialOpen] = useState(false);
 
-  // close social on outside click / ESC
+  // Close on outside click / ESC
   useEffect(() => {
     if (!socialOpen) return;
     const onDocClick = (e) => {
@@ -41,7 +37,6 @@ export default function HomePageTwo() {
     };
   }, [socialOpen]);
 
-  // social links (Facebook, Instagram, YouTube, X/Twitter, LinkedIn)
   const socialLinks = [
     { id: 'fb', icon: <FaFacebookF />,  color: '#1877F2', href: 'https://facebook.com' },
     { id: 'ig', icon: <FaInstagram />,  color: '#E1306C', href: 'https://instagram.com' },
@@ -64,7 +59,7 @@ export default function HomePageTwo() {
       <BlogArea />
       <FeatureAreaTwo />
 
-      {/* WhatsApp Floating Button (kept on left bottom per your styles file) */}
+      {/* WhatsApp (left bottom, from your SCSS) */}
       <a
         href="https://wa.me/919999999999"
         target="_blank"
@@ -72,21 +67,16 @@ export default function HomePageTwo() {
         className={styles['whatsapp-float-btn']}
         aria-label="Chat on WhatsApp"
       >
-        <FaWhatsapp size={28} />
+        <FaWhatsapp size={26} />
       </a>
 
-      {/* ===== Call button at bottom-right (replaces message icon) ===== */}
-      <a
-        href="tel:+919999999999"
-        aria-label="Call us"
-        className="call-float-btn"
-      >
-        <FiPhoneCall size={26} />
+      {/* Call button (bottom-right) */}
+      <a href="tel:+919999999999" aria-label="Call us" className="call-float-btn">
+        <FiPhoneCall size={24} />
       </a>
 
-      {/* ===== Right-center sticky social menu ===== */}
+      {/* ===== Right-center sticky social (compact “C” arc) ===== */}
       <div id="social-share-root" className="social-root">
-        {/* Toggle Button (Share icon) */}
         <button
           id="social-toggle"
           className={`social-toggle ${socialOpen ? 'open' : ''}`}
@@ -94,10 +84,9 @@ export default function HomePageTwo() {
           onClick={() => setSocialOpen(v => !v)}
           title="Share"
         >
-          <FiShare2 size={22} />
+          <FiShare2 size={20} />
         </button>
 
-        {/* Radial Items */}
         <ul className={`social-items ${socialOpen ? 'show' : ''}`} aria-hidden={!socialOpen}>
           {socialLinks.map((s, idx) => (
             <li key={s.id} style={{ '--i': idx, '--clr': s.color }}>
@@ -111,44 +100,36 @@ export default function HomePageTwo() {
 
       <Footer />
 
-      {/* Styles */}
       <style jsx>{`
-        /* ======= CALL BUTTON (bottom-right) ======= */
+        /* ===== Call button ===== */
         .call-float-btn{
           position: fixed;
-          right: 24px;
-          bottom: 24px;
+          right: 18px;
+          bottom: 18px;
           z-index: 1300;
-          width: 56px;
-          height: 56px;
+          width: 50px;
+          height: 50px;
           border-radius: 50%;
           display: grid;
           place-items: center;
+          background: #0ea5e9;
           color: #fff;
-          background: #0ea5e9; /* light blue */
-          box-shadow: 0 12px 28px rgba(14,165,233,.35);
           text-decoration: none;
+          box-shadow: 0 10px 22px rgba(14,165,233,.34);
           transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
         }
-        .call-float-btn:hover{
-          transform: translateY(-2px) scale(1.03);
-          background: #0284c7;
-          box-shadow: 0 16px 34px rgba(2,132,199,.35);
-        }
-        .call-float-btn:active{
-          transform: translateY(0);
-        }
+        .call-float-btn:hover{ transform: translateY(-2px); background:#0284c7; }
 
-        /* ======= RIGHT-CENTER STICKY SOCIAL ======= */
+        /* ===== Sticky social root (smaller canvas) ===== */
         .social-root{
           position: fixed;
-          right: 34px;             /* give more breathing room from edge */
+          right: 24px;
           top: 50%;
           transform: translateY(-50%);
           z-index: 1200;
-          width: 360px;            /* larger canvas so items never clip */
-          height: 360px;
-          pointer-events: none;    /* children will re-enable */
+          width: 260px;   /* tighter area */
+          height: 260px;
+          pointer-events: none;
         }
 
         .social-toggle{
@@ -157,26 +138,24 @@ export default function HomePageTwo() {
           right: 0;
           top: 50%;
           transform: translateY(-50%) rotate(0deg);
-          width: 60px;
-          height: 60px;
+          width: 48px;
+          height: 48px;
           border-radius: 50%;
           border: 0;
-          background: #111827;     /* dark pill as in screenshot */
+          background: #111827;
           color: #fff;
-          box-shadow: 0 14px 34px rgba(0,0,0,0.28);
+          box-shadow: 0 12px 26px rgba(0,0,0,0.24);
           cursor: pointer;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          transition: transform .35s ease, box-shadow .35s ease, background .2s ease;
+          transition: transform .28s ease, background .18s ease, box-shadow .28s ease;
         }
-        .social-toggle:hover{
-          transform: translateY(-50%) scale(1.05);
-        }
+        .social-toggle:hover{ transform: translateY(-50%) scale(1.04); }
         .social-toggle.open{
           background: #60a5fa;
           color: #0b1b2a;
-          transform: translateY(-50%) rotate(45deg) scale(1.03);
+          transform: translateY(-50%) rotate(45deg) scale(1.02);
         }
 
         .social-items{
@@ -185,87 +164,83 @@ export default function HomePageTwo() {
           padding: 0;
           margin: 0;
           position: absolute;
-          right: 34px;             /* from the same anchor as toggle */
+          right: 24px;
           top: 50%;
           transform: translateY(-50%);
           width: 0; height: 0;
         }
 
-        /* Each item is a crisp, perfectly round white chip with colored ring */
+        /* Smaller, clean chips */
         .social-items li{
-          --size: 64px;                           /* bigger circle like screenshot */
+          --size: 44px; /* 👈 reduced size */
           position: absolute;
           width: var(--size);
           height: var(--size);
           border-radius: 50%;
           display: grid;
           place-items: center;
-          background: #ffffff;
+          background: #fff;
           color: #111827;
-          border: 3px solid var(--clr, #60a5fa);  /* colored ring */
-          box-shadow: 0 12px 30px rgba(0,0,0,0.16),
-                      inset 0 0 0 2px rgba(255,255,255,.9);
+          border: 2px solid var(--clr, #60a5fa);
+          box-shadow: 0 8px 18px rgba(0,0,0,0.16);
           opacity: 0;
           transform: translate(0,0) scale(.6);
-          transition: transform 560ms cubic-bezier(.22,.8,.27,1),
-                      opacity 420ms ease,
-                      box-shadow .25s ease;
-          backdrop-filter: blur(1px);
+          transition:
+            transform 420ms cubic-bezier(.22,.8,.27,1),
+            opacity 260ms ease,
+            box-shadow .2s ease;
         }
-
-        /* icon inside */
         .social-items li a{
-          width: 100%;
-          height: 100%;
-          display: grid;
-          place-items: center;
+          width: 100%; height: 100%;
+          display: grid; place-items: center;
           border-radius: 50%;
-          text-decoration: none;
-          color: #111827;
-          transition: transform .2s ease, color .2s ease;
+          color: #111827; text-decoration: none;
+          transition: transform .15s ease, color .15s ease;
         }
-        .social-items li svg{
-          font-size: 22px;
-        }
-        .social-items li:hover{ box-shadow: 0 18px 40px rgba(0,0,0,0.22); }
+        .social-items li svg{ font-size: 18px; }
+        .social-items li:hover{ box-shadow: 0 12px 26px rgba(0,0,0,0.22); }
         .social-items li:hover a{ transform: scale(1.06); color: var(--clr, #0ea5e9); }
 
-        /* show state + stagger animation */
+        /* Staggered reveal */
         .social-items.show li{ opacity: 1; transform: var(--pos, translate(0,0)) scale(1); }
-        .social-items li:nth-child(1){ transition-delay: 60ms; }
-        .social-items li:nth-child(2){ transition-delay: 110ms; }
-        .social-items li:nth-child(3){ transition-delay: 160ms; }
-        .social-items li:nth-child(4){ transition-delay: 210ms; }
-        .social-items li:nth-child(5){ transition-delay: 260ms; }
+        .social-items li:nth-child(1){ transition-delay: 40ms; }
+        .social-items li:nth-child(2){ transition-delay: 80ms; }
+        .social-items li:nth-child(3){ transition-delay: 120ms; }
+        .social-items li:nth-child(4){ transition-delay: 160ms; }
+        .social-items li:nth-child(5){ transition-delay: 200ms; }
 
-        /* Radial layout with more spacing so circles never overlap */
-        .social-items.show li:nth-child(1){ --pos: translate(-150px, -120px); }
-        .social-items.show li:nth-child(2){ --pos: translate(-200px,  -20px); }
-        .social-items.show li:nth-child(3){ --pos: translate(-160px,   90px); }
-        .social-items.show li:nth-child(4){ --pos: translate( -70px,  150px); }
-        .social-items.show li:nth-child(5){ --pos: translate(  30px,  115px); }
+        /* ===== Perfect compact “C” arc (relative to toggle) =====
+           Higher is negative Y, lower is positive Y.
+           These positions form a smooth C sweeping around the toggle.
+        */
+        .social-items.show li:nth-child(1){ --pos: translate(-110px, -85px); }  /* top-left */
+        .social-items.show li:nth-child(2){ --pos: translate(-145px, -25px); }  /* upper mid */
+        .social-items.show li:nth-child(3){ --pos: translate(-155px,  40px); }  /* deepest left */
+        .social-items.show li:nth-child(4){ --pos: translate(-145px, 105px); }  /* lower mid */
+        .social-items.show li:nth-child(5){ --pos: translate(-110px, 165px); }  /* bottom-left */
 
         /* ===== Responsive ===== */
         @media (max-width: 768px){
-          .social-root{ right: 16px; width: 300px; height: 300px; }
-          .social-toggle{ width: 56px; height: 56px; }
-          .social-items li{ --size: 56px; }
-          .social-items.show li:nth-child(1){ --pos: translate(-130px, -100px); }
-          .social-items.show li:nth-child(2){ --pos: translate(-170px,  -10px); }
-          .social-items.show li:nth-child(3){ --pos: translate(-135px,   80px); }
-          .social-items.show li:nth-child(4){ --pos: translate( -55px,  130px); }
-          .social-items.show li:nth-child(5){ --pos: translate(  20px,  100px); }
+          .social-root{ right: 16px; width: 230px; height: 230px; }
+          .social-toggle{ width: 44px; height: 44px; }
+          .social-items li{ --size: 40px; }
+          .social-items.show li:nth-child(1){ --pos: translate(-95px, -75px); }
+          .social-items.show li:nth-child(2){ --pos: translate(-125px, -18px); }
+          .social-items.show li:nth-child(3){ --pos: translate(-135px,  36px); }
+          .social-items.show li:nth-child(4){ --pos: translate(-125px,  92px); }
+          .social-items.show li:nth-child(5){ --pos: translate(-95px,  145px); }
         }
 
         @media (max-width: 480px){
-          .social-root{ right: 12px; width: 260px; height: 260px; }
-          .social-items li{ --size: 52px; }
-          .social-items.show li:nth-child(1){ --pos: translate(-110px, -90px); }
-          .social-items.show li:nth-child(2){ --pos: translate(-145px,  -5px); }
-          .social-items.show li:nth-child(3){ --pos: translate(-115px,  70px); }
-          .social-items.show li:nth-child(4){ --pos: translate( -45px, 115px); }
-          .social-items.show li:nth-child(5){ --pos: translate(  15px,  88px); }
-          .call-float-btn{ right: 16px; bottom: 16px; }
+          .social-root{ right: 12px; width: 210px; height: 210px; }
+          .social-toggle{ width: 42px; height: 42px; }
+          .social-items li{ --size: 36px; }
+          .social-items.show li:nth-child(1){ --pos: translate(-86px, -66px); }
+          .social-items.show li:nth-child(2){ --pos: translate(-110px, -14px); }
+          .social-items.show li:nth-child(3){ --pos: translate(-120px,  32px); }
+          .social-items.show li:nth-child(4){ --pos: translate(-110px,  82px); }
+          .social-items.show li:nth-child(5){ --pos: translate(-86px,  128px); }
+          .call-float-btn{ right: 14px; bottom: 14px; }
         }
       `}</style>
     </Wrapper>
