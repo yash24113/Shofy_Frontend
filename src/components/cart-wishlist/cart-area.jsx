@@ -1,7 +1,6 @@
 'use client';
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 // internal
 import { clearCart } from '@/redux/features/cartSlice';
@@ -15,9 +14,7 @@ const CartArea = () => {
   const dispatch = useDispatch();
   const router = useRouter();
 
-  const handleAddProduct = () => {
-    router.push('/shop');
-  };
+  const handleAddProduct = () => router.push('/shop');
 
   return (
     <>
@@ -26,9 +23,13 @@ const CartArea = () => {
           {cart_products.length === 0 && (
             <div className="text-center pt-50">
               <h3>No Cart Items Found</h3>
-              <Link href="/shop" className="tp-cart-checkout-btn mt-20">
+              <button
+                type="button"
+                className="btn-ghost-invert square mt-20"
+                onClick={() => router.push('/shop')}
+              >
                 Continue Shopping
-              </Link>
+              </button>
             </div>
           )}
 
@@ -66,7 +67,7 @@ const CartArea = () => {
                         <button
                           type="button"
                           onClick={handleAddProduct}
-                          className="btn-add-product"
+                          className="btn-ghost-invert square"
                           title="Browse products"
                           aria-label="Add Product"
                         >
@@ -82,7 +83,7 @@ const CartArea = () => {
                         <button
                           onClick={() => dispatch(clearCart())}
                           type="button"
-                          className="btn-base btn-outline btn-pressable"
+                          className="btn-ghost-invert square"
                           title="Remove all items from cart"
                         >
                           Clear Cart
@@ -102,139 +103,67 @@ const CartArea = () => {
         </div>
       </section>
 
-      {/* Internal styles */}
+      {/* Internal styles – default solid dark navy, hover outlined (square option) */}
       <style jsx>{`
-        /* ===== Add Product button (black base → maroon hover) ===== */
-        .btn-add-product {
-          --btnRadius: 12px;
-          --btnPadY: 12px;
-          --btnPadX: 20px;
+        .center-left { display:flex; justify-content:center; align-items:center; }
 
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          padding: var(--btnPadY) var(--btnPadX);
-          border: none;
-          border-radius: var(--btnRadius);
-          background: #0b0b0e; /* black base */
-          color: #ffffff;
-          font-weight: 600;
-          font-size: 15px;
-          line-height: 1;
-          cursor: pointer;
-          user-select: none;
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
-          transform: translateZ(0);
-          transition:
-            background-color 180ms ease,
-            color 180ms ease,
-            transform 150ms ease,
-            box-shadow 180ms ease,
-            outline-color 0s;
+        .btn-ghost-invert {
+          --navy: #0b1620;
+          --radius: 10px;
+
+          display:inline-flex;
+          align-items:center;
+          gap:10px;
+          min-height:48px;
+          padding:12px 22px;
+          border-radius:var(--radius);
+          text-decoration:none;
+          font-weight:600;
+          font-size:15px;
+          line-height:1;
+          cursor:pointer;
+          user-select:none;
+
+          background:var(--navy);
+          color:#fff;
+          border:1px solid var(--navy);
+          box-shadow:0 6px 18px rgba(0,0,0,0.22);
+          transform:translateZ(0);
+
+          transition: background 180ms ease, color 180ms ease,
+                      border-color 180ms ease, box-shadow 180ms ease,
+                      transform 120ms ease;
+        }
+        .btn-ghost-invert.square { border-radius:0; }
+
+        .btn-ghost-invert:hover {
+          background:#fff;
+          color:var(--navy);
+          border-color:var(--navy);
+          box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12);
+          transform:translateY(-1px);
+        }
+        .btn-ghost-invert:active {
+          transform:translateY(0);
+          background:#f8fafc;
+          color:var(--navy);
+          box-shadow:0 3px 10px rgba(0,0,0,0.15);
+        }
+        .btn-ghost-invert:focus-visible {
+          outline:0;
+          box-shadow:0 0 0 3px rgba(11,22,32,0.35);
         }
 
-        .btn-add-product:hover {
-          background: #800000; /* maroon hover */
-          color: #ffffff;
-          transform: translateY(-1px);
-          box-shadow: 0 10px 24px rgba(128, 0, 0, 0.35);
-        }
+        .btn-icon { display:inline-flex; align-items:center; justify-content:center; line-height:0; }
+        .btn-label { white-space:nowrap; }
 
-        .btn-add-product:active {
-          background: #5e0000; /* darker pressed */
-          color: #ffffff;
-          transform: translateY(0);
-          box-shadow: 0 6px 16px rgba(94, 0, 0, 0.35);
-        }
+        .tp-cart-actions-left, .tp-cart-update { display:flex; align-items:center; }
+        .tp-cart-update { justify-content:flex-end; }
 
-        .btn-add-product:focus-visible {
-          outline: 3px solid rgba(128, 0, 0, 0.55); /* maroon focus ring */
-          outline-offset: 2px;
-        }
-
-        .btn-add-product .btn-icon {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          line-height: 0;
-        }
-
-        .btn-add-product .btn-label {
-          white-space: nowrap;
-        }
-
-        /* ===== Existing button styles kept for Clear Cart ===== */
-        .btn-base {
-          position: relative;
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          min-height: 48px;
-          padding: 12px 22px;
-          border-radius: 10px;
-          font-weight: 600;
-          font-size: 15px;
-          line-height: 1;
-          text-decoration: none;
-          cursor: pointer;
-          user-select: none;
-          transition: transform 160ms ease, box-shadow 160ms ease,
-            background 160ms ease, border-color 160ms ease, color 160ms ease;
-        }
-
-        .btn-pressable:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 8px 20px rgba(128, 0, 0, 0.25);
-        }
-
-        .btn-pressable:active {
-          transform: translateY(0);
-          box-shadow: 0 3px 10px rgba(128, 0, 0, 0.3);
-        }
-
-        .btn-pressable:focus-visible {
-          outline: 0;
-          box-shadow: 0 0 0 3px rgba(128, 0, 0, 0.45);
-        }
-
-        /* Outline (Clear Cart) */
-        .btn-outline {
-          color: #374151;
-          background: #fff;
-          border: 1px solid #e5e7eb;
-        }
-
-        .btn-outline:hover {
-          background: #800000;
-          color: #fff;
-          border-color: #800000;
-        }
-
-        .btn-outline:active {
-          background: #5e0000;
-          border-color: #5e0000;
-          color: #fff;
-        }
-
-        /* Layout helpers */
-        .tp-cart-actions-left,
-        .tp-cart-update {
-          display: flex;
-          align-items: center;
-        }
-
-        .center-left {
-          justify-content: center;
-        }
-
-        .tp-cart-update {
-          justify-content: flex-end;
-        }
-
-        @media (max-width: 640px) {
-          .tp-cart-update {
-            justify-content: flex-start;
-          }
+        @media (max-width:640px){
+          .btn-ghost-invert { min-height:44px; padding:10px 18px; border-radius:8px; }
+          .btn-ghost-invert.square { border-radius:0; } /* keep square on mobile */
+          .tp-cart-update { justify-content:flex-start; }
         }
       `}</style>
     </>

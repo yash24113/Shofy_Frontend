@@ -11,6 +11,7 @@ const WishlistArea = () => {
   const router = useRouter();
 
   const handleAddProduct = () => router.push('/shop');
+  const handleGoToCart = () => router.push('/cart');
 
   return (
     <>
@@ -50,7 +51,7 @@ const WishlistArea = () => {
                 {/* Bottom actions row */}
                 <div className="tp-wishlist-bottom">
                   <div className="row align-items-end justify-content-between g-3">
-                    {/* LEFT: Add Product (button) */}
+                    {/* LEFT: Add Product */}
                     <div className="col-md-6">
                       <div className="wl-actions-left center-left">
                         <button
@@ -66,16 +67,18 @@ const WishlistArea = () => {
                       </div>
                     </div>
 
-                    {/* RIGHT: Go To Cart */}
+                    {/* RIGHT: Go To Cart as BUTTON (no radius) */}
                     <div className="col-md-6">
                       <div className="wl-actions-right text-md-end">
-                        <Link
-                          href="/cart"
-                          className="btn-ghost-invert"
+                        <button
+                          type="button"
+                          onClick={handleGoToCart}
+                          className="btn-ghost-invert square"
                           title="Review cart"
+                          aria-label="Go To Cart"
                         >
                           Go To Cart
-                        </Link>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -86,82 +89,67 @@ const WishlistArea = () => {
         </div>
       </section>
 
-      {/* Styles so default == filled dark, hover == outlined (your images) */}
+      {/* Styles: default solid dark navy, hover outlined (square option available) */}
       <style jsx>{`
-        .center-left {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
+        .center-left { display:flex; justify-content:center; align-items:center; }
 
-        /* Shared button that inverts on hover */
         .btn-ghost-invert {
-          --navy: #0b1620;              /* very dark navy like image 1 */
+          --navy: #0b1620;
           --radius: 10px;
 
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          min-height: 48px;
-          padding: 12px 22px;
-          border-radius: var(--radius);
-          text-decoration: none;
-          font-weight: 600;
-          font-size: 15px;
-          line-height: 1;
+          display:inline-flex;
+          align-items:center;
+          gap:10px;
+          min-height:48px;
+          padding:12px 22px;
+          border-radius:var(--radius);
+          text-decoration:none;
+          font-weight:600;
+          font-size:15px;
+          line-height:1;
+          cursor:pointer;
+          user-select:none;
 
-          background: var(--navy);      /* filled (image 1) */
-          color: #ffffff;
-          border: 1px solid var(--navy);
-          box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+          background:var(--navy);
+          color:#fff;
+          border:1px solid var(--navy);
+          box-shadow:0 6px 18px rgba(0,0,0,0.25);
+          transform:translateZ(0);
 
-          cursor: pointer;
-          transition:
-            background 180ms ease,
-            color 180ms ease,
-            border-color 180ms ease,
-            box-shadow 180ms ease,
-            transform 120ms ease;
+          transition: background 180ms ease, color 180ms ease,
+                      border-color 180ms ease, box-shadow 180ms ease,
+                      transform 120ms ease;
         }
+        /* force square corners where needed */
+        .btn-ghost-invert.square { border-radius:0; }
+
         .btn-ghost-invert:hover {
-          background: #ffffff;          /* switch to outline (image 2) */
-          color: var(--navy);
-          border-color: var(--navy);
-          box-shadow: 0 0 0 1px var(--navy) inset;
-          transform: translateY(-1px);
+          background:#fff;
+          color:var(--navy);
+          border-color:var(--navy);
+          box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12);
+          transform:translateY(-1px);
         }
         .btn-ghost-invert:active {
-          transform: translateY(0);
-          background: #f8fafc;         /* slight pressed fill */
-          color: var(--navy);
-          box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+          transform:translateY(0);
+          background:#f8fafc;
+          color:var(--navy);
+          box-shadow:0 3px 10px rgba(0,0,0,0.15);
         }
         .btn-ghost-invert:focus-visible {
-          outline: 0;
-          box-shadow: 0 0 0 3px rgba(11,22,32,0.35);
+          outline:0;
+          box-shadow:0 0 0 3px rgba(11,22,32,0.35);
         }
 
-        .btn-icon {
-          display: inline-flex;
-          align-items: center;
-          line-height: 0;
-        }
+        .btn-icon { display:inline-flex; align-items:center; line-height:0; }
 
-        .wl-actions-left,
-        .wl-actions-right {
-          display: flex;
-          align-items: center;
-        }
-        .wl-actions-right { justify-content: flex-end; }
-        .center-left { justify-content: center; }
+        .wl-actions-left, .wl-actions-right { display:flex; align-items:center; }
+        .wl-actions-right { justify-content:flex-end; }
 
-        @media (max-width: 640px) {
-          .btn-ghost-invert {
-            min-height: 44px;
-            padding: 10px 18px;
-            border-radius: 8px;
-          }
-          .wl-actions-right { justify-content: flex-start; }
+        @media (max-width:640px){
+          .btn-ghost-invert { min-height:44px; padding:10px 18px; border-radius:8px; }
+          .btn-ghost-invert.square { border-radius:0; } /* keep square on mobile too */
+          .wl-actions-right { justify-content:flex-start; }
         }
       `}</style>
     </>
