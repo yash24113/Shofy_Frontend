@@ -5,11 +5,7 @@ import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import useSticky from '@/hooks/use-sticky';
 import useCartInfo from '@/hooks/use-cart-info';
-import {
-  openCartMini,
-  get_cart_products,
-  selectCartDistinctCount,
-} from '@/redux/features/cartSlice';
+import { openCartMini } from '@/redux/features/cartSlice';
 import CartMiniSidebar from '@/components/common/cart-mini-sidebar';
 import OffCanvas from '@/components/common/off-canvas';
 import Menus from './header-com/menus';
@@ -18,31 +14,18 @@ import useSearchFormSubmit from '@/hooks/use-search-form-submit';
 import { FaHeart, FaUser } from 'react-icons/fa';
 import { FiMenu } from 'react-icons/fi';
 
-/* 👉 Use your existing modal components and CSS as-is */
+/* Use your existing modal components and CSS as-is */
 import LoginArea from '@/components/login-register/login-area';
 import RegisterArea from '@/components/login-register/register-area';
 
 const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
-
-  // wishlist slice shape: { wishlist } (array)
-  const { wishlist } = useSelector((state) => state.wishlist || { wishlist: [] });
-  const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
-
-  // if you still use useCartInfo for total quantity, keep it
-  const { quantity } = useCartInfo(); // available if you need it elsewhere
-
-  // ✅ use the selector (NOT the action creator)
-  const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
-
-  // Rehydrate cart on client so badge works after refresh
-  useEffect(() => {
-    dispatch(get_cart_products());
-  }, [dispatch]);
+  const { wishlist } = useSelector((state) => state.wishlist);
+  const { quantity } = useCartInfo();
+  const { searchText, setSearchText, handleSubmit: handleSearchSubmit } = useSearchFormSubmit();
 
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
-  const { searchText, setSearchText, handleSubmit: handleSearchSubmit } = useSearchFormSubmit();
 
   // ---- Session & user dropdown ----
   const [hasSession, setHasSession] = useState(false);
@@ -59,20 +42,17 @@ const HeaderTwo = ({ style_2 = false }) => {
 
   /* Watch localStorage for session */
   useEffect(() => {
-    const check = () => {
-      if (typeof window === 'undefined') return;
-      setHasSession(!!window.localStorage.getItem('sessionId'));
-    };
+    const check = () =>
+      setHasSession(
+        typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId')
+      );
     check();
-
-    const onStorage = (e) => {
-      if (e.key === 'sessionId') check();
-    };
+    const onStorage = (e) => { if (e.key === 'sessionId') check(); };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // Close dropdown on outside click / touch / ESC / scroll / resize / tab hide
+  /* Close dropdown on outside click / escape / etc. */
   useEffect(() => {
     const close = () => setUserOpen(false);
 
@@ -80,12 +60,10 @@ const HeaderTwo = ({ style_2 = false }) => {
       const btn = userBtnRef.current;
       const menu = userMenuRef.current;
       const target = e.target;
-      if (!target) return;
       if (btn && btn.contains(target)) return;
       if (menu && menu.contains(target)) return;
       close();
     };
-
     const onEsc = (e) => { if (e.key === 'Escape') close(); };
     const onScroll = () => close();
     const onResize = () => close();
@@ -113,13 +91,10 @@ const HeaderTwo = ({ style_2 = false }) => {
     try {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('sessionId');
-        // remove cookie if present
         try {
           import('js-cookie')
             .then((Cookies) => Cookies.default.remove('userInfo'))
-            .catch((err) => {
-              console.error('Failed to remove userInfo cookie:', err);
-            });
+            .catch((err) => console.error('Failed to remove userInfo cookie:', err));
         } catch (err) {
           console.error('Error importing js-cookie:', err);
         }
@@ -127,9 +102,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     } finally {
       setHasSession(false);
       setUserOpen(false);
-      if (typeof window !== 'undefined') {
-        window.location.href = '/';
-      }
+      if (typeof window !== 'undefined') window.location.href = '/';
     }
   };
 
@@ -138,14 +111,12 @@ const HeaderTwo = ({ style_2 = false }) => {
     if (!authOpen) return;
 
     const onIntercept = (e) => {
-      const target = e.target;
-      if (!target) return;
-      const el = target.closest && target.closest('a');
+      const el = e.target.closest?.('a');
       if (!el) return;
       const href = el.getAttribute('href');
 
-      // Only handle links inside your auth modals (expects your modal root has data-auth attr)
-      const inAuth = !!(el.closest && el.closest('[data-auth="login"], [data-auth="register"]'));
+      // Only handle links inside your auth modals
+      const inAuth = !!el.closest?.('[data-auth="login"], [data-auth="register"]');
       if (!inAuth) return;
 
       if (href === '/register') {
@@ -173,21 +144,21 @@ const HeaderTwo = ({ style_2 = false }) => {
 
     const closeModal = () => {
       setAuthOpen(false);
-      // optionally: setAuthMode('login');
+      // optionally reset: setAuthMode('login');
     };
 
     const onPointerDownCapture = (e) => {
       const t = e.target;
-      if (!t || !t.closest) return;
-      const withinAuth = t.closest('[data-auth="login"], [data-auth="register"]');
+      const withinAuth = t.closest?.('[data-auth="login"], [data-auth="register"]');
       if (!withinAuth) return;
 
-      const isOverlay = t.closest('.modalOverlay');
-      const isCloseBtn = t.closest('.modalClose');
+      const isOverlay = t.closest?.('.modalOverlay');
+      const isCloseBtn = t.closest?.('.modalClose');
       if (isOverlay || isCloseBtn) {
-        // stop before click to prevent click-through
+        // stop event *before* click happens to prevent click-through
         e.preventDefault();
         e.stopPropagation();
+        // mark to swallow the very next 'click' event the browser may still fire
         swallowNextClickRef.current = true;
         closeModal();
       }
@@ -225,6 +196,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     <>
       <header>
         <div className={`tp-header-area tp-header-style-${style_2 ? 'primary' : 'darkRed'} tp-header-height`}>
+          {/* Header Bottom */}
           <div
             id="header-sticky"
             className={`tp-header-bottom-2 tp-header-sticky ${sticky ? 'header-sticky' : ''}`}
@@ -241,8 +213,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                           alt="Company Logo"
                           width={140}
                           height={44}
-                          style={{ height: 'auto', width: 'auto', maxWidth: '140px', maxHeight: '44px' }}
-                          sizes="(max-width: 600px) 110px, 140px"
+                          style={{ height: 'auto', width: 'auto', maxWidth: 140, maxHeight: 44 }}
                         />
                       </Link>
                     </div>
@@ -295,89 +266,45 @@ const HeaderTwo = ({ style_2 = false }) => {
                               <div className="user-menu-inner">
                                 {hasSession ? (
                                   <>
-                                    <button
-                                      className="user-item"
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        window.location.href = '/profile';
-                                      }}
-                                    >
+                                    <Link className="user-item" href="/profile" role="menuitem" onClick={() => setUserOpen(false)}>
                                       My Account
-                                    </button>
-
-                                    <button
-                                      className="user-item"
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        window.location.href = '/wishlist';
-                                      }}
-                                    >
+                                    </Link>
+                                    <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
                                       Wishlist
-                                    </button>
-
+                                    </Link>
                                     <button
                                       className="user-item"
                                       type="button"
                                       role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        dispatch(openCartMini());
-                                      }}
+                                      onClick={() => { setUserOpen(false); dispatch(openCartMini()); }}
                                     >
                                       My Booking
                                     </button>
-
                                     <div className="user-divider" />
-                                    <button
-                                      className="user-item danger"
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={handleLogout}
-                                    >
+                                    <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
                                       Logout
                                     </button>
                                   </>
                                 ) : (
                                   <>
-                                    <button
-                                      className="user-item"
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        window.location.href = '/wishlist';
-                                      }}
-                                    >
+                                    <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
                                       Wishlist
-                                    </button>
+                                    </Link>
 
-                                    {/* 🔓 Open your modals (no routing) */}
+                                    {/* Open your modals (no routing) */}
                                     <button
                                       className="user-item"
                                       type="button"
                                       role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        setAuthMode('login');
-                                        setAuthOpen(true);
-                                      }}
+                                      onClick={() => { setUserOpen(false); setAuthMode('login'); setAuthOpen(true); }}
                                     >
                                       Login
                                     </button>
-
                                     <button
                                       className="user-item"
                                       type="button"
                                       role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        setAuthMode('register');
-                                        setAuthOpen(true);
-                                      }}
+                                      onClick={() => { setUserOpen(false); setAuthMode('register'); setAuthOpen(true); }}
                                     >
                                       Sign Up
                                     </button>
@@ -388,11 +315,11 @@ const HeaderTwo = ({ style_2 = false }) => {
                           )}
                         </div>
 
-                        {/* Wishlist icon */}
+                        {/* Wishlist */}
                         <div className="tp-header-action-item d-none d-lg-block me-2">
                           <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
                             <FaHeart />
-                            <span className="tp-header-action-badge">{wishlistCount}</span>
+                            <span className="tp-header-action-badge">{wishlist.length}</span>
                           </Link>
                         </div>
 
@@ -402,10 +329,9 @@ const HeaderTwo = ({ style_2 = false }) => {
                             onClick={() => dispatch(openCartMini())}
                             className="tp-header-action-btn cartmini-open-btn"
                             aria-label="Open cart"
-                            type="button"
                           >
                             <CartTwo />
-                            <span className="tp-header-action-badge">{distinctCount}</span>
+                            <span className="tp-header-action-badge">{quantity}</span>
                           </button>
                         </div>
 
@@ -438,10 +364,10 @@ const HeaderTwo = ({ style_2 = false }) => {
         categoryType="fashion"
       />
 
-      {/* 🔁 Render your existing modal components conditionally (no routing) */}
+      {/* Render your existing modal components conditionally */}
       {authOpen && (authMode === 'login' ? <LoginArea /> : <RegisterArea />)}
 
-      {/* Polished dropdown styles */}
+      {/* Only ONE styled-jsx block */}
       <style jsx>{`
         .user-menu-dropdown{
           position:absolute;
@@ -467,20 +393,55 @@ const HeaderTwo = ({ style_2 = false }) => {
           transform:rotate(45deg);
           box-shadow:-2px -2px 6px rgba(0,0,0,.05);
         }
-        .user-menu-inner{ display:flex; flex-direction:column; gap:6px; padding:8px; }
+
+        .user-menu-inner{
+          display:flex;
+          flex-direction:column;
+          gap:6px;
+          padding:8px;
+        }
+
         .user-item{
-          display:block !important; width:100%; padding:10px 14px; border-radius:8px;
-          font-size:14px; line-height:1.25; color:#111827; background:transparent; border:0; text-align:left;
-          cursor:pointer; transition:background .15s ease,color .15s ease,transform .02s ease;
+          display:block !important;
+          width:100%;
+          padding:10px 14px;
+          border-radius:8px;
+          font-size:14px;
+          line-height:1.25;
+          color:#111827;
+          text-decoration:none;
+          background:transparent;
+          border:0;
+          text-align:left;
+          cursor:pointer;
+          transition:background .15s ease,color .15s ease,transform .02s ease;
         }
         .user-item:hover{ background:#f3f4f6; }
-        .user-item:focus-visible{ outline:none; background:#eef2ff; box-shadow:0 0 0 3px rgba(99,102,241,.25) inset; }
+        .user-item:focus-visible{
+          outline:none;
+          background:#eef2ff;
+          box-shadow:0 0 0 3px rgba(99,102,241,.25) inset;
+        }
         .user-item:active{ transform:scale(.995); }
         .user-item.danger{ color:#b91c1c; }
         .user-item.danger:hover{ background:#fee2e2; }
-        .user-divider{ height:1px; background:#e5e7eb; margin:2px 6px; border-radius:1px; }
-        @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
-        @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
+
+        .user-divider{
+          height:1px;
+          background:#e5e7eb;
+          margin:2px 6px;
+          border-radius:1px;
+        }
+
+        @keyframes menuPop{
+          from{ transform:translateY(-4px); opacity:0; }
+          to{   transform:translateY(0);    opacity:1; }
+        }
+
+        @media (max-width:480px){
+          .user-menu-dropdown{ min-width:210px; right:-8px; }
+          .user-menu-dropdown::before{ right:24px; }
+        }
       `}</style>
     </>
   );
