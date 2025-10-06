@@ -48,7 +48,7 @@ const handleCloseCartMini = () => {
                   <div key={i} className="cartmini__widget-item">
                     <div className="cartmini__thumb">
                       <Link href={`/fabric/${slug}`}>
-                        <Image src={item.image || '/assets/img/product/default-product-img.jpg'} width={70} height={60} alt="product img" />
+                        <Image src={item.img || '/assets/img/product/default-product-img.jpg'} width={70} height={60} alt="product img" />
                       </Link>
                     </div>
                     <div className="cartmini__content">

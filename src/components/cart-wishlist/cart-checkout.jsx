@@ -9,11 +9,8 @@ const CartCheckout = () => {
 
   // handle shipping cost
   const handleShippingCost = (value) => {
-    if (value === "free") {
-      setShipCost(0);
-    } else {
-      setShipCost(value);
-    }
+    if (value === "free") setShipCost(0);
+    else setShipCost(value);
   };
 
   return (
@@ -54,7 +51,7 @@ const CartCheckout = () => {
         </div>
 
         <div className="tp-cart-checkout-proceed">
-          <Link href="/checkout" className="tp-cart-checkout-btn w-100">
+          <Link href="/checkout" className="btn-ghost-invert w-100" role="button">
             Proceed to Checkout
           </Link>
         </div>
@@ -102,56 +99,57 @@ const CartCheckout = () => {
           font-weight: 500;
         }
 
-        /* === Proceed to Checkout Button === */
-        .tp-cart-checkout-btn {
+        /* === Proceed to Checkout — ghost-invert, square corners === */
+        .btn-ghost-invert {
+          --navy: #0b1620;
+
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          min-height: 48px;
+          padding: 12px 22px;
           font-weight: 600;
           font-size: 16px;
+          line-height: 1;
           text-decoration: none;
-          border-radius: 10px;
-          padding: 14px 22px;
-          background: #0b0b0e; /* black base */
+          cursor: pointer;
+          user-select: none;
+
+          border-radius: 0;               /* square */
+          background: var(--navy);        /* filled default */
           color: #ffffff;
-          border: none;
-          transition: background-color 180ms ease, color 180ms ease,
-            transform 120ms ease, box-shadow 180ms ease;
+          border: 1px solid var(--navy);
           box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+          transition:
+            background 180ms ease,
+            color 180ms ease,
+            border-color 180ms ease,
+            transform 120ms ease,
+            box-shadow 180ms ease;
         }
-
-        .tp-cart-checkout-btn:hover {
-          background: #800000; /* maroon hover */
-          color: #ffffff;
+        .btn-ghost-invert:hover {
+          background: #ffffff;            /* outline on hover */
+          color: var(--navy);
+          border-color: var(--navy);
+          box-shadow: 0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12);
           transform: translateY(-1px);
-          box-shadow: 0 10px 28px rgba(128, 0, 0, 0.35);
         }
-
-        .tp-cart-checkout-btn:active {
-          background: #5e0000; /* darker maroon on click */
-          box-shadow: 0 6px 16px rgba(94, 0, 0, 0.35);
+        .btn-ghost-invert:active {
           transform: translateY(0);
+          background: #f8fafc;
+          color: var(--navy);
+          box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+        }
+        .btn-ghost-invert:focus-visible {
+          outline: 0;
+          box-shadow: 0 0 0 3px rgba(11,22,32,0.35);
         }
 
-        .tp-cart-checkout-btn:focus-visible {
-          outline: 3px solid rgba(128, 0, 0, 0.45);
-          outline-offset: 2px;
-        }
-
-        .w-100 {
-          width: 100%;
-          text-align: center;
-        }
+        .w-100 { width: 100%; text-align: center; }
 
         @media (max-width: 640px) {
-          .tp-cart-checkout-wrapper {
-            padding: 18px;
-          }
-          .tp-cart-checkout-btn {
-            font-size: 15px;
-            padding: 12px 18px;
-            border-radius: 8px;
-          }
+          .tp-cart-checkout-wrapper { padding: 18px; }
+          .btn-ghost-invert { min-height: 44px; padding: 10px 18px; font-size: 15px; }
         }
       `}</style>
     </>
