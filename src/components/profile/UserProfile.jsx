@@ -34,18 +34,6 @@ const editSchema = Yup.object().shape({
   pincode: Yup.string().nullable(),
 });
 
-/** Safely get a sessionId (localStorage → cookie → session API) */
-const getSessionId = (sessionData) => {
-  if (typeof window !== 'undefined') {
-    const ls = window.localStorage?.getItem('sessionId');
-    if (ls && ls !== 'undefined' && ls !== 'null') return ls;
-  }
-  const ck = Cookies.get('sessionId');
-  if (ck && ck !== 'undefined' && ck !== 'null') return ck;
-  // Try to infer from your session API response structure (adjust if different)
-  return sessionData?.session?.sessionId || sessionData?.sessionId || null;
-};
-
 export default function UserProfile() {
   const authUser = useSelector((s) => s?.auth?.user);
   const cookieUser = useMemo(() => pickInitialUser(authUser), [authUser]);
@@ -96,15 +84,14 @@ export default function UserProfile() {
   }, [user, reset]);
 
   const onSubmit = async (data) => {
-    const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
-    const sessionId = getSessionId(sessionData);
+    const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://test.amrita-fashions.com').replace(/\/$/, '');
 
     try {
       let updated;
 
-      if (sessionId && apiBase) {
-        // Use sessionId endpoint: PUT /shopy/users/:sessionId
-        const res = await fetch(`${apiBase}/users/${encodeURIComponent(sessionId)}`, {
+      if (userId) {
+        // Use _id endpoint: PUT /shopy/users/:_id
+        const res = await fetch(`${apiBase}/shopy/users/${encodeURIComponent(userId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
@@ -112,19 +99,19 @@ export default function UserProfile() {
         });
 
         if (!res.ok) {
-          const errJson = await safeJson(res);
-          throw new Error(errJson?.message || `Update failed (${res.status})`);
+          const text = await res.text().catch(() => '');
+          let message = `Update failed (${res.status})`;
+          try { message = JSON.parse(text)?.message || message; } catch {}
+          throw new Error(message);
         }
 
         const json = await res.json();
-        // Accept either {user: {...}} or direct user object
-        updated = json?.user || json;
+        updated = json?.user || json; // accept either shape
       } else {
-        // Fallback to existing RTK mutation if sessionId not found
+        // Fallback if _id not available
         updated = await updateProfile({ id: userId, ...data }).unwrap();
       }
 
-      // Persist updated user in cookie for quick bootstrapping
       Cookies.set('userInfo', JSON.stringify({ user: updated }), { expires: 0.5 });
       await refetchSession();
       notifySuccess('Profile updated');
