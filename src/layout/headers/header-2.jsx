@@ -8,7 +8,7 @@ import useCartInfo from '@/hooks/use-cart-info';
 import {
   openCartMini,
   get_cart_products,
-  selectCartDistinctCount
+  selectCartDistinctCount,
 } from '@/redux/features/cartSlice';
 import CartMiniSidebar from '@/components/common/cart-mini-sidebar';
 import OffCanvas from '@/components/common/off-canvas';
@@ -31,7 +31,7 @@ const HeaderTwo = ({ style_2 = false }) => {
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
   // if you still use useCartInfo for total quantity, keep it
-  const { quantity } = useCartInfo(); // (not shown, but harmless if used elsewhere)
+  const { quantity } = useCartInfo(); // available if you need it elsewhere
 
   // ✅ use the selector (NOT the action creator)
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
@@ -47,24 +47,27 @@ const HeaderTwo = ({ style_2 = false }) => {
   // ---- Session & user dropdown ----
   const [hasSession, setHasSession] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
-  const userBtnRef = useRef<HTMLButtonElement | null>(null);
-  const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const userBtnRef = useRef(null);
+  const userMenuRef = useRef(null);
 
   // ---- Auth modal toggles (no routing) ----
   const [authOpen, setAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
 
   // swallow-next-click flag to prevent click-through after closing on pointerdown
   const swallowNextClickRef = useRef(false);
 
   /* Watch localStorage for session */
   useEffect(() => {
-    const check = () =>
-      setHasSession(
-        typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId')
-      );
+    const check = () => {
+      if (typeof window === 'undefined') return;
+      setHasSession(!!window.localStorage.getItem('sessionId'));
+    };
     check();
-    const onStorage = (e: StorageEvent) => { if (e.key === 'sessionId') check(); };
+
+    const onStorage = (e) => {
+      if (e.key === 'sessionId') check();
+    };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
@@ -73,17 +76,17 @@ const HeaderTwo = ({ style_2 = false }) => {
   useEffect(() => {
     const close = () => setUserOpen(false);
 
-    const onPointer = (e: Event) => {
-      const btn = userBtnRef.current as unknown as HTMLElement | null;
-      const menu = userMenuRef.current as unknown as HTMLElement | null;
-      const target = e.target as Node | null;
+    const onPointer = (e) => {
+      const btn = userBtnRef.current;
+      const menu = userMenuRef.current;
+      const target = e.target;
       if (!target) return;
       if (btn && btn.contains(target)) return;
       if (menu && menu.contains(target)) return;
       close();
     };
 
-    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const onEsc = (e) => { if (e.key === 'Escape') close(); };
     const onScroll = () => close();
     const onResize = () => close();
     const onVisibility = () => { if (document.visibilityState === 'hidden') close(); };
@@ -110,14 +113,15 @@ const HeaderTwo = ({ style_2 = false }) => {
     try {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('sessionId');
+        // remove cookie if present
         try {
           import('js-cookie')
             .then((Cookies) => Cookies.default.remove('userInfo'))
             .catch((err) => {
-              console.error("Failed to remove userInfo cookie:", err);
+              console.error('Failed to remove userInfo cookie:', err);
             });
         } catch (err) {
-          console.error("Error importing js-cookie:", err);
+          console.error('Error importing js-cookie:', err);
         }
       }
     } finally {
@@ -133,10 +137,10 @@ const HeaderTwo = ({ style_2 = false }) => {
   useEffect(() => {
     if (!authOpen) return;
 
-    const onIntercept = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
+    const onIntercept = (e) => {
+      const target = e.target;
       if (!target) return;
-      const el = (target.closest && target.closest('a')) as HTMLAnchorElement | null;
+      const el = target.closest && target.closest('a');
       if (!el) return;
       const href = el.getAttribute('href');
 
@@ -172,14 +176,14 @@ const HeaderTwo = ({ style_2 = false }) => {
       // optionally: setAuthMode('login');
     };
 
-    const onPointerDownCapture = (e: Event) => {
-      const t = e.target as HTMLElement | null;
-      if (!t) return;
-      const withinAuth = t.closest?.('[data-auth="login"], [data-auth="register"]');
+    const onPointerDownCapture = (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      const withinAuth = t.closest('[data-auth="login"], [data-auth="register"]');
       if (!withinAuth) return;
 
-      const isOverlay = t.closest?.('.modalOverlay');
-      const isCloseBtn = t.closest?.('.modalClose');
+      const isOverlay = t.closest('.modalOverlay');
+      const isCloseBtn = t.closest('.modalClose');
       if (isOverlay || isCloseBtn) {
         // stop before click to prevent click-through
         e.preventDefault();
@@ -189,7 +193,7 @@ const HeaderTwo = ({ style_2 = false }) => {
       }
     };
 
-    const onKeydownCapture = (e: KeyboardEvent) => {
+    const onKeydownCapture = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
@@ -198,7 +202,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     };
 
     // swallow the first click after we closed on pointerdown
-    const onClickSwallow = (e: MouseEvent) => {
+    const onClickSwallow = (e) => {
       if (swallowNextClickRef.current) {
         e.preventDefault();
         e.stopPropagation();
@@ -297,7 +301,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       role="menuitem"
                                       onClick={() => {
                                         setUserOpen(false);
-                                        window.location.href = "/profile";
+                                        window.location.href = '/profile';
                                       }}
                                     >
                                       My Account
@@ -309,7 +313,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       role="menuitem"
                                       onClick={() => {
                                         setUserOpen(false);
-                                        window.location.href = "/wishlist";
+                                        window.location.href = '/wishlist';
                                       }}
                                     >
                                       Wishlist
@@ -328,7 +332,12 @@ const HeaderTwo = ({ style_2 = false }) => {
                                     </button>
 
                                     <div className="user-divider" />
-                                    <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
+                                    <button
+                                      className="user-item danger"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={handleLogout}
+                                    >
                                       Logout
                                     </button>
                                   </>
@@ -340,7 +349,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       role="menuitem"
                                       onClick={() => {
                                         setUserOpen(false);
-                                        window.location.href = "/wishlist";
+                                        window.location.href = '/wishlist';
                                       }}
                                     >
                                       Wishlist
