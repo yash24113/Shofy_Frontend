@@ -10,15 +10,7 @@ import { formatProductForCart, formatProductForWishlist } from '@/utils/authUtil
 import { add_to_wishlist } from '@/redux/features/wishlist-slice';
 import { add_cart_product } from '@/redux/features/cartSlice';
 
-import {
-  Cart,
-  CartActive,
-  Wishlist,
-  WishlistActive,
-  QuickView,
-  Share,
-} from '@/svg';
-
+import { Cart, CartActive, Wishlist, WishlistActive, QuickView, Share } from '@/svg';
 import { handleProductModal } from '@/redux/features/productModalSlice';
 import { useGetProductsByGroupcodeQuery } from '@/redux/features/productApi';
 import { useGetSeoByProductQuery } from '@/redux/features/seoApi';
@@ -65,7 +57,7 @@ const ProductItem = ({ product }) => {
     }
   }, []);
 
-  // act immediately
+  // actions
   const handleAddProduct = (prd, e) => {
     e?.stopPropagation?.(); e?.preventDefault?.();
     dispatch(add_cart_product(formatProductForCart(prd)));
@@ -181,7 +173,7 @@ const ProductItem = ({ product }) => {
       } else {
         prompt('Copy link', url);
       }
-    } catch {/*  */}
+    } catch {/* ignore */}
   };
 
   /* select from slices */
@@ -253,10 +245,11 @@ const ProductItem = ({ product }) => {
               <button
                 type="button"
                 onClick={(e) => handleAddProduct(product, e)}
-                className={`action-button ${inCart ? 'active cart-active' : ''}`}
+                className={`action-button tooltip ${inCart ? 'active cart-active' : ''}`}
+                data-tip={inCart ? 'In cart' : 'Add to cart'}
                 aria-label={inCart ? 'In cart' : 'Add to cart'}
                 aria-pressed={inCart}
-                title={inCart ? 'Added to cart' : 'Add to cart'}
+                title={inCart ? 'In cart' : 'Add to cart'}
               >
                 {inCart ? <CartActive /> : <Cart />}
               </button>
@@ -264,18 +257,34 @@ const ProductItem = ({ product }) => {
               <button
                 type="button"
                 onClick={(e) => handleWishlistProduct(product, e)}
-                className={`action-button ${inWishlist ? 'active wishlist-active' : ''}`}
+                className={`action-button tooltip ${inWishlist ? 'active wishlist-active' : ''}`}
+                data-tip={inWishlist ? 'In wishlist' : 'Add to wishlist'}
                 aria-label={inWishlist ? 'In wishlist' : 'Add to wishlist'}
                 aria-pressed={inWishlist}
-                title={inWishlist ? 'Added to wishlist' : 'Add to wishlist'}
+                title={inWishlist ? 'In wishlist' : 'Add to wishlist'}
               >
                 {inWishlist ? <WishlistActive /> : <Wishlist />}
               </button>
 
-              <button type="button" onClick={(e) => handleShare(product, e)} className="action-button" aria-label="Share product" title="Share">
+              <button
+                type="button"
+                onClick={(e) => handleShare(product, e)}
+                className="action-button tooltip"
+                data-tip="Share"
+                aria-label="Share product"
+                title="Share"
+              >
                 <Share />
               </button>
-              <button type="button" onClick={(e) => openQuickView(product, e)} className="action-button" aria-label="Quick view" title="Quick view">
+
+              <button
+                type="button"
+                onClick={(e) => openQuickView(product, e)}
+                className="action-button tooltip"
+                data-tip="Quick view"
+                aria-label="Quick view"
+                title="Quick view"
+              >
                 <QuickView />
               </button>
             </div>
@@ -321,7 +330,8 @@ const ProductItem = ({ product }) => {
         .fashion-product-card{
           --primary:#0f172a; --muted:#6b7280; --accent:#7c3aed;
           --success:#10b981; --danger:#ef4444;
-          --maroon:#800000;               /* ← your maroon */
+          --maroon:#800000;
+          --edge-gap:18px;                 /* right margin for floating UI */
           --card-bg:#fff; --card-border:rgba(17,24,39,.12); --inner-border:rgba(17,24,39,.08);
           --shadow-sm:0 1px 2px rgba(0,0,0,.04);
           position:relative; width:100%; height:100%;
@@ -369,7 +379,7 @@ const ProductItem = ({ product }) => {
         .ribbon-text strong{ font-weight:800; margin-right:4px; }
 
         .product-actions{
-          position:absolute; top:12px; right:12px;
+          position:absolute; top:12px; right:var(--edge-gap);
           display:flex; flex-direction:column; gap:8px;
           opacity:0; transform:translateY(-6px);
           transition:opacity .25s ease, transform .25s ease;
@@ -389,31 +399,49 @@ const ProductItem = ({ product }) => {
           border:1px solid rgba(0,0,0,.06);
           box-shadow:0 4px 12px rgba(0,0,0,.08);
           transition:transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease;
+          position:relative;     /* for tooltip */
         }
-        /* default icon color */
         .action-button :global(svg){ width:16px; height:16px; color:var(--primary); transition:color .2s ease; }
 
-        /* 🔸 MAROON HOVER: background maroon + white icon */
+        /* MAROON hover */
         .action-button:hover{
           background:var(--maroon);
           border-color:var(--maroon);
           box-shadow:0 6px 16px rgba(128,0,0,.25);
           transform:scale(1.06);
         }
-        .action-button:hover :global(svg){
-          color:#fff !important;
-        }
+        .action-button:hover :global(svg){ color:#fff !important; }
 
-        /* keep state colors but still allow maroon on hover */
         .action-button.active{ box-shadow:0 6px 16px rgba(0,0,0,.12); }
         .action-button.cart-active{ background:#f0fdf4; border-color:rgba(16,185,129,.35); }
         .action-button.cart-active :global(svg){ color:#10b981; }
         .action-button.wishlist-active{ background:#fef2f2; border-color:rgba(239,68,68,.35); }
         .action-button.wishlist-active :global(svg){ color:#ef4444; }
 
-        .action-button:focus-visible{
-          outline:2px solid var(--maroon);
-          outline-offset:2px;
+        .action-button:focus-visible{ outline:2px solid var(--maroon); outline-offset:2px; }
+
+        /* --- Tooltip --- */
+        .tooltip::after{
+          content: attr(data-tip);
+          position:absolute;
+          right:calc(100% + 8px);
+          top:50%;
+          transform:translateY(-50%);
+          white-space:nowrap;
+          background:rgba(17,24,39,.95);
+          color:#fff;
+          font-size:12px;
+          line-height:1;
+          font-weight:600;
+          padding:6px 8px;
+          border-radius:6px;
+          opacity:0; pointer-events:none;
+          transition:opacity .15s ease, transform .15s ease;
+          box-shadow:0 8px 18px rgba(0,0,0,.18);
+        }
+        .tooltip:hover::after,
+        .tooltip:focus-visible::after{
+          opacity:1; transform:translate(-2px, -50%);
         }
 
         .product-info{ padding:18px 12px 12px; border-top:1px solid var(--inner-border); background:#fff; }
