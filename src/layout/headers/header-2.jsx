@@ -182,12 +182,30 @@ const HeaderTwo = ({ style_2 = false }) => {
                               <div className="user-menu-inner">
                                 {hasSession ? (
                                   <>
-                                    <Link className="user-item" href="/profile" role="menuitem" onClick={() => setUserOpen(false)}>
+                                    <button
+                                      className="user-item"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = "/profile";
+                                      }}
+                                    >
                                       My Account
-                                    </Link>
-                                    <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
+                                    </button>
+
+                                    <button
+                                      className="user-item"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = "/wishlist";
+                                      }}
+                                    >
                                       Wishlist
-                                    </Link>
+                                    </button>
+
                                     <button
                                       className="user-item"
                                       type="button"
@@ -199,6 +217,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                     >
                                       My Booking
                                     </button>
+
                                     <div className="user-divider" />
                                     <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
                                       Logout
@@ -206,15 +225,42 @@ const HeaderTwo = ({ style_2 = false }) => {
                                   </>
                                 ) : (
                                   <>
-                                    <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
+                                    <button
+                                      className="user-item"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = "/wishlist";
+                                      }}
+                                    >
                                       Wishlist
-                                    </Link>
-                                    <Link className="user-item" href="/login" role="menuitem" onClick={() => setUserOpen(false)}>
+                                    </button>
+
+                                    <button
+                                      className="user-item"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = "/login";
+                                      }}
+                                    >
                                       Login
-                                    </Link>
-                                    <Link className="user-item" href="/register" role="menuitem" onClick={() => setUserOpen(false)}>
+                                    </button>
+
+                                    <button
+                                      className="user-item"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = "/register";
+                                      }}
+                                    >
                                       Sign Up
-                                    </Link>
+                                    </button>
+
                                   </>
                                 )}
                               </div>
