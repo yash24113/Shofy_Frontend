@@ -2,136 +2,118 @@ import { createSlice } from "@reduxjs/toolkit";
 import { getLocalStorage, setLocalStorage } from "@/utils/localstorage";
 import { notifyError, notifySuccess } from "@/utils/toast";
 
-const safeToast = {
-  success: (m) => { try { notifySuccess?.(m); } catch {} },
-  error:   (m) => { try { notifyError?.(m); } catch {} },
-};
-
-const lsGetArray = (key) => {
-  const v = getLocalStorage(key);
-  return Array.isArray(v) ? v : [];
-};
-
 const initialState = {
-  cart_products: lsGetArray("cart_products"),
-  orderQuantity: 1,         // global add-qty control (kept for compatibility)
-  cartMiniOpen: false,
-};
-
-const upsertLocalStorage = (state) => {
-  try { setLocalStorage("cart_products", state.cart_products); } catch {}
-};
-
-const getProductId = (o = {}) => o.productId || o._id || o.id;
-
-// normalize minimal product object for cart
-const toCartItem = (src = {}, defaultsQty = 1) => {
-  const productId = getProductId(src);
-  return {
-    ...src,
-    productId,
-    title: src.title || src.name || "Product",
-    price: Number(src.price ?? 0),
-    image: src.image || src.imageUrl || src.img || "",
-    orderQuantity: Number(src.orderQuantity ?? defaultsQty),
-  };
+  cart_products: [],
+  orderQuantity: 1,
+  cartMiniOpen:false,
 };
 
 export const cartSlice = createSlice({
   name: "cart",
   initialState,
   reducers: {
-    // Add one (or global orderQuantity) of the product
     add_cart_product: (state, { payload }) => {
       try {
-        const productId = getProductId(payload);
+        // Ensure we have a valid product ID to work with
+        const productId = payload._id || payload.id;
         if (!productId) {
-          console.error("add_cart_product: missing productId", payload);
+          console.error('Cannot add to cart: Product ID is missing', payload);
           return;
         }
-        const idx = state.cart_products.findIndex((p) => p.productId === productId);
 
-        if (idx === -1) {
-          const qty = Number(state.orderQuantity || 1);
-          const newItem = toCartItem(payload, qty);
+        // Find if product already exists in cart
+        const existingIndex = state.cart_products.findIndex(item => 
+          (item._id === productId || item.id === productId)
+        );
+
+        if (existingIndex === -1) {
+          // Add new item to cart
+          const newItem = {
+            ...payload,
+            _id: productId, // Ensure _id is set
+            id: productId,  // Keep id for backward compatibility
+            orderQuantity: state.orderQuantity || 1,
+            quantity: payload.quantity || 1,
+            title: payload.title || payload.name || 'Product',
+            price: parseFloat(payload.price) || 0,
+            image: payload.image || payload.imageUrl || ''
+          };
+          
           state.cart_products.push(newItem);
-          safeToast.success(`${newItem.title} added to cart`);
+          notifySuccess(`${newItem.orderQuantity} ${newItem.title} added to cart`);
         } else {
-          const item = state.cart_products[idx];
-          const inc = Number(state.orderQuantity || 1);
-          const nextQty = Number(item.orderQuantity || 1) + inc;
-
-          // optional stock cap if payload.quantity exists
-          const stock = Number(payload?.quantity ?? item?.quantity ?? Infinity);
-          if (nextQty > stock) {
-            safeToast.error("No more quantity available for this product!");
+          // Update existing item quantity
+          const item = state.cart_products[existingIndex];
+          const newQty = (item.orderQuantity || 1) + (state.orderQuantity || 1);
+          
+          if (item.quantity >= newQty) {
+            item.orderQuantity = newQty;
+            notifySuccess(`${item.title} quantity updated to ${newQty}`);
           } else {
-            item.orderQuantity = nextQty;
-            safeToast.success(`${item.title} quantity updated to ${nextQty}`);
+            notifyError("No more quantity available for this product!");
           }
         }
-        upsertLocalStorage(state);
-      } catch (err) {
-        console.error("add_cart_product error:", err);
-        safeToast.error("Failed to add item to cart");
+        
+        // Update local storage
+        setLocalStorage("cart_products", state.cart_products);
+        console.log('Cart updated:', state.cart_products);
+        
+      } catch (error) {
+        console.error('Error in add_cart_product:', error);
+        notifyError("Failed to add item to cart");
       }
     },
-
-    // OLD global controls kept for compatibility (used by PDP add-qty widgets)
-    increment: (state) => {
-      state.orderQuantity = Number(state.orderQuantity || 1) + 1;
+    // eslint-disable-next-line no-unused-vars
+    increment: (state, { payload: _payload }) => {
+      state.orderQuantity = state.orderQuantity + 1;
     },
-    decrement: (state) => {
-      const cur = Number(state.orderQuantity || 1);
-      state.orderQuantity = cur > 1 ? cur - 1 : 1;
+    // eslint-disable-next-line no-unused-vars
+    decrement: (state, { payload: _payload }) => {
+      state.orderQuantity =
+        state.orderQuantity > 1
+          ? state.orderQuantity - 1
+          : (state.orderQuantity = 1);
     },
-
-    // Decrement quantity of a specific cart item
     quantityDecrement: (state, { payload }) => {
-      const productId = getProductId(payload);
-      if (!productId) return;
-
-      state.cart_products = state.cart_products.map((item) => {
-        if (item.productId === productId) {
-          const cur = Number(item.orderQuantity || 1);
-          if (cur > 1) item.orderQuantity = cur - 1;
+      state.cart_products.map((item) => {
+        if (item._id === payload._id) {
+          if (item.orderQuantity > 1) {
+            item.orderQuantity = item.orderQuantity - 1;
+          }
         }
-        return item;
+        return { ...item };
       });
-      upsertLocalStorage(state);
+      setLocalStorage("cart_products", state.cart_products);
     },
-
     remove_product: (state, { payload }) => {
-      const productId = getProductId(payload);
-      const title = payload?.title || "Item";
-      state.cart_products = state.cart_products.filter((i) => i.productId !== productId);
-      upsertLocalStorage(state);
-      safeToast.error(`${title} removed from cart`);
+      state.cart_products = state.cart_products.filter(
+        (item) => item._id !== payload.id
+      );
+      setLocalStorage("cart_products", state.cart_products);
+      notifyError(`${payload.title} Remove from cart`);
     },
-
     get_cart_products: (state) => {
-      state.cart_products = lsGetArray("cart_products");
+      state.cart_products = getLocalStorage("cart_products");
     },
-
-    initialOrderQuantity: (state) => {
+    // eslint-disable-next-line no-unused-vars
+    initialOrderQuantity: (state, { payload: _payload }) => {
       state.orderQuantity = 1;
     },
-
-    clearCart: (state) => {
-      let ok = true;
-      try {
-        if (typeof window !== "undefined") {
-          ok = window.confirm("Are you sure you want to remove all items ?");
-        }
-      } catch {}
-      if (ok) {
-        state.cart_products = [];
-        upsertLocalStorage(state);
+    clearCart:(state) => {
+      const isClearCart = window.confirm('Are you sure you want to remove all items ?');
+      if(isClearCart){
+        state.cart_products = []
       }
+      setLocalStorage("cart_products", state.cart_products);
     },
-
-    openCartMini: (state) => { state.cartMiniOpen = true; },
-    closeCartMini: (state) => { state.cartMiniOpen = false; },
+    // eslint-disable-next-line no-unused-vars
+    openCartMini:(state,{ payload: _payload }) => {
+      state.cartMiniOpen = true
+    },
+    // eslint-disable-next-line no-unused-vars
+    closeCartMini:(state,{ payload: _payload }) => {
+      state.cartMiniOpen = false
+    },
   },
 });
 
@@ -147,5 +129,4 @@ export const {
   closeCartMini,
   openCartMini,
 } = cartSlice.actions;
-
 export default cartSlice.reducer;
