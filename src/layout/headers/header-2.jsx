@@ -82,6 +82,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     };
   }, [userOpen]);
 
+    const distinctCount = useSelector(openCartMini);
   const handleLogout = () => {
     try {
       if (typeof window !== 'undefined') {
@@ -215,7 +216,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                         dispatch(openCartMini());
                                       }}
                                     >
-                                      
+
                                       My Booking
                                     </button>
 
@@ -285,7 +286,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                             aria-label="Open cart"
                           >
                             <CartTwo />
-                            <span className="tp-header-action-badge">{quantity}</span>
+                            <span className="tp-header-action-badge">{distinctCount}</span>
                           </button>
                         </div>
 
