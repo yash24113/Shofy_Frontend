@@ -4,8 +4,8 @@ import Image from "next/image";
 import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
 // internal
-import { Close, Minus, Plus } from "@/svg";
-import { add_cart_product, quantityDecrement } from "@/redux/features/cartSlice";
+import { Close } from "@/svg";
+import { add_cart_product } from "@/redux/features/cartSlice";
 import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
 
 const WishlistItem = ({ product }) => {
@@ -71,9 +71,10 @@ const WishlistItem = ({ product }) => {
           <button
             onClick={() => handleAddProduct(product)}
             type="button"
-            className={`btn-add-product ${moving ? "is-loading" : ""}`}
+            className={`btn-ghost-invert square ${moving ? "is-loading" : ""}`}
             aria-busy={moving ? "true" : "false"}
             title="Move to Cart"
+            disabled={!!isAddToCart && !moving}
           >
             {moving ? "Moving…" : "Move to Cart"}
           </button>
@@ -83,7 +84,7 @@ const WishlistItem = ({ product }) => {
         <td className="tp-cart-action wishlist-cell">
           <button
             onClick={() => handleRemovePrd({ title, id: _id })}
-            className="tp-cart-action-btn wishlist-remove btn-pressable"
+            className="btn-ghost-invert square"
             type="button"
             title="Remove from wishlist"
           >
@@ -95,148 +96,76 @@ const WishlistItem = ({ product }) => {
 
       {/* -------- INTERNAL CSS (scoped) -------- */}
       <style jsx>{`
+        /* Row */
         .wishlist-row {
           border-bottom: 1px solid #eef0f3;
           transition: background-color 160ms ease, box-shadow 180ms ease;
         }
-        .wishlist-row:hover {
-          background: #fafbfc;
-        }
+        .wishlist-row:hover { background: #fafbfc; }
 
-        .wishlist-cell {
-          padding: 14px 12px;
-          vertical-align: middle;
-        }
+        /* Cells */
+        .wishlist-cell { padding: 14px 12px; vertical-align: middle; }
+        .wishlist-cell-center { text-align: center; }
 
-        .wishlist-cell-center {
-          text-align: center;
-        }
-
-        .wishlist-img-link {
-          display: inline-block;
-          line-height: 0;
-        }
+        /* Image */
+        .wishlist-img-link { display: inline-block; line-height: 0; }
         .wishlist-img {
-          width: 70px;
-          height: 100px;
-          object-fit: cover;
-          border-radius: 10px;
-          background: #f3f5f8;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+          width: 70px; height: 100px; object-fit: cover;
+          border-radius: 10px; background: #f3f5f8;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.06);
         }
 
-        .wishlist-title {
-          display: inline-block;
-          font-weight: 600;
-          line-height: 1.3;
-          color: #0f172a;
-          text-decoration: none;
-        }
-        .wishlist-title:hover {
-          text-decoration: underline;
-        }
+        /* Text */
+        .wishlist-title { display:inline-block; font-weight:600; line-height:1.3; color:#0f172a; text-decoration:none; }
+        .wishlist-title:hover { text-decoration: underline; }
+        .wishlist-price { font-weight: 600; color: #0f172a; }
 
-        .wishlist-price {
-          font-weight: 600;
-          color: #0f172a;
-        }
-
-        /* Pressable base */
-        .btn-pressable {
-          position: relative;
-          overflow: hidden;
-          transform: translateZ(0);
-          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
-          border-radius: 10px;
-        }
-        .btn-pressable:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 8px 20px rgba(128, 0, 0, 0.25);
-        }
-        .btn-pressable:active {
-          transform: translateY(0);
-          box-shadow: 0 3px 10px rgba(128, 0, 0, 0.3);
-        }
-
-        /* NEW: Add Product button (black base → maroon hover) */
-        .btn-add-product {
-          --btn-radius: 10px;
-          --btn-height: 48px;
-          --btn-padding-x: 22px;
-
+        /* Shared square ghost-invert button (same as CartItem) */
+        .btn-ghost-invert {
+          --navy: #0b1620;
           display: inline-flex;
           align-items: center;
-          justify-content: center;
-          min-width: 220px;
-          height: var(--btn-height);
-          padding: 0 var(--btn-padding-x);
-          border-radius: var(--btn-radius);
-          border: none;
-          outline: none;
-
-          background: #0b0b0e; /* base black */
-          color: #ffffff;
+          gap: 8px;
+          min-height: 44px;
+          padding: 10px 18px;
+          border-radius: 0;            /* square */
           font-weight: 600;
-          letter-spacing: 0.2px;
-
-          transition: background-color 180ms ease, transform 120ms ease,
-            box-shadow 180ms ease, opacity 180ms ease;
-          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+          font-size: 15px;
+          line-height: 1;
           cursor: pointer;
+          user-select: none;
+          text-decoration: none;
+          background: var(--navy);
+          color: #fff;
+          border: 1px solid var(--navy);
+          box-shadow: 0 6px 18px rgba(0,0,0,0.22);
+          transition: background 180ms ease, color 180ms ease,
+                      border-color 180ms ease, box-shadow 180ms ease,
+                      transform 120ms ease;
         }
-
-        .btn-add-product:hover {
-          background: #800000; /* maroon hover */
-          box-shadow: 0 10px 28px rgba(128, 0, 0, 0.35);
+        .btn-ghost-invert:hover {
+          background: #fff;
+          color: var(--navy);
+          border-color: var(--navy);
+          box-shadow: 0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12);
           transform: translateY(-1px);
         }
-
-        .btn-add-product:active {
-          background: #5e0000; /* darker maroon */
+        .btn-ghost-invert:active {
           transform: translateY(0);
-          box-shadow: 0 6px 16px rgba(94, 0, 0, 0.3);
+          background: #f8fafc;
+          color: var(--navy);
+          box-shadow: 0 3px 10px rgba(0,0,0,0.15);
         }
-
-        .btn-add-product:focus-visible {
-          outline: 3px solid rgba(128, 0, 0, 0.45);
-          outline-offset: 2px;
+        .btn-ghost-invert:focus-visible {
+          outline: 0;
+          box-shadow: 0 0 0 3px rgba(11,22,32,0.35);
         }
-
-        .btn-add-product.is-loading {
-          pointer-events: none;
-          opacity: 0.9;
-        }
-
-        /* Remove button */
-        .wishlist-remove {
-          color: #6b7280;
-          border: 1px solid #e5e7eb;
-          background: #fff;
-          padding: 10px 14px;
-          border-radius: 8px;
-          transition: background 160ms ease, color 160ms ease;
-        }
-
-        .wishlist-remove:hover {
-          background: #800000;
-          color: #fff;
-          border-color: #800000;
-        }
+        .btn-ghost-invert.is-loading { pointer-events: none; opacity: 0.9; }
 
         @media (max-width: 640px) {
-          .wishlist-cell {
-            padding: 10px 8px;
-          }
-          .wishlist-img {
-            width: 56px;
-            height: 80px;
-            border-radius: 8px;
-          }
-          .btn-add-product {
-            min-width: 180px;
-            height: 44px;
-            --btn-radius: 8px;
-          }
+          .wishlist-cell { padding: 10px 8px; }
+          .wishlist-img { width: 56px; height: 80px; border-radius: 8px; }
+          .btn-ghost-invert { min-height: 42px; padding: 9px 16px; }
         }
       `}</style>
     </>
