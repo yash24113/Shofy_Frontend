@@ -225,7 +225,7 @@ const ProductItem = ({ product }) => {
               </div>
             </Link>
 
-            {/* centered options ribbon */}
+            {/* centered options ribbon (responsive) */}
             {showOptionsBadge && (
               <button
                 type="button"
@@ -235,7 +235,6 @@ const ProductItem = ({ product }) => {
               >
                 <span className="ribbon-inner">
                   <span className="ribbon-icon" aria-hidden="true">
-                    {/* use your saved SVG icon */}
                     <Image
                       src="/assets/img/product/icons/tshirt.svg"
                       alt="Options Icon"
@@ -322,6 +321,7 @@ const ProductItem = ({ product }) => {
         .fashion-product-card{
           --primary:#0f172a; --muted:#6b7280; --accent:#7c3aed;
           --success:#10b981; --danger:#ef4444;
+          --maroon:#800000;               /* ← your maroon */
           --card-bg:#fff; --card-border:rgba(17,24,39,.12); --inner-border:rgba(17,24,39,.08);
           --shadow-sm:0 1px 2px rgba(0,0,0,.04);
           position:relative; width:100%; height:100%;
@@ -337,7 +337,7 @@ const ProductItem = ({ product }) => {
         :global(.img-main){ position:absolute; inset:0; object-fit:cover; }
         .image-overlay{ position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,.16) 0%, transparent 40%); z-index:1; }
 
-        /* === Refined compact “Options” pill === */
+        /* === Responsive “Options” ribbon === */
         .options-ribbon{
           position:absolute;
           left:50%;
@@ -349,8 +349,10 @@ const ProductItem = ({ product }) => {
           z-index:3;
         }
         .ribbon-inner{
-          display:flex; align-items:center; gap:6px;
-          height:26px; padding:0 10px; border-radius:13px;
+          display:flex; align-items:center; gap:8px;
+          height:clamp(22px, 5.2vw, 30px);
+          padding:0 clamp(8px, 2.2vw, 14px);
+          border-radius:999px;
           background:rgba(255,255,255,0.28);
           backdrop-filter:blur(8px) saturate(180%);
           border:1px solid rgba(255,255,255,0.28);
@@ -358,31 +360,61 @@ const ProductItem = ({ product }) => {
           transition:all .2s ease;
         }
         .options-ribbon:hover .ribbon-inner{ background:rgba(255,255,255,0.45); }
-
-        .ribbon-icon{ display:inline-grid; place-items:center; width:20px; height:20px; }
-        .badge-icon{ width:20px; height:20px; display:block; filter:drop-shadow(0 0 2px rgba(255,255,255,0.9)); }
-
+        .ribbon-icon{ display:inline-grid; place-items:center; width:clamp(16px, 4.5vw, 20px); height:clamp(16px, 4.5vw, 20px); }
+        .badge-icon{ width:100%; height:100%; display:block; filter:drop-shadow(0 0 2px rgba(255,255,255,0.9)); }
         .ribbon-text{
-          font-family: Arial, "Helvetica Neue", sans-serif;
-          font-size:13px; font-weight:600; color:#111827; letter-spacing:.2px;
+          font-size:clamp(12px, 3.2vw, 14px);
+          font-weight:600; color:#111827; letter-spacing:.2px; line-height:1;
         }
-        .ribbon-text strong{ font-weight:700; }
+        .ribbon-text strong{ font-weight:800; margin-right:4px; }
 
-        .product-actions{ position:absolute; top:12px; right:12px; display:flex; flex-direction:column; gap:8px; opacity:0; transform:translateY(-6px); transition:opacity .25s ease, transform .25s ease; z-index:3; }
-        @media (hover:hover) and (pointer:fine){ .fashion-product-card:hover .product-actions, .fashion-product-card:focus-within .product-actions{ opacity:1; transform:translateY(0); } }
+        .product-actions{
+          position:absolute; top:12px; right:12px;
+          display:flex; flex-direction:column; gap:8px;
+          opacity:0; transform:translateY(-6px);
+          transition:opacity .25s ease, transform .25s ease;
+          z-index:3;
+        }
+        @media (hover:hover) and (pointer:fine){
+          .fashion-product-card:hover .product-actions,
+          .fashion-product-card:focus-within .product-actions{ opacity:1; transform:translateY(0); }
+        }
         .fashion-product-card.show-actions .product-actions{ opacity:1; transform:translateY(0); }
 
-        .action-button{ width:32px; height:32px; border-radius:50%; display:grid; place-items:center; background:rgba(255,255,255,.95); backdrop-filter:blur(4px); border:1px solid rgba(0,0,0,.06); box-shadow:0 4px 12px rgba(0,0,0,.08); transition:transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease; }
-        .action-button:hover{ background:#fff; transform:scale(1.06); box-shadow:0 6px 16px rgba(0,0,0,.12); }
-        .action-button:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
-        .action-button :global(svg){ width:14px; height:14px; color:var(--primary); transition:color .2s ease; }
-        .action-button:hover :global(svg){ color:#7c3aed; }
+        .action-button{
+          width:34px; height:34px; border-radius:50%;
+          display:grid; place-items:center;
+          background:rgba(255,255,255,.95);
+          backdrop-filter:blur(4px);
+          border:1px solid rgba(0,0,0,.06);
+          box-shadow:0 4px 12px rgba(0,0,0,.08);
+          transition:transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease;
+        }
+        /* default icon color */
+        .action-button :global(svg){ width:16px; height:16px; color:var(--primary); transition:color .2s ease; }
 
+        /* 🔸 MAROON HOVER: background maroon + white icon */
+        .action-button:hover{
+          background:var(--maroon);
+          border-color:var(--maroon);
+          box-shadow:0 6px 16px rgba(128,0,0,.25);
+          transform:scale(1.06);
+        }
+        .action-button:hover :global(svg){
+          color:#fff !important;
+        }
+
+        /* keep state colors but still allow maroon on hover */
         .action-button.active{ box-shadow:0 6px 16px rgba(0,0,0,.12); }
         .action-button.cart-active{ background:#f0fdf4; border-color:rgba(16,185,129,.35); }
         .action-button.cart-active :global(svg){ color:#10b981; }
         .action-button.wishlist-active{ background:#fef2f2; border-color:rgba(239,68,68,.35); }
         .action-button.wishlist-active :global(svg){ color:#ef4444; }
+
+        .action-button:focus-visible{
+          outline:2px solid var(--maroon);
+          outline-offset:2px;
+        }
 
         .product-info{ padding:18px 12px 12px; border-top:1px solid var(--inner-border); background:#fff; }
         .product-category{ font-size:11px; font-weight:600; letter-spacing:.02em; color:#6b7280; margin-bottom:4px; }
@@ -394,7 +426,7 @@ const ProductItem = ({ product }) => {
           display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word;
         }
         .product-title :global(a){ color:inherit; text-decoration:none; }
-        .product-title :global(a:hover){ color:#7c3aed; }
+        .product-title :global(a:hover){ color:var(--maroon); }
 
         .spec-columns{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; margin-top:4px; }
         @media (max-width:340px){ .spec-columns{ grid-template-columns:1fr; } }
