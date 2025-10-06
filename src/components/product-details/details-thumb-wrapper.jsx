@@ -1,6 +1,6 @@
 'use client';
 import Image from 'next/image';
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { CgPlayButtonO } from 'react-icons/cg';
 
 /* ---------------- helpers ---------------- */
@@ -42,15 +42,21 @@ const DetailsThumbWrapper = ({
   activeImg,          // default large image (we prefer `img` if provided)
   imgWidth = 416,
   imgHeight = 480,
+
+  /** If you pass a video id/url but not thumbs, we'll still render */
   videoId = false,
   status,
-  zoomScale = 2.2,
+
+  /** Zoom tuning */
+  zoomScale = 2.2,             // magnification multiplier on natural pixels
   zoomPaneWidth = 620,
   zoomPaneHeight = 480,
-  lensSize = 140,
+
+  /** Lens visuals (border/bg only; size is auto-calculated) */
   lensBorder = '2px solid rgba(59,130,246,.75)',
   lensBg = 'rgba(255,255,255,.25)',
 }) => {
+
   const [isVideoActive, setIsVideoActive] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
 
@@ -74,12 +80,12 @@ const DetailsThumbWrapper = ({
   /* ---------- Merge optional apiImages and imageURLs AFTER the 3 primaries ---------- */
   const extrasFromApiImages = useMemo(() => {
     const src = apiImages || {};
-    const pics = [src.img, src.image1, src.image2]
+    const pics = [src?.img, src?.image1, src?.image2]
       .map(processImageUrl)
       .filter(Boolean)
       .map((p) => ({ type: 'image', img: p }));
 
-    if (src.video || src.videoThumbnail) {
+    if (src?.video || src?.videoThumbnail) {
       const vUrl = src.video ? (isRemote(src.video) ? src.video : processImageUrl(src.video)) : null;
       const poster = processImageUrl(src.videoThumbnail) || pics[0]?.img || null;
       if (vUrl || poster) pics.push({ type: 'video', img: poster, video: vUrl });
@@ -96,7 +102,7 @@ const DetailsThumbWrapper = ({
         const thumb = processImageUrl(item.img || item.thumbnail || item.poster);
         const vUrl =
           type === 'video'
-            ? (isRemote(item.video) ? item.video : processImageUrl(item.video))
+            ? (isRemote(item.video || '') ? item.video : processImageUrl(item.video))
             : null;
         return thumb ? { type, img: thumb, video: vUrl } : null;
       })
@@ -124,7 +130,6 @@ const DetailsThumbWrapper = ({
   );
 
   const [mainSrc, setMainSrc] = useState(defaultMain);
-
   useEffect(() => {
     setMainSrc(defaultMain);
     setIsVideoActive(false);
@@ -148,17 +153,69 @@ const DetailsThumbWrapper = ({
     }
   };
 
-  /* ---------------- Zoom + Lens logic ---------------- */
-  const imgWrapRef = useRef(null);
+  /* ---------------- Zoom + Lens logic (true hover-area mapping) ---------------- */
+  const wrapRef = useRef(null);
+
   const [showZoom, setShowZoom] = useState(false);
-  const [zoomBgPos, setZoomBgPos] = useState('50% 50%');
-  const [naturalSize, setNaturalSize] = useState({ w: imgWidth, h: imgHeight });
+  const [zoomBgPosPx, setZoomBgPosPx] = useState({ x: 0, y: 0 }); // pixel-based background-position
+  const [natural, setNatural] = useState({ w: imgWidth, h: imgHeight });
+  const [displayRect, setDisplayRect] = useState({ ox: 0, oy: 0, dw: imgWidth, dh: imgHeight });
 
-  const [showLens, setShowLens] = useState(false);
+  // Lens size auto-matches the visible area shown in the zoom pane
+  const [lensSize, setLensSize] = useState({ lw: 140, lh: 140 });
   const [lensPos, setLensPos] = useState({ x: 0, y: 0 });
+  const [showLens, setShowLens] = useState(false);
 
-  const handleImageLoaded = ({ naturalWidth, naturalHeight }) => {
-    setNaturalSize({ w: naturalWidth || imgWidth, h: naturalHeight || imgHeight });
+  const computeDisplayRect = useCallback(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const W = wrap.clientWidth;
+    const H = wrap.clientHeight;
+    const NW = natural.w;
+    const NH = natural.h;
+
+    if (!NW || !NH) return;
+
+    // object-fit: contain math
+    const wrapRatio = W / H;
+    const imgRatio = NW / NH;
+
+    let dw, dh;
+    if (imgRatio > wrapRatio) {
+      // limited by width
+      dw = W;
+      dh = W / imgRatio;
+    } else {
+      // limited by height
+      dh = H;
+      dw = H * imgRatio;
+    }
+
+    const ox = (W - dw) / 2; // left letterbox
+    const oy = (H - dh) / 2; // top letterbox
+    setDisplayRect({ ox, oy, dw, dh });
+
+    // lens size so that zoom pane shows exactly the same area
+    const lw = (zoomPaneWidth / (natural.w * zoomScale)) * dw;
+    const lh = (zoomPaneHeight / (natural.h * zoomScale)) * dh;
+    setLensSize({
+      lw: Math.max(30, Math.min(dw, lw)),
+      lh: Math.max(30, Math.min(dh, lh)),
+    });
+  }, [natural, zoomPaneWidth, zoomPaneHeight, zoomScale]);
+
+  // recompute on size or new image/natural change
+  useEffect(() => {
+    computeDisplayRect();
+    const r = () => computeDisplayRect();
+    window.addEventListener('resize', r);
+    return () => window.removeEventListener('resize', r);
+  }, [computeDisplayRect, mainSrc]);
+
+  const onImageLoaded = ({ naturalWidth, naturalHeight }) => {
+    setNatural({ w: naturalWidth || imgWidth, h: naturalHeight || imgHeight });
+    // After natural known, compute display rect
+    setTimeout(computeDisplayRect, 0);
   };
 
   const handleMouseEnter = () => {
@@ -171,23 +228,53 @@ const DetailsThumbWrapper = ({
     setShowZoom(false);
     setShowLens(false);
   };
-  const handleMouseMove = (e) => {
-    if (!imgWrapRef.current || isVideoActive) return;
-    const rect = imgWrapRef.current.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
 
-    const half = lensSize / 2;
-    const lx = Math.max(0, Math.min(rect.width - lensSize, cx - half));
-    const ly = Math.max(0, Math.min(rect.height - lensSize, cy - half));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  const handleMouseMove = (e) => {
+    if (!wrapRef.current || isVideoActive) return;
+
+    const rect = wrapRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const { ox, oy, dw, dh } = displayRect;
+
+    // If pointer outside the drawn image (letterbox zones), hide lens/zoom
+    const inside =
+      x >= ox && x <= ox + dw &&
+      y >= oy && y <= oy + dh;
+
+    if (!inside) {
+      setShowLens(false);
+      setShowZoom(false);
+      return;
+    } else {
+      setShowLens(true);
+      setShowZoom(true);
+    }
+
+    // Relative position within displayed image
+    const px = (x - ox) / dw; // 0..1
+    const py = (y - oy) / dh; // 0..1
+
+    // Lens top-left (so that cursor is at lens center)
+    const lx = clamp(x - lensSize.lw / 2, ox, ox + dw - lensSize.lw);
+    const ly = clamp(y - lensSize.lh / 2, oy, oy + dh - lensSize.lh);
     setLensPos({ x: lx, y: ly });
 
-    const centerX = (lx + half) / rect.width;
-    const centerY = (ly + half) / rect.height;
-    setZoomBgPos(`${centerX * 100}% ${centerY * 100}%`);
+    // Convert to natural pixel coords
+    const natX = px * natural.w;
+    const natY = py * natural.h;
+
+    // Background is scaled by zoomScale; set bg-position so (natX,natY) is centered in zoom pane
+    const bgX = -(natX * zoomScale - zoomPaneWidth / 2);
+    const bgY = -(natY * zoomScale - zoomPaneHeight / 2);
+    setZoomBgPosPx({ x: bgX, y: bgY });
   };
 
-  const zoomBgSize = `${naturalSize.w * zoomScale}px ${naturalSize.h * zoomScale}px`;
+  const bgSize = `${natural.w * zoomScale}px ${natural.h * zoomScale}px`;
+  const bgPos = `${zoomBgPosPx.x}px ${zoomBgPosPx.y}px`;
 
   return (
     <div className="pdw-wrapper">
@@ -245,7 +332,7 @@ const DetailsThumbWrapper = ({
       {/* Main viewer with lens */}
       <div className="pdw-main">
         <div
-          ref={imgWrapRef}
+          ref={wrapRef}
           className="pdw-main-inner"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
@@ -266,9 +353,9 @@ const DetailsThumbWrapper = ({
               width={imgWidth}
               height={imgHeight}
               style={{ objectFit: 'contain' }}
-              unoptimized={isCloudinaryUrl(mainSrc)}
+              unoptimized={isCloudinaryUrl(mainSrc || '')}
               priority
-              onLoadingComplete={handleImageLoaded}
+              onLoadingComplete={onImageLoaded}
             />
           )}
 
@@ -277,8 +364,8 @@ const DetailsThumbWrapper = ({
             <span
               className="pdw-lens"
               style={{
-                width: lensSize,
-                height: lensSize,
+                width: `${lensSize.lw}px`,
+                height: `${lensSize.lh}px`,
                 transform: `translate(${lensPos.x}px, ${lensPos.y}px)`,
                 border: lensBorder,
                 background: lensBg
@@ -298,8 +385,8 @@ const DetailsThumbWrapper = ({
         className={`pdw-zoom ${showZoom && !isVideoActive ? 'is-visible' : ''}`}
         style={{
           backgroundImage: mainSrc ? `url(${mainSrc})` : 'none',
-          backgroundSize: zoomBgSize,
-          backgroundPosition: zoomBgPos
+          backgroundSize: bgSize,
+          backgroundPosition: bgPos
         }}
         aria-hidden={!showZoom || isVideoActive}
       />
@@ -366,7 +453,7 @@ const DetailsThumbWrapper = ({
         /* Right zoom pane */
         .pdw-zoom {
           width: ${zoomPaneWidth}px; height: ${zoomPaneHeight}px;
-          border-radius: 12px; background-repeat: no-repeat; background-position: center;
+          border-radius: 12px; background-repeat: no-repeat;
           background-color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.06);
           opacity: 0; visibility: hidden; transform: translateY(4px);
           transition: opacity 160ms ease, visibility 160ms ease, transform 160ms ease;
