@@ -60,7 +60,7 @@ const CartArea = () => {
                 {/* Bottom actions row */}
                 <div className="tp-cart-bottom">
                   <div className="row align-items-end justify-content-between g-3">
-                    {/* LEFT: Add Product (button with black → light-blue hover) */}
+                    {/* LEFT: Add Product */}
                     <div className="col-md-6">
                       <div className="tp-cart-actions-left center-left">
                         <button
@@ -104,7 +104,7 @@ const CartArea = () => {
 
       {/* Internal styles */}
       <style jsx>{`
-        /* ===== Add Product button (black base → light-blue hover) ===== */
+        /* ===== Add Product button (black base → maroon hover) ===== */
         .btn-add-product {
           --btnRadius: 12px;
           --btnPadY: 12px;
@@ -116,14 +116,14 @@ const CartArea = () => {
           padding: var(--btnPadY) var(--btnPadX);
           border: none;
           border-radius: var(--btnRadius);
-          background: #0b0b0e;                     /* black base */
+          background: #0b0b0e; /* black base */
           color: #ffffff;
           font-weight: 600;
           font-size: 15px;
           line-height: 1;
           cursor: pointer;
           user-select: none;
-          box-shadow: 0 6px 16px rgba(0,0,0,0.22);
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
           transform: translateZ(0);
           transition:
             background-color 180ms ease,
@@ -132,28 +132,33 @@ const CartArea = () => {
             box-shadow 180ms ease,
             outline-color 0s;
         }
+
         .btn-add-product:hover {
-          background: #60a5fa;                     /* light blue hover */
-          color: #0b1b2a;                          /* dark text for contrast on light blue */
+          background: #800000; /* maroon hover */
+          color: #ffffff;
           transform: translateY(-1px);
-          box-shadow: 0 10px 24px rgba(96,165,250,0.35);
+          box-shadow: 0 10px 24px rgba(128, 0, 0, 0.35);
         }
+
         .btn-add-product:active {
-          background: #3b82f6;                     /* slightly deeper blue when pressed */
+          background: #5e0000; /* darker pressed */
           color: #ffffff;
           transform: translateY(0);
-          box-shadow: 0 6px 16px rgba(59,130,246,0.35);
+          box-shadow: 0 6px 16px rgba(94, 0, 0, 0.35);
         }
+
         .btn-add-product:focus-visible {
-          outline: 3px solid rgba(96,165,250,0.55); /* focus ring in light blue family */
+          outline: 3px solid rgba(128, 0, 0, 0.55); /* maroon focus ring */
           outline-offset: 2px;
         }
+
         .btn-add-product .btn-icon {
           display: inline-flex;
           align-items: center;
           justify-content: center;
           line-height: 0;
         }
+
         .btn-add-product .btn-label {
           white-space: nowrap;
         }
@@ -171,22 +176,25 @@ const CartArea = () => {
           font-size: 15px;
           line-height: 1;
           text-decoration: none;
-          cursor: pointer;  
+          cursor: pointer;
           user-select: none;
           transition: transform 160ms ease, box-shadow 160ms ease,
-                      background 160ms ease, border-color 160ms ease, color 160ms ease;
+            background 160ms ease, border-color 160ms ease, color 160ms ease;
         }
+
         .btn-pressable:hover {
           transform: translateY(-1px);
-          box-shadow: 0 8px 20px rgba(2, 132, 199, 0.18);
+          box-shadow: 0 8px 20px rgba(128, 0, 0, 0.25);
         }
+
         .btn-pressable:active {
           transform: translateY(0);
-          box-shadow: 0 3px 10px rgba(2, 132, 199, 0.2);
+          box-shadow: 0 3px 10px rgba(128, 0, 0, 0.3);
         }
+
         .btn-pressable:focus-visible {
           outline: 0;
-          box-shadow: 0 0 0 3px rgba(46, 160, 255, 0.45);
+          box-shadow: 0 0 0 3px rgba(128, 0, 0, 0.45);
         }
 
         /* Outline (Clear Cart) */
@@ -195,13 +203,17 @@ const CartArea = () => {
           background: #fff;
           border: 1px solid #e5e7eb;
         }
+
         .btn-outline:hover {
-          background: #f9fafb;
-          border-color: #d1d5db;
+          background: #800000;
+          color: #fff;
+          border-color: #800000;
         }
+
         .btn-outline:active {
-          background: #f3f4f6;
-          border-color: #cbd5e1;
+          background: #5e0000;
+          border-color: #5e0000;
+          color: #fff;
         }
 
         /* Layout helpers */
@@ -210,15 +222,19 @@ const CartArea = () => {
           display: flex;
           align-items: center;
         }
+
         .center-left {
           justify-content: center;
         }
+
         .tp-cart-update {
           justify-content: flex-end;
         }
 
         @media (max-width: 640px) {
-          .tp-cart-update { justify-content: flex-start; }
+          .tp-cart-update {
+            justify-content: flex-start;
+          }
         }
       `}</style>
     </>

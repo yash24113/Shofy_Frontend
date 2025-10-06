@@ -21,7 +21,6 @@ const WishlistItem = ({ product }) => {
 
   const slug = product?.slug || _id;
 
-  // add product (and remove from wishlist)
   const handleAddProduct = async (prd) => {
     try {
       setMoving(true);
@@ -30,10 +29,6 @@ const WishlistItem = ({ product }) => {
     } finally {
       setTimeout(() => setMoving(false), 250);
     }
-  };
-
-  const handleDecrement = (prd) => {
-    dispatch(quantityDecrement(prd));
   };
 
   const handleRemovePrd = (prd) => {
@@ -100,7 +95,6 @@ const WishlistItem = ({ product }) => {
 
       {/* -------- INTERNAL CSS (scoped) -------- */}
       <style jsx>{`
-        /* Row polish */
         .wishlist-row {
           border-bottom: 1px solid #eef0f3;
           transition: background-color 160ms ease, box-shadow 180ms ease;
@@ -109,17 +103,15 @@ const WishlistItem = ({ product }) => {
           background: #fafbfc;
         }
 
-        /* Cells */
         .wishlist-cell {
           padding: 14px 12px;
           vertical-align: middle;
         }
-        /* center the "Add Product" button cell */
+
         .wishlist-cell-center {
           text-align: center;
         }
 
-        /* Image */
         .wishlist-img-link {
           display: inline-block;
           line-height: 0;
@@ -133,7 +125,6 @@ const WishlistItem = ({ product }) => {
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
         }
 
-        /* Title */
         .wishlist-title {
           display: inline-block;
           font-weight: 600;
@@ -145,49 +136,12 @@ const WishlistItem = ({ product }) => {
           text-decoration: underline;
         }
 
-        /* Price */
         .wishlist-price {
           font-weight: 600;
           color: #0f172a;
         }
 
-        /* Quantity group (kept for future use) */
-        .wishlist-qty {
-          display: inline-flex;
-          align-items: center;
-          border: 1px solid #e5e7eb;
-          border-radius: 999px;
-          padding: 2px;
-          background: #fff;
-        }
-        .wishlist-qty-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 38px;
-          height: 38px;
-          border-radius: 999px;
-          border: none;
-          background: transparent;
-          cursor: pointer;
-          transition: transform 120ms ease, background-color 120ms ease;
-        }
-        .wishlist-qty-btn:hover {
-          background: #f3f4f6;
-        }
-        .wishlist-qty-btn:active {
-          transform: translateY(1px);
-        }
-        .wishlist-qty-input {
-          width: 52px;
-          text-align: center;
-          font-weight: 600;
-          border: 0;
-          background: transparent;
-          outline: none;
-        }
-
-        /* Animated buttons base */
+        /* Pressable base */
         .btn-pressable {
           position: relative;
           overflow: hidden;
@@ -197,34 +151,14 @@ const WishlistItem = ({ product }) => {
         }
         .btn-pressable:hover {
           transform: translateY(-1px);
-          box-shadow: 0 8px 20px rgba(2, 132, 199, 0.18);
+          box-shadow: 0 8px 20px rgba(128, 0, 0, 0.25);
         }
         .btn-pressable:active {
           transform: translateY(0);
-          box-shadow: 0 3px 10px rgba(2, 132, 199, 0.2);
-        }
-        .btn-pressable::after {
-          content: "";
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          width: 0;
-          height: 0;
-          background: rgba(255, 255, 255, 0.35);
-          border-radius: 999px;
-          transform: translate(-50%, -50%);
-          opacity: 0;
-          pointer-events: none;
-        }
-        .btn-pressable:active::after {
-          width: 180%;
-          height: 180%;
-          opacity: 1;
-          transition: width 280ms ease, height 280ms ease, opacity 380ms ease;
-          opacity: 0;
+          box-shadow: 0 3px 10px rgba(128, 0, 0, 0.3);
         }
 
-        /* NEW: Add Product button (navy base -> blue hover) */
+        /* NEW: Add Product button (black base → maroon hover) */
         .btn-add-product {
           --btn-radius: 10px;
           --btn-height: 48px;
@@ -240,29 +174,34 @@ const WishlistItem = ({ product }) => {
           border: none;
           outline: none;
 
-          background: #081a2b; /* deep navy (like 2nd image) */
+          background: #0b0b0e; /* base black */
           color: #ffffff;
           font-weight: 600;
           letter-spacing: 0.2px;
 
           transition: background-color 180ms ease, transform 120ms ease,
             box-shadow 180ms ease, opacity 180ms ease;
-          box-shadow: 0 6px 18px rgba(8, 26, 43, 0.25);
+          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
           cursor: pointer;
         }
+
         .btn-add-product:hover {
-          background: #1486ff; /* bright blue (like 3rd image) */
-          box-shadow: 0 10px 28px rgba(20, 134, 255, 0.35);
+          background: #800000; /* maroon hover */
+          box-shadow: 0 10px 28px rgba(128, 0, 0, 0.35);
           transform: translateY(-1px);
         }
+
         .btn-add-product:active {
+          background: #5e0000; /* darker maroon */
           transform: translateY(0);
-          box-shadow: 0 6px 16px rgba(8, 26, 43, 0.3);
+          box-shadow: 0 6px 16px rgba(94, 0, 0, 0.3);
         }
+
         .btn-add-product:focus-visible {
-          outline: 3px solid rgba(20, 134, 255, 0.45);
+          outline: 3px solid rgba(128, 0, 0, 0.45);
           outline-offset: 2px;
         }
+
         .btn-add-product.is-loading {
           pointer-events: none;
           opacity: 0.9;
@@ -277,12 +216,13 @@ const WishlistItem = ({ product }) => {
           border-radius: 8px;
           transition: background 160ms ease, color 160ms ease;
         }
+
         .wishlist-remove:hover {
-          background: #f9fafb;
-          color: #374151;
+          background: #800000;
+          color: #fff;
+          border-color: #800000;
         }
 
-        /* Responsive tweaks */
         @media (max-width: 640px) {
           .wishlist-cell {
             padding: 10px 8px;
