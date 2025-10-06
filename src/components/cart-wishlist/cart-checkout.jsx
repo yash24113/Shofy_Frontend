@@ -1,16 +1,21 @@
 'use client';
 import React, { useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import useCartInfo from "@/hooks/use-cart-info";
 
 const CartCheckout = () => {
   const { total } = useCartInfo();
   const [shipCost, setShipCost] = useState(0);
+  const router = useRouter();
 
   // handle shipping cost
   const handleShippingCost = (value) => {
     if (value === "free") setShipCost(0);
-    else setShipCost(value);
+    else setShipCost(Number(value));
+  };
+
+  const handleProceed = () => {
+    router.push("/checkout");
   };
 
   return (
@@ -51,9 +56,13 @@ const CartCheckout = () => {
         </div>
 
         <div className="tp-cart-checkout-proceed">
-          <Link href="/checkout" className="btn-ghost-invert w-100" role="button">
+          <button
+            type="button"
+            className="btn-ghost-invert w-100"
+            onClick={handleProceed}
+          >
             Proceed to Checkout
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -99,7 +108,7 @@ const CartCheckout = () => {
           font-weight: 500;
         }
 
-        /* === Proceed to Checkout — ghost-invert, square corners === */
+        /* === Proceed to Checkout — ghost-invert, square === */
         .btn-ghost-invert {
           --navy: #0b1620;
 
@@ -108,15 +117,14 @@ const CartCheckout = () => {
           justify-content: center;
           min-height: 48px;
           padding: 12px 22px;
+          width: 100%;
           font-weight: 600;
           font-size: 16px;
           line-height: 1;
-          text-decoration: none;
           cursor: pointer;
           user-select: none;
-
-          border-radius: 0;               /* square */
-          background: var(--navy);        /* filled default */
+          border-radius: 0;
+          background: var(--navy);
           color: #ffffff;
           border: 1px solid var(--navy);
           box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
@@ -127,29 +135,36 @@ const CartCheckout = () => {
             transform 120ms ease,
             box-shadow 180ms ease;
         }
+
         .btn-ghost-invert:hover {
-          background: #ffffff;            /* outline on hover */
+          background: #ffffff;
           color: var(--navy);
           border-color: var(--navy);
-          box-shadow: 0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12);
+          box-shadow: 0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0, 0, 0, 0.12);
           transform: translateY(-1px);
         }
+
         .btn-ghost-invert:active {
           transform: translateY(0);
           background: #f8fafc;
           color: var(--navy);
-          box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
         }
+
         .btn-ghost-invert:focus-visible {
           outline: 0;
-          box-shadow: 0 0 0 3px rgba(11,22,32,0.35);
+          box-shadow: 0 0 0 3px rgba(11, 22, 32, 0.35);
         }
 
-        .w-100 { width: 100%; text-align: center; }
-
         @media (max-width: 640px) {
-          .tp-cart-checkout-wrapper { padding: 18px; }
-          .btn-ghost-invert { min-height: 44px; padding: 10px 18px; font-size: 15px; }
+          .tp-cart-checkout-wrapper {
+            padding: 18px;
+          }
+          .btn-ghost-invert {
+            min-height: 44px;
+            padding: 10px 18px;
+            font-size: 15px;
+          }
         }
       `}</style>
     </>
