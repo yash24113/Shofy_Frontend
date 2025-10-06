@@ -117,8 +117,25 @@ export default function UserProfile() {
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           let message = `Update failed (${res.status})`;
-          try { message = JSON.parse(text)?.message || message; } catch {}
-          throw new Error(message);
+          try { message = JSON.parse(text)?.message || message; } catch(err) {
+
+           const msg =
+    err?.message ||
+    err?.data?.message ||
+    (typeof err === 'string' ? err : '') ||
+    'Update failed. Please try again.';
+
+  // Special-case obvious network failures
+  if (/Failed to fetch|NetworkError|TypeError: Failed to fetch/i.test(String(err?.message))) {
+    notifyError('Network error: please check your connection and try again.');
+  } else {
+    notifyError(msg);
+  }
+
+  // Helpful for debugging in DevTools
+  console.error('Profile update error:', err);
+}
+ throw new Error(message);
         }
 
         const json = await res.json();
