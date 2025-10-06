@@ -95,7 +95,7 @@ const WishlistArea = () => {
           align-items: center;
         }
 
-        /* Add Product button (black base → light-blue hover) */
+        /* Add Product button (black base → maroon hover) */
         .add-btn {
           display: inline-flex;
           align-items: center;
@@ -108,31 +108,33 @@ const WishlistArea = () => {
           font-size: 15px;
           line-height: 1;
           color: #fff;
-
-          background: #000;            /* black base */
+          background: #000; /* base black */
           border: none;
           cursor: pointer;
-
           transition: background 180ms ease,
                       box-shadow 180ms ease,
                       transform 120ms ease;
           box-shadow: 0 6px 18px rgba(0,0,0,0.25);
         }
+
         .add-btn:hover {
-          background: #2ea0ff;        /* light blue hover */
-          box-shadow: 0 10px 28px rgba(46,160,255,0.35);
+          background: #800000; /* maroon hover */
+          box-shadow: 0 10px 28px rgba(128,0,0,0.35);
           transform: translateY(-1px);
-          color: #0b1b2a;             /* darker text on lighter bg for contrast */
+          color: #fff;
         }
+
         .add-btn:active {
-          background: #1670ff;        /* pressed */
+          background: #5e0000; /* darker pressed */
           transform: translateY(0);
           color: #fff;
         }
+
         .add-btn:focus-visible {
           outline: 0;
-          box-shadow: 0 0 0 3px rgba(46,160,255,0.45);
+          box-shadow: 0 0 0 3px rgba(128,0,0,0.45);
         }
+
         .btn-icon {
           display: inline-flex;
           align-items: center;
@@ -167,17 +169,20 @@ const WishlistArea = () => {
           transition: transform 160ms ease, box-shadow 160ms ease,
             background 160ms ease, border-color 160ms ease, color 160ms ease;
         }
+
         .btn-pressable:hover {
           transform: translateY(-1px);
-          box-shadow: 0 8px 20px rgba(2, 132, 199, 0.18);
+          box-shadow: 0 8px 20px rgba(128,0,0,0.25);
         }
+
         .btn-pressable:active {
           transform: translateY(0);
-          box-shadow: 0 3px 10px rgba(2, 132, 199, 0.2);
+          box-shadow: 0 3px 10px rgba(128,0,0,0.3);
         }
+
         .btn-pressable:focus-visible {
           outline: 0;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45);
+          box-shadow: 0 0 0 3px rgba(128,0,0,0.45);
         }
 
         /* Outline (Go To Cart) */
@@ -186,13 +191,17 @@ const WishlistArea = () => {
           background: #fff;
           border: 1px solid #e5e7eb;
         }
+
         .btn-outline:hover {
-          background: #f9fafb;
-          border-color: #d1d5db;
+          background: #800000;
+          color: #fff;
+          border-color: #800000;
         }
+
         .btn-outline:active {
-          background: #f3f4f6;
-          border-color: #cbd5e1;
+          background: #5e0000;
+          border-color: #5e0000;
+          color: #fff;
         }
 
         /* Layout helpers */
@@ -201,11 +210,19 @@ const WishlistArea = () => {
           display: flex;
           align-items: center;
         }
-        .wl-actions-right { justify-content: flex-end; }
-        .center-left { justify-content: center; }
+
+        .wl-actions-right {
+          justify-content: flex-end;
+        }
+
+        .center-left {
+          justify-content: center;
+        }
 
         @media (max-width: 640px) {
-          .wl-actions-right { justify-content: flex-start; }
+          .wl-actions-right {
+            justify-content: flex-start;
+          }
         }
       `}</style>
     </>
