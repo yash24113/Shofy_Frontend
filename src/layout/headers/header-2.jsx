@@ -14,18 +14,14 @@ import useSearchFormSubmit from '@/hooks/use-search-form-submit';
 import { FaHeart, FaUser } from 'react-icons/fa';
 import { FiMenu } from 'react-icons/fi';
 
-/* Use your existing modal components and CSS as-is */
-import LoginArea from '@/components/login-register/login-area';
-import RegisterArea from '@/components/login-register/register-area';
-
 const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
   const { wishlist } = useSelector((state) => state.wishlist);
   const { quantity } = useCartInfo();
-  const { searchText, setSearchText, handleSubmit: handleSearchSubmit } = useSearchFormSubmit();
 
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
+  const { searchText, setSearchText, handleSubmit: handleSearchSubmit } = useSearchFormSubmit();
 
   // ---- Session & user dropdown ----
   const [hasSession, setHasSession] = useState(false);
@@ -33,14 +29,6 @@ const HeaderTwo = ({ style_2 = false }) => {
   const userBtnRef = useRef(null);
   const userMenuRef = useRef(null);
 
-  // ---- Auth modal toggles (no routing) ----
-  const [authOpen, setAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
-
-  // swallow-next-click flag to prevent click-through after closing on pointerdown
-  const swallowNextClickRef = useRef(false);
-
-  /* Watch localStorage for session */
   useEffect(() => {
     const check = () =>
       setHasSession(
@@ -52,24 +40,31 @@ const HeaderTwo = ({ style_2 = false }) => {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  /* Close dropdown on outside click / escape / etc. */
+  // Close dropdown on outside click / touch / ESC / scroll / resize / tab hide
   useEffect(() => {
     const close = () => setUserOpen(false);
 
     const onPointer = (e) => {
+      // if click/touch happened outside both the button and the menu -> close
       const btn = userBtnRef.current;
       const menu = userMenuRef.current;
       const target = e.target;
-      if (btn && btn.contains(target)) return;
-      if (menu && menu.contains(target)) return;
+      if (
+        btn && btn.contains(target)
+      ) return;
+      if (
+        menu && menu.contains(target)
+      ) return;
       close();
     };
+
     const onEsc = (e) => { if (e.key === 'Escape') close(); };
     const onScroll = () => close();
     const onResize = () => close();
     const onVisibility = () => { if (document.visibilityState === 'hidden') close(); };
 
     if (userOpen) {
+      // capture phase helps catch events before they bubble into React portals
       document.addEventListener('mousedown', onPointer, true);
       document.addEventListener('touchstart', onPointer, true);
       document.addEventListener('keydown', onEsc);
@@ -87,6 +82,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     };
   }, [userOpen]);
 
+    const distinctCount = useSelector(openCartMini);
   const handleLogout = () => {
     try {
       if (typeof window !== 'undefined') {
@@ -94,108 +90,28 @@ const HeaderTwo = ({ style_2 = false }) => {
         try {
           import('js-cookie')
             .then((Cookies) => Cookies.default.remove('userInfo'))
-            .catch((err) => console.error('Failed to remove userInfo cookie:', err));
+            .catch((err) => {
+              console.error("Failed to remove userInfo cookie:", err);
+            });
         } catch (err) {
-          console.error('Error importing js-cookie:', err);
+          console.error("Error importing js-cookie:", err);
         }
       }
     } finally {
       setHasSession(false);
       setUserOpen(false);
-      if (typeof window !== 'undefined') window.location.href = '/';
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
     }
   };
-
-  /* 1) Intercept Login<->Signup links INSIDE your modal so they toggle view instead of routing */
-  useEffect(() => {
-    if (!authOpen) return;
-
-    const onIntercept = (e) => {
-      const el = e.target.closest?.('a');
-      if (!el) return;
-      const href = el.getAttribute('href');
-
-      // Only handle links inside your auth modals
-      const inAuth = !!el.closest?.('[data-auth="login"], [data-auth="register"]');
-      if (!inAuth) return;
-
-      if (href === '/register') {
-        e.preventDefault();
-        e.stopPropagation();
-        setAuthMode('register'); // swap to Signup tab
-        return;
-      }
-      if (href === '/login') {
-        e.preventDefault();
-        e.stopPropagation();
-        setAuthMode('login'); // swap to Login tab
-        return;
-      }
-    };
-
-    // capture phase beats Next.js Link
-    document.addEventListener('click', onIntercept, true);
-    return () => document.removeEventListener('click', onIntercept, true);
-  }, [authOpen]);
-
-  /* 2) Intercept CLOSE actions (✕ / overlay / ESC) using pointerdown + swallow next click */
-  useEffect(() => {
-    if (!authOpen) return;
-
-    const closeModal = () => {
-      setAuthOpen(false);
-      // optionally reset: setAuthMode('login');
-    };
-
-    const onPointerDownCapture = (e) => {
-      const t = e.target;
-      const withinAuth = t.closest?.('[data-auth="login"], [data-auth="register"]');
-      if (!withinAuth) return;
-
-      const isOverlay = t.closest?.('.modalOverlay');
-      const isCloseBtn = t.closest?.('.modalClose');
-      if (isOverlay || isCloseBtn) {
-        // stop event *before* click happens to prevent click-through
-        e.preventDefault();
-        e.stopPropagation();
-        // mark to swallow the very next 'click' event the browser may still fire
-        swallowNextClickRef.current = true;
-        closeModal();
-      }
-    };
-
-    const onKeydownCapture = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        closeModal();
-      }
-    };
-
-    // swallow the first click after we closed on pointerdown
-    const onClickSwallow = (e) => {
-      if (swallowNextClickRef.current) {
-        e.preventDefault();
-        e.stopPropagation();
-        swallowNextClickRef.current = false;
-      }
-    };
-
-    document.addEventListener('pointerdown', onPointerDownCapture, true);
-    document.addEventListener('keydown', onKeydownCapture, true);
-    document.addEventListener('click', onClickSwallow, true);
-
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDownCapture, true);
-      document.removeEventListener('keydown', onKeydownCapture, true);
-      document.removeEventListener('click', onClickSwallow, true);
-    };
-  }, [authOpen]);
 
   return (
     <>
       <header>
         <div className={`tp-header-area tp-header-style-${style_2 ? 'primary' : 'darkRed'} tp-header-height`}>
+          {/* Header Top — intentionally hidden */}
+
           {/* Header Bottom */}
           <div
             id="header-sticky"
@@ -213,7 +129,8 @@ const HeaderTwo = ({ style_2 = false }) => {
                           alt="Company Logo"
                           width={140}
                           height={44}
-                          style={{ height: 'auto', width: 'auto', maxWidth: 140, maxHeight: 44 }}
+                          style={{ height: 'auto', width: 'auto', maxWidth: '140px', maxHeight: '44px' }}
+                          sizes="(max-width: 600px) 110px, 140px"
                         />
                       </Link>
                     </div>
@@ -266,20 +183,43 @@ const HeaderTwo = ({ style_2 = false }) => {
                               <div className="user-menu-inner">
                                 {hasSession ? (
                                   <>
-                                    <Link className="user-item" href="/profile" role="menuitem" onClick={() => setUserOpen(false)}>
-                                      My Account
-                                    </Link>
-                                    <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
-                                      Wishlist
-                                    </Link>
                                     <button
                                       className="user-item"
                                       type="button"
                                       role="menuitem"
-                                      onClick={() => { setUserOpen(false); dispatch(openCartMini()); }}
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = "/profile";
+                                      }}
                                     >
+                                      My Account
+                                    </button>
+
+                                    <button
+                                      className="user-item"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = "/wishlist";
+                                      }}
+                                    >
+                                      Wishlist
+                                    </button>
+
+                                    <button
+                                      className="user-item"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        dispatch(openCartMini());
+                                      }}
+                                    >
+
                                       My Booking
                                     </button>
+
                                     <div className="user-divider" />
                                     <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
                                       Logout
@@ -287,27 +227,42 @@ const HeaderTwo = ({ style_2 = false }) => {
                                   </>
                                 ) : (
                                   <>
-                                    <Link className="user-item" href="/wishlist" role="menuitem" onClick={() => setUserOpen(false)}>
-                                      Wishlist
-                                    </Link>
-
-                                    {/* Open your modals (no routing) */}
                                     <button
                                       className="user-item"
                                       type="button"
                                       role="menuitem"
-                                      onClick={() => { setUserOpen(false); setAuthMode('login'); setAuthOpen(true); }}
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = "/wishlist";
+                                      }}
+                                    >
+                                      Wishlist
+                                    </button>
+
+                                    <button
+                                      className="user-item"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = "/login";
+                                      }}
                                     >
                                       Login
                                     </button>
+
                                     <button
                                       className="user-item"
                                       type="button"
                                       role="menuitem"
-                                      onClick={() => { setUserOpen(false); setAuthMode('register'); setAuthOpen(true); }}
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = "/register";
+                                      }}
                                     >
                                       Sign Up
                                     </button>
+
                                   </>
                                 )}
                               </div>
@@ -315,7 +270,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                           )}
                         </div>
 
-                        {/* Wishlist */}
+                        {/* Wishlist icon */}
                         <div className="tp-header-action-item d-none d-lg-block me-2">
                           <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
                             <FaHeart />
@@ -331,7 +286,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                             aria-label="Open cart"
                           >
                             <CartTwo />
-                            <span className="tp-header-action-badge">{quantity}</span>
+                            <span className="tp-header-action-badge">{distinctCount}</span>
                           </button>
                         </div>
 
@@ -364,10 +319,7 @@ const HeaderTwo = ({ style_2 = false }) => {
         categoryType="fashion"
       />
 
-      {/* Render your existing modal components conditionally */}
-      {authOpen && (authMode === 'login' ? <LoginArea /> : <RegisterArea />)}
-
-      {/* Only ONE styled-jsx block */}
+      {/* Polished dropdown styles (stacked items) */}
       <style jsx>{`
         .user-menu-dropdown{
           position:absolute;
