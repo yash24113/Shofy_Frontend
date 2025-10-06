@@ -1,118 +1,96 @@
 'use client';
 import React from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useDispatch } from "react-redux";
-// icons & actions
+import Link from "next/link";
+// internal
 import { Close, Minus, Plus } from "@/svg";
-import {
-  add_cart_product,
-  quantityDecrement,
-  remove_product,
-} from "@/redux/features/cartSlice";
+import { add_cart_product, quantityDecrement, remove_product } from "@/redux/features/cartSlice";
 import { add_to_wishlist } from "@/redux/features/wishlist-slice";
 
 const CartItem = ({ product }) => {
+  const { _id, img, title, salesPrice, orderQuantity = 0 } = product || {};
   const dispatch = useDispatch();
 
-  // normalize fields
-  const {
-    _id,
-    id,
-    slug,
-    img,
-    image,
-    title = "Product",
-    salesPrice = 0,
-    price = 0,
-    orderQuantity = 0,
-    quantity: stockQuantity,
-  } = product || {};
+  const imageUrl = img?.startsWith("http")
+    ? img
+    : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${img}`;
 
-  const PID = _id || id;
-  const href = `/fabric/${slug || PID || ""}`;
-  const unit = typeof salesPrice === "number"
-    ? salesPrice
-    : (parseFloat(salesPrice) || price || 0);
-  const lineTotal = (unit || 0) * (orderQuantity || 0);
+  const slug = product?.slug || _id;
 
-  const rawImg = img || image || "";
-  const imageUrl = rawImg?.startsWith("http")
-    ? rawImg
-    : rawImg
-    ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${rawImg}`
-    : "/images/placeholder-portrait.webp";
+  // qty handlers
+  const handleAddProduct = (prd) => dispatch(add_cart_product(prd));
+  const handleDecrement = (prd) => dispatch(quantityDecrement(prd));
 
-  // normalized payload so slice matches by id/_id
-  const normalized = {
-    ...product,
-    _id: PID,
-    id: PID,
-    title,
-    price: unit,
-    quantity: typeof stockQuantity === "number" ? stockQuantity : (product?.quantity ?? 0),
-    img: img || image || "",
-    image: image || img || "",
-  };
-
-  const inc = () => dispatch(add_cart_product(normalized));
-  const dec = () => dispatch(quantityDecrement({ _id: PID, id: PID }));
-  const remove = () => {
+  // remove → save to wishlist first
+  const handleRemovePrd = (prd) => {
     dispatch(add_to_wishlist(product));
-    dispatch(remove_product({ _id: PID, id: PID, title }));
+    dispatch(remove_product(prd));
   };
 
   return (
     <>
-      <tr className="cart-row">
+      <tr className="tp-cart-row">
         {/* image */}
-        <td className="col-img">
-          <Link href={href} className="thumb-wrap" aria-label={title}>
-            <span className="thumb">
+        <td className="tp-cart-img">
+          <Link href={`/fabric/${slug}`}>
+            {img && (
               <Image
                 src={imageUrl}
-                alt={title}
-                width={96}
-                height={96}
-                className="thumb-img"
+                alt={title || "product img"}
+                width={120}
+                height={120}
+                className="cart-image"
               />
-            </span>
+            )}
           </Link>
         </td>
 
         {/* title */}
-        <td className="col-title">
-          <Link href={href} className="title-link">
-            <span className="title-text">{title}</span>
+        <td className="tp-cart-title">
+          <Link href={`/fabric/${slug}`} className="cart-title-link">
+            {title}
           </Link>
         </td>
 
         {/* price */}
-        <td className="col-price">
-          <span className="price">${lineTotal.toFixed(2)}</span>
+        <td className="tp-cart-price">
+          <span>${((salesPrice || 0) * orderQuantity).toFixed(2)}</span>
         </td>
 
-        {/* quantity (shows numeric value clearly) */}
-        <td className="col-qty">
-          <div className="qty">
-            <button type="button" className="qty-btn" onClick={dec} aria-label={`Decrease ${title}`}>
+        {/* quantity */}
+        <td className="tp-cart-quantity">
+          <div className="tp-product-quantity">
+            <button
+              onClick={() => handleDecrement(product)}
+              className="tp-cart-minus"
+              aria-label="Decrease quantity"
+            >
               <Minus />
             </button>
-
-            {/* 👇 visible quantity */}
-            <span className="qty-value" aria-live="polite" aria-label={`Quantity of ${title}`}>
-              {orderQuantity}
-            </span>
-
-            <button type="button" className="qty-btn" onClick={inc} aria-label={`Increase ${title}`}>
+            <input
+              className="tp-cart-input"
+              type="text"
+              value={orderQuantity}
+              readOnly
+            />
+            <button
+              onClick={() => handleAddProduct(product)}
+              className="tp-cart-plus"
+              aria-label="Increase quantity"
+            >
               <Plus />
             </button>
           </div>
         </td>
 
-        {/* action */}
-        <td className="col-action">
-          <button type="button" onClick={remove} className="btn-ghost-invert square" title="Remove item">
+        {/* remove button */}
+        <td className="tp-cart-action">
+          <button
+            onClick={() => handleRemovePrd({ title, id: _id })}
+            className="btn-square"
+            title="Remove from cart and save to wishlist"
+          >
             <Close />
             <span>Remove</span>
           </button>
@@ -120,81 +98,136 @@ const CartItem = ({ product }) => {
       </tr>
 
       <style jsx>{`
-        /* row + cells */
-        .cart-row :global(td){ vertical-align: middle; padding:16px 12px; }
-        .cart-row { border-bottom:1px solid #e5e7eb; }
-
-        .col-img   { width:120px; min-width:120px; }
-        .col-title { max-width:620px; }
-        .col-price { width:140px; white-space:nowrap; }
-        .col-qty   { width:200px; }
-        .col-action{ width:200px; text-align:right; }
-
-        /* image box */
-        .thumb-wrap{ display:inline-block; }
-        .thumb{ width:96px; height:96px; border-radius:12px; overflow:hidden; background:#f3f4f6; display:block; }
-        .thumb-img{ width:100%; height:100%; object-fit:cover; display:block; }
-
-        /* title */
-        .title-link{ text-decoration:none; color:#0b1220; }
-        .title-text{
-          display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
-          overflow:hidden; word-break:break-word;
-          font-weight:700; font-size:18px; line-height:1.35; color:#0b1220;
+        .tp-cart-row {
+          border-bottom: 1px solid #e5e7eb;
         }
 
-        /* price */
-        .price{ font-weight:700; font-size:16px; color:#0b1220; }
-
-        /* qty pill */
-        .qty{
-          display:inline-flex; align-items:center; gap:14px;
-          border:1px solid #e5e7eb; border-radius:999px; background:#fff; padding:8px 14px;
-        }
-        .qty-btn{
-          display:inline-flex; align-items:center; justify-content:center;
-          width:32px; height:32px; border-radius:999px; border:0;
-          background:#f3f4f6; cursor:pointer;
-          transition:background .15s ease, transform .04s ease;
-        }
-        .qty-btn:hover{ background:#e5e7eb; }
-        .qty-btn:active{ transform:scale(.98); }
-
-        /* 👇 the visible number */
-        .qty-value{
-          min-width:28px; text-align:center;
-          font-weight:700; font-size:16px; color:#0b1220;
-          line-height:1; letter-spacing:.2px;
+        .tp-cart-img {
+          width: 140px;
+          padding: 16px;
         }
 
-        /* remove button */
-        .btn-ghost-invert{
-          --navy:#0b1620;
-          display:inline-flex; align-items:center; gap:10px;
-          min-height:46px; padding:12px 18px; border-radius:10px;
-          font-weight:700; font-size:15px; background:var(--navy); color:#fff; border:1px solid var(--navy);
-          box-shadow:0 12px 28px rgba(0,0,0,.12); cursor:pointer;
-          transition:background .18s ease, color .18s ease, transform .06s ease;
+        .cart-image {
+          width: 100px;
+          height: 100px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #ddd;
         }
-        .btn-ghost-invert:hover{ background:#fff; color:var(--navy); transform:translateY(-1px); }
 
-        /* responsive */
-        @media (max-width:992px){
-          .col-title{ max-width:420px; }
-          .col-action{ width:160px; }
+        .tp-cart-title {
+          padding: 12px 16px;
+          max-width: 320px;
         }
-        @media (max-width:640px){
-          .cart-row :global(td){ padding:12px 8px; }
-          .col-img{ width:100px; min-width:100px; }
-          .thumb{ width:84px; height:84px; }
-          .title-text{ font-size:16px; -webkit-line-clamp:3; }
-          .col-price{ width:110px; }
-          .col-qty{ width:170px; }
-          .qty{ padding:6px 10px; gap:10px; }
-          .qty-btn{ width:28px; height:28px; }
-          .qty-value{ min-width:24px; font-size:15px; }
-          .col-action{ text-align:left; width:auto; }
-          .btn-ghost-invert{ min-height:42px; padding:10px 16px; }
+
+        .cart-title-link {
+          display: block;
+          font-weight: 600;
+          font-size: 16px;
+          color: #111827;
+          line-height: 1.4;
+          text-decoration: none;
+        }
+
+        .cart-title-link:hover {
+          text-decoration: underline;
+          color: #0b1620;
+        }
+
+        .tp-cart-price {
+          padding: 12px;
+          font-weight: 600;
+          color: #0b1620;
+          white-space: nowrap;
+        }
+
+        .tp-product-quantity {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          border: 1px solid #e5e7eb;
+          border-radius: 9999px;
+          padding: 6px 10px;
+          min-width: 110px;
+          justify-content: space-between;
+        }
+
+        .tp-cart-minus,
+        .tp-cart-plus {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f9fafb;
+          border: 1px solid #d1d5db;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .tp-cart-minus:hover,
+        .tp-cart-plus:hover {
+          background: #0b1620;
+          color: #fff;
+          border-color: #0b1620;
+        }
+
+        .tp-cart-input {
+          width: 36px;
+          text-align: center;
+          border: none;
+          font-weight: 600;
+          background: transparent;
+          color: #111827;
+        }
+
+        /* Square Remove Button */
+        .btn-square {
+          --navy: #0b1620;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 10px 18px;
+          background: var(--navy);
+          color: #fff;
+          font-weight: 600;
+          border: 1px solid var(--navy);
+          border-radius: 6px; /* square look */
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+          transition: all 0.2s ease;
+        }
+
+        .btn-square:hover {
+          background: #fff;
+          color: var(--navy);
+          border-color: var(--navy);
+          transform: translateY(-2px);
+        }
+
+        .btn-square:active {
+          transform: translateY(0);
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .tp-cart-action {
+          text-align: right;
+          padding-right: 16px;
+        }
+
+        @media (max-width: 768px) {
+          .tp-cart-row {
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+          }
+          .tp-cart-action {
+            text-align: left;
+            margin-top: 8px;
+          }
         }
       `}</style>
     </>
