@@ -76,13 +76,12 @@ export const cartSlice = createSlice({
         const addQty = state.orderQuantity || 1;
         const nextQty = (item.orderQuantity || 1) + addQty;
 
-        // If you use `quantity` as stock cap, enforce it; otherwise just set
         if (
           typeof item.quantity === "number" &&
           item.quantity > 0 &&
           nextQty > item.quantity
         ) {
-          // do nothing if exceeding stock
+          // exceed stock → ignore
         } else {
           item.orderQuantity = nextQty;
         }

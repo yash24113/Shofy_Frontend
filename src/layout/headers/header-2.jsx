@@ -5,7 +5,11 @@ import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import useSticky from '@/hooks/use-sticky';
 import useCartInfo from '@/hooks/use-cart-info';
-import { openCartMini } from '@/redux/features/cartSlice';
+import {
+  openCartMini,
+  get_cart_products,
+  selectCartDistinctCount
+} from '@/redux/features/cartSlice';
 import CartMiniSidebar from '@/components/common/cart-mini-sidebar';
 import OffCanvas from '@/components/common/off-canvas';
 import Menus from './header-com/menus';
@@ -17,8 +21,21 @@ import { FiMenu } from 'react-icons/fi';
 const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
-  const { wishlist } = useSelector((state) => state.wishlist);
-  const { quantity } = useCartInfo();
+
+  // wishlist slice shape: { wishlist } (array)
+  const { wishlist } = useSelector((state) => state.wishlist || { wishlist: [] });
+  const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
+
+  // if you still use useCartInfo for total quantity, keep it
+  const { quantity } = useCartInfo(); // not used below, but left as-is
+
+  // ✅ use the selector (NOT the action creator)
+  const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
+
+  // Rehydrate cart on client so badge works after refresh
+  useEffect(() => {
+    dispatch(get_cart_products());
+  }, [dispatch]);
 
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
   const { searchText, setSearchText, handleSubmit: handleSearchSubmit } = useSearchFormSubmit();
@@ -45,16 +62,11 @@ const HeaderTwo = ({ style_2 = false }) => {
     const close = () => setUserOpen(false);
 
     const onPointer = (e) => {
-      // if click/touch happened outside both the button and the menu -> close
       const btn = userBtnRef.current;
       const menu = userMenuRef.current;
       const target = e.target;
-      if (
-        btn && btn.contains(target)
-      ) return;
-      if (
-        menu && menu.contains(target)
-      ) return;
+      if (btn && btn.contains(target)) return;
+      if (menu && menu.contains(target)) return;
       close();
     };
 
@@ -64,7 +76,6 @@ const HeaderTwo = ({ style_2 = false }) => {
     const onVisibility = () => { if (document.visibilityState === 'hidden') close(); };
 
     if (userOpen) {
-      // capture phase helps catch events before they bubble into React portals
       document.addEventListener('mousedown', onPointer, true);
       document.addEventListener('touchstart', onPointer, true);
       document.addEventListener('keydown', onEsc);
@@ -82,7 +93,6 @@ const HeaderTwo = ({ style_2 = false }) => {
     };
   }, [userOpen]);
 
-    const distinctCount = useSelector(openCartMini);
   const handleLogout = () => {
     try {
       if (typeof window !== 'undefined') {
@@ -110,9 +120,6 @@ const HeaderTwo = ({ style_2 = false }) => {
     <>
       <header>
         <div className={`tp-header-area tp-header-style-${style_2 ? 'primary' : 'darkRed'} tp-header-height`}>
-          {/* Header Top — intentionally hidden */}
-
-          {/* Header Bottom */}
           <div
             id="header-sticky"
             className={`tp-header-bottom-2 tp-header-sticky ${sticky ? 'header-sticky' : ''}`}
@@ -216,7 +223,6 @@ const HeaderTwo = ({ style_2 = false }) => {
                                         dispatch(openCartMini());
                                       }}
                                     >
-
                                       My Booking
                                     </button>
 
@@ -262,7 +268,6 @@ const HeaderTwo = ({ style_2 = false }) => {
                                     >
                                       Sign Up
                                     </button>
-
                                   </>
                                 )}
                               </div>
@@ -274,7 +279,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                         <div className="tp-header-action-item d-none d-lg-block me-2">
                           <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
                             <FaHeart />
-                            <span className="tp-header-action-badge">{wishlist.length}</span>
+                            <span className="tp-header-action-badge">{wishlistCount}</span>
                           </Link>
                         </div>
 
@@ -284,6 +289,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                             onClick={() => dispatch(openCartMini())}
                             className="tp-header-action-btn cartmini-open-btn"
                             aria-label="Open cart"
+                            type="button"
                           >
                             <CartTwo />
                             <span className="tp-header-action-badge">{distinctCount}</span>
@@ -319,7 +325,7 @@ const HeaderTwo = ({ style_2 = false }) => {
         categoryType="fashion"
       />
 
-      {/* Polished dropdown styles (stacked items) */}
+      {/* Polished dropdown styles */}
       <style jsx>{`
         .user-menu-dropdown{
           position:absolute;
@@ -345,55 +351,20 @@ const HeaderTwo = ({ style_2 = false }) => {
           transform:rotate(45deg);
           box-shadow:-2px -2px 6px rgba(0,0,0,.05);
         }
-
-        .user-menu-inner{
-          display:flex;
-          flex-direction:column;
-          gap:6px;
-          padding:8px;
-        }
-
+        .user-menu-inner{ display:flex; flex-direction:column; gap:6px; padding:8px; }
         .user-item{
-          display:block !important;
-          width:100%;
-          padding:10px 14px;
-          border-radius:8px;
-          font-size:14px;
-          line-height:1.25;
-          color:#111827;
-          text-decoration:none;
-          background:transparent;
-          border:0;
-          text-align:left;
-          cursor:pointer;
-          transition:background .15s ease,color .15s ease,transform .02s ease;
+          display:block !important; width:100%; padding:10px 14px; border-radius:8px;
+          font-size:14px; line-height:1.25; color:#111827; background:transparent; border:0; text-align:left;
+          cursor:pointer; transition:background .15s ease,color .15s ease,transform .02s ease;
         }
         .user-item:hover{ background:#f3f4f6; }
-        .user-item:focus-visible{
-          outline:none;
-          background:#eef2ff;
-          box-shadow:0 0 0 3px rgba(99,102,241,.25) inset;
-        }
+        .user-item:focus-visible{ outline:none; background:#eef2ff; box-shadow:0 0 0 3px rgba(99,102,241,.25) inset; }
         .user-item:active{ transform:scale(.995); }
         .user-item.danger{ color:#b91c1c; }
         .user-item.danger:hover{ background:#fee2e2; }
-
-        .user-divider{
-          height:1px;
-          background:#e5e7eb;
-          margin:2px 6px;
-          border-radius:1px;
-        }
-
-        @keyframes menuPop{
-          from{ transform:translateY(-4px); opacity:0; }
-          to{   transform:translateY(0);    opacity:1; }
-        }
-
-        @media (max-width:480px){
-          .user-menu-dropdown{ min-width:210px; right:-8px; }
-          .user-menu-dropdown::before{ right:24px; }
-        }
+        .user-divider{ height:1px; background:#e5e7eb; margin:2px 6px; border-radius:1px; }
+        @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
+        @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
       `}</style>
     </>
   );
