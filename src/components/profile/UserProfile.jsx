@@ -91,7 +91,7 @@ export default function UserProfile() {
 
       if (userId) {
         // Use _id endpoint: PUT /shopy/users/:_id
-        const res = await fetch(`${apiBase}/shopy/users/${encodeURIComponent(userId)}`, {
+        const res = await fetch(`${apiBase}/users/${encodeURIComponent(userId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
