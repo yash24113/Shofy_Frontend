@@ -13,10 +13,10 @@ const schema = Yup.object().shape({
   password:      Yup.string().min(8, 'At least 8 characters').required('Password is required'),
   organisation:  Yup.string().required('Organisation is required'),
   phone:         Yup.string().required('Phone number is required'),
-  address:       Yup.string().required('Address is required'),
-  city:          Yup.string().required('City is required'),
-  state:         Yup.string().required('State is required'),
-  country:       Yup.string().required('Country is required'),
+  address:       Yup.string(),
+  city:          Yup.string(),
+  state:         Yup.string(),
+  country:       Yup.string(),
   remember:      Yup.bool().oneOf([true], 'You must accept the terms'),
 });
 
