@@ -168,15 +168,62 @@ const CartItem = ({ product }) => {
         }
 
         /* remove button */
-        .btn-ghost-invert{
-          --navy:#0b1620;
-          display:inline-flex; align-items:center; gap:10px;
-          min-height:46px; padding:12px 18px; border-radius:10px;
-          font-weight:700; font-size:15px; background:var(--navy); color:#fff; border:1px solid var(--navy);
-          box-shadow:0 12px 28px rgba(0,0,0,.12); cursor:pointer;
-          transition:background .18s ease, color .18s ease, transform .06s ease;
-        }
-        .btn-ghost-invert:hover{ background:#fff; color:var(--navy); transform:translateY(-1px); }
+  .btn-ghost-invert.square {
+    --navy: #0b1620;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 22px;
+    min-height: 44px;
+    background: var(--navy);
+    color: #fff;
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1;
+    border: 1px solid var(--navy);
+    border-radius: 0;               /* ← Square corners */
+    text-transform: none;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    transition:
+      background 180ms ease,
+      color 180ms ease,
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 120ms ease;
+  }
+
+  .btn-ghost-invert.square:hover {
+    background: #fff;
+    color: var(--navy);
+    border-color: var(--navy);
+    box-shadow:
+      0 0 0 1px var(--navy) inset,
+      0 8px 20px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost-invert.square:active {
+    transform: translateY(0);
+    background: #f8fafc;
+    color: var(--navy);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  }
+
+  .btn-ghost-invert.square:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(11, 22, 32, 0.35);
+  }
+
+  @media (max-width: 640px) {
+    .btn-ghost-invert.square {
+      padding: 9px 16px;
+      font-size: 14px;
+    }
+  }
+
 
         /* responsive */
         @media (max-width:992px){
