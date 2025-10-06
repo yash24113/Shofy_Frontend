@@ -1,6 +1,5 @@
 'use client';
 import React from 'react';
-import Link from 'next/link';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import WishlistItem from './wishlist-item';
@@ -12,6 +11,7 @@ const WishlistArea = () => {
 
   const handleAddProduct = () => router.push('/shop');
   const handleGoToCart = () => router.push('/cart');
+  const handleContinueShopping = () => router.push('/shop');
 
   return (
     <>
@@ -20,9 +20,14 @@ const WishlistArea = () => {
           {wishlist.length === 0 && (
             <div className="text-center pt-50">
               <h3>No Wishlist Items Found</h3>
-              <Link href="/shop" className="tp-cart-checkout-btn mt-20">
+              <button
+                type="button"
+                onClick={handleContinueShopping}
+                className="btn-ghost-invert square mt-20"
+                aria-label="Continue Shopping"
+              >
                 Continue Shopping
-              </Link>
+              </button>
             </div>
           )}
 
@@ -67,7 +72,7 @@ const WishlistArea = () => {
                       </div>
                     </div>
 
-                    {/* RIGHT: Go To Cart as BUTTON (no radius) */}
+                    {/* RIGHT: Go To Cart (button, square corners) */}
                     <div className="col-md-6">
                       <div className="wl-actions-right text-md-end">
                         <button
@@ -116,10 +121,14 @@ const WishlistArea = () => {
           box-shadow:0 6px 18px rgba(0,0,0,0.25);
           transform:translateZ(0);
 
-          transition: background 180ms ease, color 180ms ease,
-                      border-color 180ms ease, box-shadow 180ms ease,
-                      transform 120ms ease;
+          transition:
+            background 180ms ease,
+            color 180ms ease,
+            border-color 180ms ease,
+            box-shadow 180ms ease,
+            transform 120ms ease;
         }
+
         /* force square corners where needed */
         .btn-ghost-invert.square { border-radius:0; }
 
@@ -151,6 +160,9 @@ const WishlistArea = () => {
           .btn-ghost-invert.square { border-radius:0; } /* keep square on mobile too */
           .wl-actions-right { justify-content:flex-start; }
         }
+
+        /* utility */
+        .mt-20 { margin-top: 20px; }
       `}</style>
     </>
   );

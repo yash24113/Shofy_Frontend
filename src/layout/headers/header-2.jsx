@@ -215,6 +215,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                         dispatch(openCartMini());
                                       }}
                                     >
+                                      
                                       My Booking
                                     </button>
 
