@@ -18,6 +18,10 @@ import useSearchFormSubmit from '@/hooks/use-search-form-submit';
 import { FaHeart, FaUser } from 'react-icons/fa';
 import { FiMenu } from 'react-icons/fi';
 
+/* 👉 Use your existing modal components and CSS as-is */
+import LoginArea from '@/components/login-register/login-area';
+import RegisterArea from '@/components/login-register/register-area';
+
 const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
@@ -27,7 +31,7 @@ const HeaderTwo = ({ style_2 = false }) => {
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
   // if you still use useCartInfo for total quantity, keep it
-  const { quantity } = useCartInfo(); // not used below, but left as-is
+  const { quantity } = useCartInfo(); // (not shown, but harmless if used elsewhere)
 
   // ✅ use the selector (NOT the action creator)
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
@@ -43,16 +47,24 @@ const HeaderTwo = ({ style_2 = false }) => {
   // ---- Session & user dropdown ----
   const [hasSession, setHasSession] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
-  const userBtnRef = useRef(null);
-  const userMenuRef = useRef(null);
+  const userBtnRef = useRef<HTMLButtonElement | null>(null);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
 
+  // ---- Auth modal toggles (no routing) ----
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+
+  // swallow-next-click flag to prevent click-through after closing on pointerdown
+  const swallowNextClickRef = useRef(false);
+
+  /* Watch localStorage for session */
   useEffect(() => {
     const check = () =>
       setHasSession(
         typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId')
       );
     check();
-    const onStorage = (e) => { if (e.key === 'sessionId') check(); };
+    const onStorage = (e: StorageEvent) => { if (e.key === 'sessionId') check(); };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
@@ -61,16 +73,17 @@ const HeaderTwo = ({ style_2 = false }) => {
   useEffect(() => {
     const close = () => setUserOpen(false);
 
-    const onPointer = (e) => {
-      const btn = userBtnRef.current;
-      const menu = userMenuRef.current;
-      const target = e.target;
+    const onPointer = (e: Event) => {
+      const btn = userBtnRef.current as unknown as HTMLElement | null;
+      const menu = userMenuRef.current as unknown as HTMLElement | null;
+      const target = e.target as Node | null;
+      if (!target) return;
       if (btn && btn.contains(target)) return;
       if (menu && menu.contains(target)) return;
       close();
     };
 
-    const onEsc = (e) => { if (e.key === 'Escape') close(); };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
     const onScroll = () => close();
     const onResize = () => close();
     const onVisibility = () => { if (document.visibilityState === 'hidden') close(); };
@@ -115,6 +128,94 @@ const HeaderTwo = ({ style_2 = false }) => {
       }
     }
   };
+
+  /* 1) Intercept Login<->Signup links INSIDE your modal so they toggle view instead of routing */
+  useEffect(() => {
+    if (!authOpen) return;
+
+    const onIntercept = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const el = (target.closest && target.closest('a')) as HTMLAnchorElement | null;
+      if (!el) return;
+      const href = el.getAttribute('href');
+
+      // Only handle links inside your auth modals (expects your modal root has data-auth attr)
+      const inAuth = !!(el.closest && el.closest('[data-auth="login"], [data-auth="register"]'));
+      if (!inAuth) return;
+
+      if (href === '/register') {
+        e.preventDefault();
+        e.stopPropagation();
+        setAuthMode('register'); // swap to Signup tab
+        return;
+      }
+      if (href === '/login') {
+        e.preventDefault();
+        e.stopPropagation();
+        setAuthMode('login'); // swap to Login tab
+        return;
+      }
+    };
+
+    // capture phase beats Next.js Link
+    document.addEventListener('click', onIntercept, true);
+    return () => document.removeEventListener('click', onIntercept, true);
+  }, [authOpen]);
+
+  /* 2) Intercept CLOSE actions (✕ / overlay / ESC) using pointerdown + swallow next click */
+  useEffect(() => {
+    if (!authOpen) return;
+
+    const closeModal = () => {
+      setAuthOpen(false);
+      // optionally: setAuthMode('login');
+    };
+
+    const onPointerDownCapture = (e: Event) => {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      const withinAuth = t.closest?.('[data-auth="login"], [data-auth="register"]');
+      if (!withinAuth) return;
+
+      const isOverlay = t.closest?.('.modalOverlay');
+      const isCloseBtn = t.closest?.('.modalClose');
+      if (isOverlay || isCloseBtn) {
+        // stop before click to prevent click-through
+        e.preventDefault();
+        e.stopPropagation();
+        swallowNextClickRef.current = true;
+        closeModal();
+      }
+    };
+
+    const onKeydownCapture = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeModal();
+      }
+    };
+
+    // swallow the first click after we closed on pointerdown
+    const onClickSwallow = (e: MouseEvent) => {
+      if (swallowNextClickRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        swallowNextClickRef.current = false;
+      }
+    };
+
+    document.addEventListener('pointerdown', onPointerDownCapture, true);
+    document.addEventListener('keydown', onKeydownCapture, true);
+    document.addEventListener('click', onClickSwallow, true);
+
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDownCapture, true);
+      document.removeEventListener('keydown', onKeydownCapture, true);
+      document.removeEventListener('click', onClickSwallow, true);
+    };
+  }, [authOpen]);
 
   return (
     <>
@@ -245,13 +346,15 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       Wishlist
                                     </button>
 
+                                    {/* 🔓 Open your modals (no routing) */}
                                     <button
                                       className="user-item"
                                       type="button"
                                       role="menuitem"
                                       onClick={() => {
                                         setUserOpen(false);
-                                        window.location.href = "/login";
+                                        setAuthMode('login');
+                                        setAuthOpen(true);
                                       }}
                                     >
                                       Login
@@ -263,7 +366,8 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       role="menuitem"
                                       onClick={() => {
                                         setUserOpen(false);
-                                        window.location.href = "/register";
+                                        setAuthMode('register');
+                                        setAuthOpen(true);
                                       }}
                                     >
                                       Sign Up
@@ -324,6 +428,9 @@ const HeaderTwo = ({ style_2 = false }) => {
         setIsCanvasOpen={setIsCanvasOpen}
         categoryType="fashion"
       />
+
+      {/* 🔁 Render your existing modal components conditionally (no routing) */}
+      {authOpen && (authMode === 'login' ? <LoginArea /> : <RegisterArea />)}
 
       {/* Polished dropdown styles */}
       <style jsx>{`
