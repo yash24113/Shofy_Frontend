@@ -330,10 +330,10 @@ export default function UserProfile() {
               <FormField id="pincode" label="Pincode" type="text" placeholder="Pincode" register={register('pincode')} error={errors.pincode?.message} />
             </div>
 
-            <div className="form-actions-inline">
+            {/* <div className="form-actions-inline">
               <button type="button" className="cancel-button" onClick={handleCancel}>Cancel</button>
               <button type="submit" className="save-button" disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
-            </div>
+            </div> */}
           </form>
         )}
       </div>
