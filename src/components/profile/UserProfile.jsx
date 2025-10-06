@@ -34,6 +34,11 @@ const editSchema = Yup.object().shape({
   pincode: Yup.string().nullable(),
 });
 
+/* small util */
+async function safeJson(res){
+  try { return await res.json(); } catch { return null; }
+}
+
 export default function UserProfile() {
   const authUser = useSelector((s) => s?.auth?.user);
   const cookieUser = useMemo(() => pickInitialUser(authUser), [authUser]);
@@ -47,7 +52,16 @@ export default function UserProfile() {
     { skip: !userId, refetchOnFocus: true, refetchOnReconnect: true }
   );
 
-  const user = authUser || sessionData?.session?.user || cookieUser;
+  // derive upstream user
+  const upstreamUser = authUser || sessionData?.session?.user || cookieUser;
+
+  // ✅ local display user to reflect changes immediately (no refresh)
+  const [displayUser, setDisplayUser] = useState(upstreamUser || null);
+
+  // keep local user synced when upstream changes (e.g., after refetch)
+  useEffect(() => {
+    setDisplayUser(upstreamUser || null);
+  }, [upstreamUser]);
 
   const [logoutUser] = useLogoutUserMutation();
   const [updateProfile, { isLoading: saving }] = useUpdateProfileMutation();
@@ -57,40 +71,42 @@ export default function UserProfile() {
   const { register, handleSubmit, formState: { errors }, reset, getValues } = useForm({
     resolver: yupResolver(editSchema),
     values: {
-      name:         user?.name || '',
-      email:        user?.email || '',
-      organisation: user?.organisation || '',
-      phone:        user?.phone || '',
-      address:      user?.address || '',
-      city:         user?.city || '',
-      state:        user?.state || '',
-      country:      user?.country || '',
-      pincode:      user?.pincode || '',
+      name:         displayUser?.name || '',
+      email:        displayUser?.email || '',
+      organisation: displayUser?.organisation || '',
+      phone:        displayUser?.phone || '',
+      address:      displayUser?.address || '',
+      city:         displayUser?.city || '',
+      state:        displayUser?.state || '',
+      country:      displayUser?.country || '',
+      pincode:      displayUser?.pincode || '',
     },
   });
 
+  // reset form when displayUser changes
   useEffect(() => {
     reset({
-      name:         user?.name || '',
-      email:        user?.email || '',
-      organisation: user?.organisation || '',
-      phone:        user?.phone || '',
-      address:      user?.address || '',
-      city:         user?.city || '',
-      state:        user?.state || '',
-      country:      user?.country || '',
-      pincode:      user?.pincode || '',
+      name:         displayUser?.name || '',
+      email:        displayUser?.email || '',
+      organisation: displayUser?.organisation || '',
+      phone:        displayUser?.phone || '',
+      address:      displayUser?.address || '',
+      city:         displayUser?.city || '',
+      state:        displayUser?.state || '',
+      country:      displayUser?.country || '',
+      pincode:      displayUser?.pincode || '',
     });
-  }, [user, reset]);
+  }, [displayUser, reset]);
 
   const onSubmit = async (data) => {
-    const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://test.amrita-fashions.com').replace(/\/$/, '');
+    // default to full path base that matches your endpoint: https://.../shopy
+    const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://test.amrita-fashions.com/shopy').replace(/\/$/, '');
 
     try {
       let updated;
 
       if (userId) {
-        // Use _id endpoint: PUT /shopy/users/:_id
+        // ✅ Use _id endpoint: PUT /shopy/users/:_id
         const res = await fetch(`${apiBase}/users/${encodeURIComponent(userId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -101,43 +117,52 @@ export default function UserProfile() {
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           let message = `Update failed (${res.status})`;
-          try { message = JSON.parse(text)?.message || message; 
-            } catch (err) {
-  // Prefer the message we threw above; fall back to common shapes
-  const message =
-    err?.message ||
-    err?.data?.message ||
-    (typeof err === 'string' ? err : '') ||
-    'Update failed. Please try again.';
-
-  // Optional: detect obvious network failures
-  if (/Failed to fetch|NetworkError/i.test(String(err?.message))) {
-    notifyError('Network error: please check your connection and try again.');
-  } else {
-    notifyError(message);
-  }
-
-  // Log for debugging
-  console.error('Profile update error', err);
-}
-
+          try { message = JSON.parse(text)?.message || message; } catch {}
           throw new Error(message);
         }
 
         const json = await res.json();
         updated = json?.user || json; // accept either shape
       } else {
-        // Fallback if _id not available
+        // Fallback if _id not available (kept for compatibility)
         updated = await updateProfile({ id: userId, ...data }).unwrap();
       }
 
+      // ✅ immediately reflect in UI without waiting for refetch
+      setDisplayUser((prev) => ({ ...(prev || {}), ...updated }));
+
+      // keep cookie + session fresh in background
       Cookies.set('userInfo', JSON.stringify({ user: updated }), { expires: 0.5 });
-      await refetchSession();
+      refetchSession(); // no need to await
+
+      // sync form values so leaving edit mode shows same data
+      reset({
+        name:         updated?.name         ?? data.name,
+        email:        updated?.email        ?? (displayUser?.email || ''),
+        organisation: updated?.organisation ?? data.organisation,
+        phone:        updated?.phone        ?? data.phone,
+        address:      updated?.address      ?? data.address,
+        city:         updated?.city         ?? data.city,
+        state:        updated?.state        ?? data.state,
+        country:      updated?.country      ?? data.country,
+        pincode:      updated?.pincode      ?? data.pincode,
+      });
+
       notifySuccess('Profile updated');
       setEditing(false);
     } catch (err) {
-      const msg = err?.message || err?.data?.message || err?.error || 'Update failed';
-      notifyError(msg);
+      const message =
+        err?.message ||
+        err?.data?.message ||
+        (typeof err === 'string' ? err : '') ||
+        'Update failed. Please try again.';
+
+      if (/Failed to fetch|NetworkError/i.test(String(err?.message))) {
+        notifyError('Network error: please check your connection and try again.');
+      } else {
+        notifyError(message);
+      }
+      console.error('Profile update error', err);
     }
   };
 
@@ -155,6 +180,8 @@ export default function UserProfile() {
     reset(getValues());
     setEditing(false);
   };
+
+  const user = displayUser;
 
   if (!user) return <div className="auth-message">Not logged in.</div>;
 
@@ -390,8 +417,3 @@ function IconGlobe2(){return(<svg width="20" height="20" viewBox="0 0 24 24" fil
 function IconClockSmall(){return(<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 22C17.523 22 22 17.523 22 12C22 6.477 17.523 2 12 2C6.477 2 2 6.477 2 12C2 17.523 6.477 22 12 22Z" stroke="currentColor" strokeWidth="1.5"/><path d="M12 8V12L15 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>)}
 function IconCalendar(){return(<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 4H5C3.895 4 3 4.895 3 6V20C3 21.105 3.895 22 5 22H19C20.105 22 21 21.105 21 20V6C21 4.895 20.105 4 19 4Z" stroke="currentColor" strokeWidth="1.5"/><path d="M16 2V6" stroke="currentColor" strokeWidth="1.5"/><path d="M8 2V6" stroke="currentColor" strokeWidth="1.5"/><path d="M3 10H21" stroke="currentColor" strokeWidth="1.5"/></svg>)}
 function IconClock(){return(<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 22C17.523 22 22 17.523 22 12C22 6.477 17.523 2 12 2C6.477 2 2 6.477 2 12C2 17.523 6.477 22 12 22Z" stroke="currentColor" strokeWidth="1.5"/><path d="M12 6V12L16 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>)}
-
-/* small util */
-async function safeJson(res){
-  try { return await res.json(); } catch { return null; }
-}
