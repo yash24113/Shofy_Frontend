@@ -10,7 +10,7 @@
         font-weight: 500;
         font-size: 14px;
         color: var(--tp-common-white);
-        background-color: var(--tp-theme-primary);
+        background-color: #800000;
         width: 100%;
         padding: 12px 30px;
         text-align: left;
@@ -61,7 +61,7 @@
                 top: 50%;
                 width: 2px;
                 height: 0;
-                background-color: var(--tp-theme-primary);
+                background-color: #800000;
                 @include transform(translateY(-50%));
                 visibility: hidden;
                 opacity: 0;
@@ -220,23 +220,23 @@
                     height: 30px;
                 }
                 & > a{
-                    color: var(--tp-theme-primary);
+                    color: #800000;
                     &::after{
-                        color: var(--tp-theme-primary);
+                        color: #800000;
                     }
 
                     &:not(.mega-menu-title){
                         &::after{
-                            color: var(--tp-theme-primary);
+                            color: #800000;
                         }
                     }
                     
                     & span{
-                        color: var(--tp-theme-primary);
+                        color: #800000;
                     }
 
                     & .dropdown-toggle-btn{
-                        color: var(--tp-theme-primary);
+                        color: #800000;
                     }
                 }
 
@@ -354,12 +354,12 @@
     
             &:hover{
                 & > a{
-                    color: var(--tp-theme-primary);
+                    color: #800000;
                     &::after{
-                        color: var(--tp-theme-primary);
+                        color: #800000;
                     }
                     & .dropdown-toggle-btn i{
-                        color: var(--tp-theme-primary);
+                        color: #800000;
                     }
                 }
     
@@ -397,8 +397,8 @@
                             }
                         }
                         &:hover{
-                            background-color: var(--tp-theme-primary);
-                            border-color: var(--tp-theme-primary);
+                            background-color: #800000;
+                            border-color: #800000;
                             color: var(--tp-common-white);
                             & i{
                                 color: var(--tp-common-white);
@@ -406,11 +406,11 @@
                         }
                     }
                     &.expanded{
-                        color: var(--tp-theme-primary);
+                        color: #800000;
     
                         & .dropdown-toggle-btn.dropdown-opened{
-                            background-color: var(--tp-theme-primary);
-                            border-color: var(--tp-theme-primary);
+                            background-color: #800000;
+                            border-color: #800000;
                             color: var(--tp-common-white);
                             & i{
                                 color: var(--tp-common-white);
@@ -456,7 +456,7 @@
                     &:hover{
                         & a{
                             & .dropdown-toggle-btn{
-                                color: var(--tp-theme-primary);
+                                color: #800000;
                             }
                         }
                     }

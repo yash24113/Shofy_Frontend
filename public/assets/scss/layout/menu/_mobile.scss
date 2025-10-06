@@ -116,8 +116,8 @@
                             }
                         }
                         &:hover{
-                            background-color: var(--tp-theme-primary);
-                            border-color: var(--tp-theme-primary);
+                            background-color: #800000;
+                            border-color: #800000;
                             color: var(--tp-common-white);
                             & i{
                                 color: var(--tp-common-white);
@@ -125,11 +125,11 @@
                         }
                     }
                     &.expanded{
-                        color: var(--tp-theme-primary);
+                        color: #800000;
     
                         & .dropdown-toggle-btn.dropdown-opened{
-                            background-color: var(--tp-theme-primary);
-                            border-color: var(--tp-theme-primary);
+                            background-color: #800000;
+                            border-color: #800000;
                             color: var(--tp-common-white);
                             & i{
                                 color: var(--tp-common-white);
@@ -234,12 +234,12 @@
     
             &:hover{
                 & > a{
-                    color: var(--tp-theme-primary);
+                    color: #800000;
                     &::after{
-                        color: var(--tp-theme-primary);
+                        color: #800000;
                     }
                     & .dropdown-toggle-btn i{
-                        color: var(--tp-theme-primary);
+                        color: #800000;
                     }
                 }
     
@@ -269,7 +269,7 @@
                     &:hover{
                         & a{
                             & .dropdown-toggle-btn{
-                                color: var(--tp-theme-primary);
+                                color: #800000;
                             }
                         }
                     }

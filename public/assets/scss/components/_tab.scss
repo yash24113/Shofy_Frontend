@@ -106,10 +106,10 @@
                 }
     
                 & .#{$theme-prifix}-product-tab-tooltip{
-                    background-color: var(--tp-theme-primary);
+                    background-color: #800000;
 
                     &::after{
-                        background-color: var(--tp-theme-primary);
+                        background-color: #800000;
                     }
                 }
             }
