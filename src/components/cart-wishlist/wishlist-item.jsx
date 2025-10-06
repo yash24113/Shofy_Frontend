@@ -1,38 +1,53 @@
 'use client';
 import React, { useState } from "react";
 import Image from "next/image";
-import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
+import { useDispatch, useSelector } from "react-redux";
+import { useRouter } from "next/navigation";
 // internal
 import { Close } from "@/svg";
 import { add_cart_product } from "@/redux/features/cartSlice";
 import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
 
 const WishlistItem = ({ product }) => {
-  const { _id, img, title, salesPrice } = product || {};
-  const { cart_products } = useSelector((state) => state.cart);
-  const isAddToCart = cart_products?.find?.((item) => item?._id === _id);
+  const { _id, img, title = "Product", salesPrice = 0, slug } = product || {};
   const dispatch = useDispatch();
+  const router = useRouter();
+
+  const { cart_products } = useSelector((state) => state.cart);
+  const alreadyInCart = cart_products?.some?.((item) => (item?._id || item?.id) === _id);
+
   const [moving, setMoving] = useState(false);
 
   const imageUrl = img?.startsWith("http")
     ? img
     : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${img}`;
 
-  const slug = product?.slug || _id;
+  const href = `/fabric/${slug || _id || ""}`;
 
-  const handleAddProduct = async (prd) => {
+  const handleAddProduct = async () => {
+    // Gate by sessionId
+    const hasSession =
+      typeof window !== "undefined" && !!window.localStorage.getItem("sessionId");
+
+    if (!hasSession) {
+      router.push("/login");
+      return;
+    }
+
     try {
       setMoving(true);
-      dispatch(add_cart_product(prd));
+      // normalize payload to guarantee id/_id are present
+      const normalized = { ...product, _id, id: _id };
+      dispatch(add_cart_product(normalized));
       dispatch(remove_wishlist_product({ title, id: _id }));
     } finally {
       setTimeout(() => setMoving(false), 250);
     }
   };
 
-  const handleRemovePrd = (prd) => {
-    dispatch(remove_wishlist_product(prd));
+  const handleRemovePrd = () => {
+    dispatch(remove_wishlist_product({ title, id: _id }));
   };
 
   return (
@@ -40,11 +55,11 @@ const WishlistItem = ({ product }) => {
       <tr className="wishlist-row">
         {/* img */}
         <td className="tp-cart-img wishlist-cell">
-          <Link href={`/fabric/${slug}`} className="wishlist-img-link">
+          <Link href={href} className="wishlist-img-link">
             {img && (
               <Image
                 src={imageUrl}
-                alt={title || "product img"}
+                alt={title}
                 width={70}
                 height={100}
                 className="wishlist-img"
@@ -56,34 +71,34 @@ const WishlistItem = ({ product }) => {
 
         {/* title */}
         <td className="tp-cart-title wishlist-cell">
-          <Link href={`/fabric/${slug}`} className="wishlist-title">
+          <Link href={href} className="wishlist-title">
             {title}
           </Link>
         </td>
 
         {/* price */}
         <td className="tp-cart-price wishlist-cell">
-          <span className="wishlist-price">${(salesPrice || 0).toFixed(2)}</span>
+          <span className="wishlist-price">${salesPrice.toFixed(2)}</span>
         </td>
 
         {/* add to cart */}
         <td className="tp-cart-add-to-cart wishlist-cell wishlist-cell-center">
           <button
-            onClick={() => handleAddProduct(product)}
+            onClick={handleAddProduct}
             type="button"
             className={`btn-ghost-invert square ${moving ? "is-loading" : ""}`}
             aria-busy={moving ? "true" : "false"}
-            title="Move to Cart"
-            disabled={!!isAddToCart && !moving}
+            title={alreadyInCart ? "Already in cart" : "Move to Cart"}
+            disabled={!!alreadyInCart || moving}
           >
-            {moving ? "Moving…" : "Move to Cart"}
+            {alreadyInCart ? "In Cart" : moving ? "Moving…" : "Move to Cart"}
           </button>
         </td>
 
         {/* remove */}
         <td className="tp-cart-action wishlist-cell">
           <button
-            onClick={() => handleRemovePrd({ title, id: _id })}
+            onClick={handleRemovePrd}
             className="btn-ghost-invert square"
             type="button"
             title="Remove from wishlist"
@@ -120,7 +135,7 @@ const WishlistItem = ({ product }) => {
         .wishlist-title:hover { text-decoration: underline; }
         .wishlist-price { font-weight: 600; color: #0f172a; }
 
-        /* Shared square ghost-invert button (same as CartItem) */
+        /* Square ghost-invert button */
         .btn-ghost-invert {
           --navy: #0b1620;
           display: inline-flex;
@@ -141,7 +156,7 @@ const WishlistItem = ({ product }) => {
           box-shadow: 0 6px 18px rgba(0,0,0,0.22);
           transition: background 180ms ease, color 180ms ease,
                       border-color 180ms ease, box-shadow 180ms ease,
-                      transform 120ms ease;
+                      transform 120ms ease, opacity 120ms ease;
         }
         .btn-ghost-invert:hover {
           background: #fff;
@@ -160,7 +175,7 @@ const WishlistItem = ({ product }) => {
           outline: 0;
           box-shadow: 0 0 0 3px rgba(11,22,32,0.35);
         }
-        .btn-ghost-invert.is-loading { pointer-events: none; opacity: 0.9; }
+        .btn-ghost-invert.is-loading { pointer-events: none; opacity: 0.8; }
 
         @media (max-width: 640px) {
           .wishlist-cell { padding: 10px 8px; }
