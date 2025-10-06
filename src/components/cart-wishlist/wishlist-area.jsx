@@ -57,7 +57,7 @@ const WishlistArea = () => {
                         <button
                           type="button"
                           onClick={handleAddProduct}
-                          className="btn-ghost-invert"
+                          className="btn-ghost-invert square"
                           title="Browse products"
                           aria-label="Add Product"
                         >
