@@ -25,7 +25,7 @@ const HeaderTwo = ({ style_2 = false }) => {
   const { wishlist } = useSelector((state) => state.wishlist || { wishlist: [] });
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
-  // If you still use useCartInfo for total quantity, keep it
+  // still present for compatibility
   const { quantity } = useCartInfo();
 
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
@@ -233,7 +233,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                               )}
                             </>
                           ) : (
-                            // ⬇️ Single "Login/SignUp" chip with user icon (matches your 2nd image)
+                            // Single "Login/SignUp" chip with user icon
                             <Link
                               href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
                               className="tp-auth-cta"
@@ -245,7 +245,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                           )}
                         </div>
 
-                        {/* Wishlist icon (kept on header) */}
+                        {/* Wishlist icon */}
                         <div className="tp-header-action-item d-none d-lg-block me-2">
                           <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
                             <FaHeart />
@@ -297,8 +297,31 @@ const HeaderTwo = ({ style_2 = false }) => {
         categoryType="fashion"
       />
 
-      {/* Polished dropdown styles + auth CTA styles */}
+      {/* Polished dropdown styles + auth CTA styles + search spacing */}
       <style jsx>{`
+        /* ===== Search spacing & icon position ===== */
+        .tp-header-search-2 {
+          margin-right: 32px !important; /* extra space before Login/SignUp */
+        }
+        @media (min-width: 1200px) {
+          .tp-header-search-2 { margin-right: 40px !important; }
+        }
+        .tp-header-search-2 form { position: relative; }
+        .tp-header-search-2 input {
+          padding-right: 44px;              /* room for the search icon button */
+        }
+        .tp-header-search-2 button {
+          position: absolute;
+          right: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          background: transparent;
+          border: 0;
+          display: inline-flex;
+          align-items: center;
+        }
+
+        /* ===== Dropdown ===== */
         .user-menu-dropdown{
           position:absolute;
           right:0;
@@ -338,7 +361,7 @@ const HeaderTwo = ({ style_2 = false }) => {
         @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
         @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
 
-        /* ===== Auth CTA (logged-out) — matches your 2nd screenshot ===== */
+        /* ===== Auth CTA (logged-out) — “Login/SignUp” chip ===== */
         .tp-auth-cta{
           display:inline-flex;
           align-items:center;
@@ -359,8 +382,6 @@ const HeaderTwo = ({ style_2 = false }) => {
         }
         .tp-auth-cta:active{ transform:translateY(0.5px); }
         .tp-auth-cta-icon{ opacity:.9; }
-
-        /* Optional: keep the default header action button/badge styles as-is */
       `}</style>
     </>
   );
