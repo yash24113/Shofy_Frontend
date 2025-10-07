@@ -228,7 +228,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                               className="tp-auth-cta"
                               aria-label="Login or Sign Up"
                             >
-                              <span className="tp-auth-cta-text">Login&nbsp;/&nbsp;SignUp</span>
+                              <span className="tp-auth-cta-text"><FaUser />&nbsp;Login&nbsp;/&nbsp;SignUp</span>
                             </Link>
                           )}
                         </div>
