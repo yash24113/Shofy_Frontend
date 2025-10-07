@@ -25,7 +25,9 @@ const writeJSON = (key, value) => {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(key, JSON.stringify(value || []));
-  } catch(e) {console.log("error",e)}
+  } catch (e) {
+    console.log('localStorage write error', e);
+  }
 };
 
 const dedupeById = (arr) => {
@@ -46,24 +48,44 @@ const getSessionUser = () => {
     userId: localStorage.getItem('userId') || null,
   };
 };
+/* --------------------------- server (API) helpers --------------------------- */
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
-const migrateGuestWishlistIfNeeded = () => {
-  const { sessionId, userId } = getSessionUser();
-  if (!sessionId || !userId) return null;
+async function fetchServerWishlist(userId) {
+  if (!userId || !API_BASE) return [];
+  try {
+    const res = await fetch(`${API_BASE}/api/wishlist?userId=${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
+    const data = await res.json();
+    // expected { items: [...] } or just array; normalize
+    const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+    return dedupeById(items);
+  } catch (err) {
+    console.warn('fetchServerWishlist failed', err);
+    return [];
+  }
+}
 
-  const guest = readJSON(LS_GUEST_KEY);
-  if (!guest.length) return null;
-
-  const userKey = keyFrom(sessionId, userId);
-  const existing = readJSON(userKey);
-  const merged = dedupeById([...existing, ...guest]);
-
-  writeJSON(userKey, merged);
-  // keep guest list for future truly guest sessions? If you prefer clean-up, uncomment next line:
-  localStorage.removeItem(LS_GUEST_KEY);
-
-  return { userKey, merged };
-};
+async function pushServerWishlist(userId, items) {
+  if (!userId || !API_BASE) return false;
+  try {
+    const res = await fetch(`${API_BASE}/api/wishlist`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, items: dedupeById(items || []) }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('pushServerWishlist failed', err);
+    return false;
+  }
+}
 /* --------------------------------------------------------------------------- */
 
 const WishlistArea = () => {
@@ -71,73 +93,90 @@ const WishlistArea = () => {
   const router = useRouter();
   const { wishlist } = useSelector((state) => state.wishlist) || { wishlist: [] };
 
-  // track session/user to know which key to use
+  // session/user to know which key to use
   const [{ sessionId, userId }, setSU] = useState(getSessionUser());
-
   const storageKey = useMemo(() => keyFrom(sessionId, userId), [sessionId, userId]);
 
-  // On mount, if user just logged in, migrate guest → user-session list
+  // Merge helper
+  const mergeLists = (...lists) => dedupeById([].concat(...lists.map((x) => x || [])));
+
+  // On mount or when userId changes → sync with server (supports cross-device)
   useEffect(() => {
-    const migrated = migrateGuestWishlistIfNeeded();
-    if (migrated?.merged?.length) {
-      // Hydrate Redux if it doesn't already contain these items
+    let mounted = true;
+
+    (async () => {
+      const { sessionId: sid, userId: uid } = getSessionUser();
+      if (!uid) {
+        // guest path: hydrate from guest local
+        const fromGuest = readJSON(LS_GUEST_KEY);
+        if (!fromGuest?.length) return;
+        const byId = new Set((wishlist || []).map((x) => x?._id || x?.id));
+        fromGuest.forEach((item) => {
+          const id = item?._id || item?.id;
+          if (id && !byId.has(id)) dispatch(add_to_wishlist(item));
+        });
+        return;
+      }
+
+      // logged-in: fetch server
+      const serverItems = await fetchServerWishlist(uid);
+      // also read guest + userKey locals to merge
+      const guestLocal = readJSON(LS_GUEST_KEY);
+      const userLocal = readJSON(keyFrom(sid, uid));
+
+      const merged = mergeLists(serverItems, guestLocal, userLocal);
+
+      // write back to server (source of truth across devices)
+      await pushServerWishlist(uid, merged);
+
+      // write to local (user-scoped) + clear guest
+      writeJSON(keyFrom(sid, uid), merged);
+      try {
+        localStorage.removeItem(LS_GUEST_KEY);
+      } catch(e) {console.log("error",e)}
+
+      // hydrate redux
+      if (!mounted) return;
       const byId = new Set((wishlist || []).map((x) => x?._id || x?.id));
-      migrated.merged.forEach((item) => {
+      merged.forEach((item) => {
         const id = item?._id || item?.id;
         if (id && !byId.has(id)) dispatch(add_to_wishlist(item));
       });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    })();
 
-  // Hydrate Redux from current storage key on mount/when session/user changes
-  useEffect(() => {
-    const fromKey = readJSON(storageKey);
-    if (fromKey?.length) {
-      const byId = new Set((wishlist || []).map((x) => x?._id || x?.id));
-      fromKey.forEach((item) => {
-        const id = item?._id || item?.id;
-        if (id && !byId.has(id)) dispatch(add_to_wishlist(item));
-      });
-    }
+    return () => {
+      mounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
+  }, [userId]);
 
-  // Persist Redux wishlist → localStorage for the active key
+  // Persist Redux wishlist → localStorage for the active key, and to server when logged-in
   useEffect(() => {
-    // only write if we have a key
     if (!storageKey) return;
-    writeJSON(storageKey, dedupeById(wishlist || []));
-  }, [wishlist, storageKey]);
+    const clean = dedupeById(wishlist || []);
+    writeJSON(storageKey, clean);
 
-  // Watch for login/logout updates done elsewhere (e.g., after LoginForm finishes)
+    // also mirror to server if logged in
+    if (userId) {
+      pushServerWishlist(userId, clean);
+    }
+  }, [wishlist, storageKey, userId]);
+
+  // Watch for login/logout updates done elsewhere (e.g., LoginForm)
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === 'sessionId' || e.key === 'userId') {
         const next = getSessionUser();
         setSU(next);
-
-        // When we gain both, migrate guest→user key
-        if (next.sessionId && next.userId) {
-          const migrated = migrateGuestWishlistIfNeeded();
-          if (migrated?.merged?.length) {
-            const byId = new Set((wishlist || []).map((x) => x?._id || x?.id));
-            migrated.merged.forEach((item) => {
-              const id = item?._id || item?.id;
-              if (id && !byId.has(id)) dispatch(add_to_wishlist(item));
-            });
-          }
-        }
       }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAddProduct = () => router.push('/shop');
 
-  // ✅ Gate "Go To Cart" behind sessionId in Local Storage
+  // Gate "Go To Cart" behind sessionId
   const handleGoToCart = () => {
     const hasSession =
       typeof window !== 'undefined' && !!localStorage.getItem('sessionId');
@@ -205,7 +244,7 @@ const WishlistArea = () => {
                       </div>
                     </div>
 
-                    {/* RIGHT: Go To Cart (requires session) */}
+                    {/* RIGHT: Go To Cart */}
                     <div className="col-md-6">
                       <div className="wl-actions-right text-md-end">
                         <button

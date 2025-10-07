@@ -11,11 +11,10 @@ import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
 
-/* ---------------- helpers: ids, storage keys, read/write ---------------- */
+/* ---------------- ids, storage keys ---------------- */
 const getSessionId = () =>
   (typeof window !== "undefined" && localStorage.getItem("sessionId")) || null;
 
-// try common places your app might store the logged-in user id in redux
 const selectUserId = (state) =>
   state?.auth?.user?._id ||
   state?.auth?.user?.id ||
@@ -27,7 +26,7 @@ const selectUserId = (state) =>
 const GUEST_KEY = "wishlist_guest";
 const userKey = (uid, sid) => `wishlist_${uid || "anon"}_${sid || "nosid"}`;
 
-const readWishlistFromKey = (key) => {
+const readFromKey = (key) => {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(key);
@@ -39,11 +38,13 @@ const readWishlistFromKey = (key) => {
   }
 };
 
-const writeWishlistToKey = (key, list) => {
+const writeToKey = (key, list) => {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(key, JSON.stringify(list || []));
-  } catch(e) {console.log("error",e)}
+  } catch (e) {
+    console.log('localStorage write error', e);
+  }
 };
 
 const mergeUniqueById = (a = [], b = []) => {
@@ -58,7 +59,45 @@ const mergeUniqueById = (a = [], b = []) => {
 const removeById = (arr = [], id) =>
   arr.filter((x) => (x?._id || x?.id) !== id);
 
-/* ---------------- component ---------------- */
+/* ---------------- server (API) helpers ---------------- */
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+
+async function fetchServerWishlist(userId) {
+  if (!userId || !API_BASE) return [];
+  try {
+    const res = await fetch(`${API_BASE}/api/wishlist?userId=${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+    return items;
+  } catch (err) {
+    console.warn('fetchServerWishlist failed', err);
+    return [];
+  }
+}
+
+async function pushServerWishlist(userId, items) {
+  if (!userId || !API_BASE) return false;
+  try {
+    const res = await fetch(`${API_BASE}/api/wishlist`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, items }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('pushServerWishlist failed', err);
+    return false;
+  }
+}
+/* ------------------------------------------------------------------------- */
+
 const WishlistItem = ({ product }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -66,6 +105,7 @@ const WishlistItem = ({ product }) => {
 
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
+  const { wishlist } = useSelector((state) => state.wishlist) || { wishlist: [] }; // for server sync
   const userId = useSelector(selectUserId);
 
   const { _id, img, title, salesPrice } = product || {};
@@ -131,44 +171,58 @@ const WishlistItem = ({ product }) => {
     if (!sid || !userId) return; // not logged in yet
     if (migratedOnce) return; // avoid repeating
 
-    // guest → user scope
-    const guestList = readWishlistFromKey(GUEST_KEY);
+    const guestList = readFromKey(GUEST_KEY);
     if (guestList.length > 0) {
       const uKey = userKey(userId, sid);
-      const userScoped = readWishlistFromKey(uKey);
-      const merged = mergeUniqueById(userScoped, guestList);
-      writeWishlistToKey(uKey, merged);
-      // clear guest key AFTER merge
-      try {
-        localStorage.removeItem(GUEST_KEY);
-      } catch(e) {console.log("error",e)}
+      const userScoped = readFromKey(uKey);
+
+      // also merge with server so this device picks up any other-device items
+      (async () => {
+        const serverItems = await fetchServerWishlist(userId);
+        const merged = mergeUniqueById(mergeUniqueById(userScoped, guestList), serverItems);
+
+        // persist everywhere
+        writeToKey(uKey, merged);
+        try { localStorage.removeItem(GUEST_KEY); } catch(e) {console.log("error",e)}
+
+        await pushServerWishlist(userId, merged);
+        setMigratedOnce(true);
+      })();
+    } else {
+      // even without guest items, make sure we mirror server -> local
+      (async () => {
+        const uKey = userKey(userId, sid);
+        const userScoped = readFromKey(uKey);
+        const serverItems = await fetchServerWishlist(userId);
+        const merged = mergeUniqueById(userScoped, serverItems);
+        writeToKey(uKey, merged);
+        await pushServerWishlist(userId, merged);
+        setMigratedOnce(true);
+      })();
     }
-    setMigratedOnce(true);
   }, [userId, migratedOnce]);
 
-  /* ---------- utilities to mirror redux changes into proper storage ---------- */
+  /* ---------- utilities to mirror redux changes into proper storage/server ---------- */
   const getActiveKey = () => {
     const sid = getSessionId();
     if (sid && userId) return userKey(userId, sid);
     return GUEST_KEY;
   };
 
-  const mirrorAddToStorage = (item) => {
+  const mirrorRemoveEverywhere = async (id) => {
     const key = getActiveKey();
-    const list = readWishlistFromKey(key);
-    const merged = mergeUniqueById(list, [item]);
-    writeWishlistToKey(key, merged);
-  };
-
-  const mirrorRemoveFromStorage = (id) => {
-    const key = getActiveKey();
-    const list = readWishlistFromKey(key);
-    writeWishlistToKey(key, removeById(list, id));
+    const list = readFromKey(key);
+    const next = removeById(list, id);
+    writeToKey(key, next);
+    if (userId) {
+      // reflect full current redux list to server (more robust)
+      await pushServerWishlist(userId, next);
+    }
   };
 
   /* ---------- actions ---------- */
   const handleAddProduct = async (prd) => {
-    // Require session → if missing, open login modal (not page)
+    // Require session → if missing, open login modal
     const sid = getSessionId();
     if (!sid) {
       openLogin();
@@ -181,19 +235,19 @@ const WishlistItem = ({ product }) => {
       dispatch(add_cart_product(prd));
       // remove from wishlist (redux)
       dispatch(remove_wishlist_product({ title, id: _id }));
-      // mirror storage changes
-      mirrorRemoveFromStorage(_id);
+      // mirror storage + server
+      await mirrorRemoveEverywhere(_id);
     } finally {
       setTimeout(() => setMoving(false), 250);
     }
   };
 
-  const handleRemovePrd = (prd) => {
+  const handleRemovePrd = async (prd) => {
     // redux remove
     dispatch(remove_wishlist_product(prd));
-    // storage remove
+    // storage + server remove
     const id = prd?.id || prd?._id;
-    if (id) mirrorRemoveFromStorage(id);
+    if (id) await mirrorRemoveEverywhere(id);
   };
 
   /* If URL has ?auth=login|register open respective modal (deep-link) */
@@ -233,7 +287,7 @@ const WishlistItem = ({ product }) => {
         {/* price */}
         <td className="tp-cart-price wishlist-cell">
           <span className="wishlist-price">
-            ${(Number(salesPrice || 0)).toFixed(2)}
+            {(Number(salesPrice || 0)).toFixed(2)}
           </span>
         </td>
 
