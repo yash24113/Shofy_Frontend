@@ -233,14 +233,14 @@ const HeaderTwo = ({ style_2 = false }) => {
                               )}
                             </>
                           ) : (
-                            // Single "Login/SignUp" chip with user icon
+                            // Single "Login/SignUp" chip with user icon (fixed so icon sits INSIDE the pill)
                             <Link
                               href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
                               className="tp-auth-cta"
                               aria-label="Login or Sign Up"
                             >
                               <FaUser className="tp-auth-cta-icon" />
-                              <span>Login/SignUp</span>
+                              <span className="tp-auth-cta-text">Login/SignUp</span>
                             </Link>
                           )}
                         </div>
@@ -307,9 +307,7 @@ const HeaderTwo = ({ style_2 = false }) => {
           .tp-header-search-2 { margin-right: 40px !important; }
         }
         .tp-header-search-2 form { position: relative; }
-        .tp-header-search-2 input {
-          padding-right: 44px;              /* room for the search icon button */
-        }
+        .tp-header-search-2 input { padding-right: 44px; }
         .tp-header-search-2 button {
           position: absolute;
           right: 10px;
@@ -366,22 +364,31 @@ const HeaderTwo = ({ style_2 = false }) => {
           display:inline-flex;
           align-items:center;
           gap:10px;
-          padding:9px 14px;
+          padding:10px 16px;
+          min-height:40px;
           background:#eef2f7;          /* soft gray */
           color:#111827;
           border:1px solid #cfd6df;
-          border-radius:10px;          /* rounded chip */
+          border-radius:12px;          /* rounded chip */
           text-decoration:none;
           font-weight:600;
           line-height:1;
+          white-space:nowrap;
           transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
+        }
+        /* Reset any global SVG positioning that pushed the icon outside */
+        .tp-auth-cta svg {
+          position: static !important;
+          width: 18px;
+          height: 18px;
+          flex: 0 0 auto;
         }
         .tp-auth-cta:hover{
           background:#e7ecf3;
           box-shadow:0 1px 0 rgba(17,24,39,.06) inset;
         }
         .tp-auth-cta:active{ transform:translateY(0.5px); }
-        .tp-auth-cta-icon{ opacity:.9; }
+        .tp-auth-cta-text { display:inline-block; }
       `}</style>
     </>
   );
