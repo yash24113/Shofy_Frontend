@@ -241,7 +241,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                               aria-label="Login or Sign Up"
                             >
                               {/* <FaUser className="tp-auth-cta-icon" /> */}
-                              <span className="tp-auth-cta-text">Login/SignUp</span>
+                              <span className="tp-auth-cta-text">Login / SignUp</span>
                             </Link>
                           )}
                         </div>
