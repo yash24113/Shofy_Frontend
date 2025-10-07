@@ -10,7 +10,14 @@ const WishlistArea = () => {
   const router = useRouter();
 
   const handleAddProduct = () => router.push('/shop');
-  const handleGoToCart = () => router.push('/cart');
+
+  // ✅ Gate "Go To Cart" behind sessionId in Local Storage
+  const handleGoToCart = () => {
+    const hasSession =
+      typeof window !== 'undefined' && !!localStorage.getItem('sessionId');
+    router.push(hasSession ? '/cart' : '/login');
+  };
+
   const handleContinueShopping = () => router.push('/shop');
 
   return (
@@ -72,7 +79,7 @@ const WishlistArea = () => {
                       </div>
                     </div>
 
-                    {/* RIGHT: Go To Cart (button, square corners) */}
+                    {/* RIGHT: Go To Cart (requires session) */}
                     <div className="col-md-6">
                       <div className="wl-actions-right text-md-end">
                         <button
