@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import useSticky from '@/hooks/use-sticky';
@@ -26,8 +26,8 @@ const HeaderTwo = ({ style_2 = false }) => {
   const { wishlist } = useSelector((state) => state.wishlist || { wishlist: [] });
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
-  // if you still use useCartInfo for total quantity, keep it
-  const { quantity } = useCartInfo(); // not used below, but left as-iss
+  // If you still use useCartInfo for total quantity, keep it
+  const { quantity } = useCartInfo(); // not used below, but left as-is
 
   // ✅ use the selector (NOT the action creator)
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
@@ -45,6 +45,13 @@ const HeaderTwo = ({ style_2 = false }) => {
   const [userOpen, setUserOpen] = useState(false);
   const userBtnRef = useRef(null);
   const userMenuRef = useRef(null);
+
+  // Build current URL for redirect query
+  const currentUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '/';
+    const url = new URL(window.location.href);
+    return url.pathname + url.search;
+  }, []);
 
   useEffect(() => {
     const check = () =>
@@ -171,25 +178,26 @@ const HeaderTwo = ({ style_2 = false }) => {
                       </div>
 
                       <div className="tp-header-action d-flex align-items-center">
-                        {/* User dropdown */}
+                        {/* User area / Login & Sign Up links */}
                         <div className="tp-header-action-item me-2 position-relative">
-                          <button
-                            ref={userBtnRef}
-                            onClick={() => setUserOpen((v) => !v)}
-                            className="tp-header-action-btn"
-                            aria-haspopup="menu"
-                            aria-expanded={userOpen}
-                            aria-label="Account menu"
-                            type="button"
-                          >
-                            <FaUser />
-                          </button>
+                          {hasSession ? (
+                            <>
+                              {/* User icon with dropdown (NO wishlist item here) */}
+                              <button
+                                ref={userBtnRef}
+                                onClick={() => setUserOpen((v) => !v)}
+                                className="tp-header-action-btn"
+                                aria-haspopup="menu"
+                                aria-expanded={userOpen}
+                                aria-label="Account menu"
+                                type="button"
+                              >
+                                <FaUser />
+                              </button>
 
-                          {userOpen && (
-                            <div ref={userMenuRef} role="menu" className="user-menu-dropdown">
-                              <div className="user-menu-inner">
-                                {hasSession ? (
-                                  <>
+                              {userOpen && (
+                                <div ref={userMenuRef} role="menu" className="user-menu-dropdown">
+                                  <div className="user-menu-inner">
                                     <button
                                       className="user-item"
                                       type="button"
@@ -208,18 +216,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       role="menuitem"
                                       onClick={() => {
                                         setUserOpen(false);
-                                        window.location.href = "/wishlist";
-                                      }}
-                                    >
-                                      Wishlist
-                                    </button>
-
-                                    <button
-                                      className="user-item"
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
+                                        // Opens the mini cart / booking
                                         dispatch(openCartMini());
                                       }}
                                     >
@@ -227,55 +224,40 @@ const HeaderTwo = ({ style_2 = false }) => {
                                     </button>
 
                                     <div className="user-divider" />
-                                    <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
+                                    <button
+                                      className="user-item danger"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={handleLogout}
+                                    >
                                       Logout
                                     </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      className="user-item"
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        window.location.href = "/wishlist";
-                                      }}
-                                    >
-                                      Wishlist
-                                    </button>
-
-                                    <button
-                                      className="user-item"
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        window.location.href = "/login";
-                                      }}
-                                    >
-                                      Login
-                                    </button>
-
-                                    <button
-                                      className="user-item"
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        window.location.href = "/register";
-                                      }}
-                                    >
-                                      Sign Up
-                                    </button>
-                                  </>
-                                )}
-                              </div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            // No session → show Login / Sign Up links (no user icon, no dropdown)
+                            <div className="d-flex align-items-center gap-2">
+                              <Link
+                                href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
+                                className="tp-header-auth-link"
+                                aria-label="Login"
+                              >
+                                Login
+                              </Link>
+                              <Link
+                                href={`/register?redirect=${encodeURIComponent(currentUrl)}`}
+                                className="tp-header-auth-link"
+                                aria-label="Sign Up"
+                              >
+                                Sign Up
+                              </Link>
                             </div>
                           )}
                         </div>
 
-                        {/* Wishlist icon */}
+                        {/* Wishlist icon (kept on header as requested change was only for dropdown) */}
                         <div className="tp-header-action-item d-none d-lg-block me-2">
                           <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
                             <FaHeart />
@@ -283,18 +265,20 @@ const HeaderTwo = ({ style_2 = false }) => {
                           </Link>
                         </div>
 
-                        {/* Cart */}
-                        <div className="tp-header-action-item me-2">
-                          <button
-                            onClick={() => dispatch(openCartMini())}
-                            className="tp-header-action-btn cartmini-open-btn"
-                            aria-label="Open cart"
-                            type="button"
-                          >
-                            <CartTwo />
-                            <span className="tp-header-action-badge">{distinctCount}</span>
-                          </button>
-                        </div>
+                        {/* Cart — hidden when not logged in */}
+                        {hasSession && (
+                          <div className="tp-header-action-item me-2">
+                            <button
+                              onClick={() => dispatch(openCartMini())}
+                              className="tp-header-action-btn cartmini-open-btn"
+                              aria-label="Open cart"
+                              type="button"
+                            >
+                              <CartTwo />
+                              <span className="tp-header-action-badge">{distinctCount}</span>
+                            </button>
+                          </div>
+                        )}
 
                         {/* Mobile hamburger */}
                         <div className="tp-header-action-item tp-header-hamburger d-xl-none">
@@ -325,7 +309,7 @@ const HeaderTwo = ({ style_2 = false }) => {
         categoryType="fashion"
       />
 
-      {/* Polished dropdown styles */}
+      {/* Polished dropdown styles + auth link styles */}
       <style jsx>{`
         .user-menu-dropdown{
           position:absolute;
@@ -365,6 +349,26 @@ const HeaderTwo = ({ style_2 = false }) => {
         .user-divider{ height:1px; background:#e5e7eb; margin:2px 6px; border-radius:1px; }
         @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
         @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
+
+        /* Auth links (when logged out) */
+        .tp-header-auth-link {
+          display:inline-flex;
+          align-items:center;
+          gap:6px;
+          padding:8px 10px;
+          font-weight:600;
+          font-size:14px;
+          color:#0f172a;
+          border:1px solid #0f172a;
+          background:#fff;
+          text-decoration:none;
+          border-radius:0; /* square */
+          transition:background .15s ease, color .15s ease;
+        }
+        .tp-header-auth-link:hover {
+          background:#0f172a;
+          color:#fff;
+        }
       `}</style>
     </>
   );
