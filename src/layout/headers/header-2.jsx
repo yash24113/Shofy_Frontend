@@ -159,20 +159,28 @@ const HeaderTwo = ({ style_2 = false }) => {
                   {/* Right side */}
                   <div className="col-6 col-sm-8 col-md-8 col-lg-9 col-xl-5">
                     <div className="tp-header-bottom-right d-flex align-items-center justify-content-end">
-                      <div className="tp-header-search-2 d-none d-sm-block me-3">
-                        <form onSubmit={handleSearchSubmit}>
-                          <input
-                            onChange={(e) => setSearchText(e.target.value)}
-                            value={searchText}
-                            type="text"
-                            placeholder="Search for Products..."
-                            aria-label="Search products"
-                          />
-                          <button type="submit" aria-label="Search">
-                            <Search />
-                          </button>
-                        </form>
-                      </div>
+                         <div className="tp-header-search-2 d-none d-sm-block me-3 search-spacer">
+  <form onSubmit={handleSearchSubmit}>
+    <input
+      onChange={(e) => setSearchText(e.target.value)}
+      value={searchText}
+      type="text"
+      placeholder="Search for Products..."
+      aria-label="Search products"
+    />
+    <button type="submit" aria-label="Search">
+      <Search />
+    </button>
+  </form>
+</div>
+
+<style jsx>{`
+  /* extra spacing to the right of the search box */
+  .search-spacer { margin-right: 24px !important; }     /* default */
+  @media (min-width: 992px)  { .search-spacer { margin-right: 32px !important; } }
+  @media (min-width: 1200px) { .search-spacer { margin-right: 40px !important; } }
+`}</style>
+
 
                       <div className="tp-header-action d-flex align-items-center">
                         {/* User area / Auth CTA */}
