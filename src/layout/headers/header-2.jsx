@@ -224,12 +224,16 @@ const HeaderTwo = ({ style_2 = false }) => {
                             </>
                           ) : (
                             <Link
-                              href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
-                              className="tp-auth-cta"
-                              aria-label="Login or Sign Up"
-                            >
-                              <span className="tp-auth-cta-text"><FaUser />&nbsp;Login&nbsp;/&nbsp;SignUp</span>
-                            </Link>
+  href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
+  className="tp-auth-cta"
+  aria-label="Login or Sign Up"
+>
+  <span className="tp-auth-cta-text">
+    <FaUser className="tp-auth-cta-icon" />
+    <span>Login&nbsp;/&nbsp;SignUp</span>
+  </span>
+</Link>
+
                           )}
                         </div>
 
@@ -344,29 +348,48 @@ const HeaderTwo = ({ style_2 = false }) => {
         @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
         @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
 
-        /* ===== Auth CTA (logged-out) — “Login/SignUp” chip ===== */
-        .tp-auth-cta{
-          display:inline-flex;
-          align-items:center;
-          gap:10px;
-          padding:10px 16px;
-          min-height:40px;
-          background:#eef2f7;
-          color:#111827;
-          border:1px solid #cfd6df;
-          border-radius:12px;
-          text-decoration:none;
-          font-weight:600;
-          line-height:1;
-          white-space:nowrap;
-          transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
-        }
-        .tp-auth-cta:hover{
-          background:#e7ecf3;
-          box-shadow:0 1px 0 rgba(17,24,39,.06) inset;
-        }
-        .tp-auth-cta:active{ transform:translateY(0.5px); }
-        .tp-auth-cta-text { display:inline-block; }
+      /* ===== Auth CTA (logged-out) — “Login / SignUp” chip ===== */
+.tp-auth-cta{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 16px;
+  min-height:40px;
+  background:#eef2f7;
+  color:#111827;
+  border:1px solid #cfd6df;
+  border-radius:12px;
+  text-decoration:none;
+  font-weight:600;
+  line-height:1;
+  white-space:nowrap;           /* prevent wrapping */
+  transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
+}
+.tp-auth-cta:hover{
+  background:#e7ecf3;
+  box-shadow:0 1px 0 rgba(17,24,39,.06) inset;
+}
+.tp-auth-cta:active{ transform:translateY(0.5px); }
+
+/* 🔒 keep icon + text on ONE line and vertically centered */
+.tp-auth-cta-text{
+  display:inline-flex;          /* was inline-block */
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;           /* double-lock no wrap */
+  line-height:1;
+}
+
+/* normalize the icon so it doesn't drop */
+.tp-auth-cta-text svg,
+.tp-auth-cta-icon{
+  width:18px;
+  height:18px;
+  flex:0 0 auto;
+  display:inline-block;
+  vertical-align:middle;
+}
+
       `}</style>
     </>
   );
