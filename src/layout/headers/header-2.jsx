@@ -131,19 +131,18 @@ const HeaderTwo = ({ style_2 = false }) => {
             <div className="container">
               <div className="tp-mega-menu-wrapper p-relative">
                 <div className="row align-items-center">
-                  {/* Logo + company name (company name shows only on mobile) */}
+                  {/* Logo */}
                   <div className="col-6 col-sm-4 col-md-4 col-lg-3 col-xl-2">
-                    <div className="logo d-flex align-items-center brand-wrap">
-                      <Link href="/" className="d-flex align-items-center brand-link">
+                    <div className="logo d-flex align-items-center" style={{ gap: '12px' }}>
+                      <Link href="/" className="d-flex align-items-center" style={{ gap: '12px' }}>
                         <img
                           src="https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp"
-                          alt="Amrita Global Enterprises"
+                          alt="Company Logo"
                           width={140}
                           height={44}
+                          style={{ height: 'auto', width: 'auto', maxWidth: '140px', maxHeight: '44px' }}
                           sizes="(max-width: 600px) 110px, 140px"
                         />
-                        {/* Visible on xs only */}
-                        <span className="brand-name-mobile">Amrita Global Enterprises</span>
                       </Link>
                     </div>
                   </div>
@@ -234,12 +233,14 @@ const HeaderTwo = ({ style_2 = false }) => {
                               )}
                             </>
                           ) : (
-                            // Single "Login/SignUp" chip (icon optional; kept text only per your last snippet)
+                            // Single "Login/SignUp" chip with user icon (fixed so icon sits INSIDE the pill)
+                         
                             <Link
                               href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
                               className="tp-auth-cta"
                               aria-label="Login or Sign Up"
                             >
+                              {/* <FaUser className="tp-auth-cta-icon" /> */}
                               <span className="tp-auth-cta-text">Login/SignUp</span>
                             </Link>
                           )}
@@ -297,31 +298,12 @@ const HeaderTwo = ({ style_2 = false }) => {
         categoryType="fashion"
       />
 
-      {/* Styles */}
+      {/* Polished dropdown styles + auth CTA styles + search spacing */}
       <style jsx>{`
-        /* ===== Brand (logo + name on mobile) ===== */
-        .brand-wrap { gap: 10px; }
-        .brand-link { gap: 8px; text-decoration: none; }
-        .brand-name-mobile {
-          display: inline-block;
-          font-weight: 700;
-          font-size: 14px;
-          color: #0f172a;
-          white-space: nowrap;
-          margin-left: 8px;
-        }
-        /* Hide brand text from sm and up */
-        @media (min-width: 576px) {
-          .brand-name-mobile { display: none; }
-        }
-        /* Shrink logo slightly on very small screens to fit text nicely */
-        @media (max-width: 400px) {
-          .brand-link img { width: 110px; height: auto; }
-          .brand-name-mobile { font-size: 13px; }
-        }
-
         /* ===== Search spacing & icon position ===== */
-        .tp-header-search-2 { margin-right: 32px !important; }
+        .tp-header-search-2 {
+          margin-right: 32px !important; /* extra space before Login/SignUp */
+        }
         @media (min-width: 1200px) {
           .tp-header-search-2 { margin-right: 40px !important; }
         }
@@ -378,22 +360,29 @@ const HeaderTwo = ({ style_2 = false }) => {
         @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
         @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
 
-        /* ===== Auth CTA (logged-out) — “Login/SignUp” pill ===== */
+        /* ===== Auth CTA (logged-out) — “Login/SignUp” chip ===== */
         .tp-auth-cta{
           display:inline-flex;
           align-items:center;
           gap:10px;
           padding:10px 16px;
           min-height:40px;
-          background:#eef2f7;
+          background:#eef2f7;          /* soft gray */
           color:#111827;
           border:1px solid #cfd6df;
-          border-radius:12px;
+          border-radius:12px;          /* rounded chip */
           text-decoration:none;
           font-weight:600;
           line-height:1;
           white-space:nowrap;
           transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
+        }
+        /* Reset any global SVG positioning that pushed the icon outside */
+        .tp-auth-cta svg {
+          position: static !important;
+          width: 18px;
+          height: 18px;
+          flex: 0 0 auto;
         }
         .tp-auth-cta:hover{
           background:#e7ecf3;
