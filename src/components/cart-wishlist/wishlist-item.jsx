@@ -11,21 +11,71 @@ import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
 
+/* ---------------- helpers: ids, storage keys, read/write ---------------- */
+const getSessionId = () =>
+  (typeof window !== "undefined" && localStorage.getItem("sessionId")) || null;
+
+// try common places your app might store the logged-in user id in redux
+const selectUserId = (state) =>
+  state?.auth?.user?._id ||
+  state?.auth?.user?.id ||
+  state?.auth?.userInfo?._id ||
+  state?.auth?.userInfo?.id ||
+  state?.user?.user?._id ||
+  null;
+
+const GUEST_KEY = "wishlist_guest";
+const userKey = (uid, sid) => `wishlist_${uid || "anon"}_${sid || "nosid"}`;
+
+const readWishlistFromKey = (key) => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeWishlistToKey = (key, list) => {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(key, JSON.stringify(list || []));
+  } catch(e) {console.log("error",e)}
+};
+
+const mergeUniqueById = (a = [], b = []) => {
+  const map = new Map();
+  [...a, ...b].forEach((item) => {
+    const id = item?._id || item?.id;
+    if (id) map.set(id, item);
+  });
+  return Array.from(map.values());
+};
+
+const removeById = (arr = [], id) =>
+  arr.filter((x) => (x?._id || x?.id) !== id);
+
+/* ---------------- component ---------------- */
 const WishlistItem = ({ product }) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const { _id, img, title, salesPrice } = product || {};
-  const { cart_products } = useSelector((state) => state.cart);
-  const isAddToCart = cart_products?.find?.((item) => item?._id === _id);
   const dispatch = useDispatch();
+  const { cart_products } = useSelector((state) => state.cart);
+  const userId = useSelector(selectUserId);
+
+  const { _id, img, title, salesPrice } = product || {};
+  const isInCart = cart_products?.find?.((item) => item?._id === _id);
+
   const [moving, setMoving] = useState(false);
+  const [authModal, setAuthModal] = useState(null); // 'login' | 'register' | null
+  const [migratedOnce, setMigratedOnce] = useState(false);
 
-  // auth modal state: 'login' | 'register' | null
-  const [authModal, setAuthModal] = useState(null);
-
-  // Build the "redirect back here" URL for your LoginForm (it reads ?redirect=...)
+  /* ---------- current page url (for redirect after auth) ---------- */
   const currentUrlWithQuery = useMemo(() => {
     const url =
       typeof window !== "undefined"
@@ -34,7 +84,6 @@ const WishlistItem = ({ product }) => {
     return url.pathname + url.search;
   }, [pathname, searchParams]);
 
-  // When opening/closing a modal, reflect state in the URL so LoginForm sees ?redirect=...
   const pushAuthQuery = useCallback(
     (type) => {
       if (typeof window === "undefined") return;
@@ -52,57 +101,102 @@ const WishlistItem = ({ product }) => {
     [currentUrlWithQuery, router]
   );
 
-  // Close modal helper
   const closeAuth = useCallback(() => {
     setAuthModal(null);
     pushAuthQuery(null);
   }, [pushAuthQuery]);
 
-  // Open login modal and set URL
   const openLogin = useCallback(() => {
     setAuthModal("login");
     pushAuthQuery("login");
   }, [pushAuthQuery]);
 
-  // Open register modal and set URL
   const openRegister = useCallback(() => {
     setAuthModal("register");
     pushAuthQuery("register");
   }, [pushAuthQuery]);
 
+  /* ---------- image / slug ---------- */
   const imageUrl =
     img?.startsWith?.("http")
       ? img
       : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${img}`;
-
   const slug = product?.slug || _id;
 
-  const handleAddProduct = async (prd) => {
-    // ✅ Check sessionId in Local Storage
-    const hasSession =
-      typeof window !== "undefined" && !!localStorage.getItem("sessionId");
+  /* ---------- STORAGE: ensure guest->user migration once on login ---------- */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-    if (!hasSession) {
-      // No session → open LOGIN MODAL (not page), and embed redirect to this URL
+    const sid = getSessionId();
+    if (!sid || !userId) return; // not logged in yet
+    if (migratedOnce) return; // avoid repeating
+
+    // guest → user scope
+    const guestList = readWishlistFromKey(GUEST_KEY);
+    if (guestList.length > 0) {
+      const uKey = userKey(userId, sid);
+      const userScoped = readWishlistFromKey(uKey);
+      const merged = mergeUniqueById(userScoped, guestList);
+      writeWishlistToKey(uKey, merged);
+      // clear guest key AFTER merge
+      try {
+        localStorage.removeItem(GUEST_KEY);
+      } catch(e) {console.log("error",e)}
+    }
+    setMigratedOnce(true);
+  }, [userId, migratedOnce]);
+
+  /* ---------- utilities to mirror redux changes into proper storage ---------- */
+  const getActiveKey = () => {
+    const sid = getSessionId();
+    if (sid && userId) return userKey(userId, sid);
+    return GUEST_KEY;
+  };
+
+  const mirrorAddToStorage = (item) => {
+    const key = getActiveKey();
+    const list = readWishlistFromKey(key);
+    const merged = mergeUniqueById(list, [item]);
+    writeWishlistToKey(key, merged);
+  };
+
+  const mirrorRemoveFromStorage = (id) => {
+    const key = getActiveKey();
+    const list = readWishlistFromKey(key);
+    writeWishlistToKey(key, removeById(list, id));
+  };
+
+  /* ---------- actions ---------- */
+  const handleAddProduct = async (prd) => {
+    // Require session → if missing, open login modal (not page)
+    const sid = getSessionId();
+    if (!sid) {
       openLogin();
       return;
     }
 
-    // Session exists → proceed to move to cart
     try {
       setMoving(true);
+      // move to cart
       dispatch(add_cart_product(prd));
+      // remove from wishlist (redux)
       dispatch(remove_wishlist_product({ title, id: _id }));
+      // mirror storage changes
+      mirrorRemoveFromStorage(_id);
     } finally {
       setTimeout(() => setMoving(false), 250);
     }
   };
 
   const handleRemovePrd = (prd) => {
+    // redux remove
     dispatch(remove_wishlist_product(prd));
+    // storage remove
+    const id = prd?.id || prd?._id;
+    if (id) mirrorRemoveFromStorage(id);
   };
 
-  // If the URL already has ?auth=login|register (deep-link), open accordingly
+  /* If URL has ?auth=login|register open respective modal (deep-link) */
   useEffect(() => {
     const auth = searchParams.get("auth");
     if (auth === "login" || auth === "register") {
@@ -139,7 +233,7 @@ const WishlistItem = ({ product }) => {
         {/* price */}
         <td className="tp-cart-price wishlist-cell">
           <span className="wishlist-price">
-            ${(salesPrice || 0).toFixed(2)}
+            ${(Number(salesPrice || 0)).toFixed(2)}
           </span>
         </td>
 
@@ -151,7 +245,7 @@ const WishlistItem = ({ product }) => {
             className={`btn-ghost-invert square ${moving ? "is-loading" : ""}`}
             aria-busy={moving ? "true" : "false"}
             title="Move to Cart"
-            disabled={!!isAddToCart && !moving}
+            disabled={!!isInCart && !moving}
           >
             {moving ? "Moving…" : "Move to Cart"}
           </button>
@@ -171,7 +265,7 @@ const WishlistItem = ({ product }) => {
         </td>
       </tr>
 
-      {/* ---------- AUTH MODALS (rendered inline) ---------- */}
+      {/* ---------- AUTH MODALS ---------- */}
       {authModal === "login" && (
         <LoginArea onClose={closeAuth} onSwitchToRegister={openRegister} />
       )}
