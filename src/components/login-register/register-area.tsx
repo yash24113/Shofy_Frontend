@@ -7,7 +7,12 @@ import { TbBadge } from 'react-icons/tb';
 import RegisterForm from '../forms/register-form';
 import styles from '../../components/auth/AuthArea.module.css';
 
-const RegisterArea: React.FC = () => {
+type Props = {
+  onClose?: () => void;
+  onSwitchToLogin?: () => void;
+};
+
+const RegisterArea: React.FC<Props> = ({ onClose, onSwitchToLogin }) => {
   const router = useRouter();
 
   // Lock page scroll while modal is open
@@ -18,9 +23,13 @@ const RegisterArea: React.FC = () => {
   }, []);
 
   const handleClose = useCallback(() => {
+    if (onClose) {
+      onClose();
+      return;
+    }
     if (typeof window !== 'undefined' && window.history.length > 1) router.back();
     else router.push('/');
-  }, [router]);
+  }, [onClose, router]);
 
   // ESC to close
   useEffect(() => {
@@ -67,7 +76,14 @@ const RegisterArea: React.FC = () => {
             <div className={styles.header}>
               <h3 id="auth-title" className={styles.title}>Signup</h3>
               <p className={styles.subtitle}>
-                Already a member? <Link href="/login" className={styles.linkBtn}>Login</Link>
+                Already a member?{' '}
+                {onSwitchToLogin ? (
+                  <button type="button" className={styles.linkBtn} onClick={onSwitchToLogin}>
+                    Login
+                  </button>
+                ) : (
+                  <Link href="/login" className={styles.linkBtn}>Login</Link>
+                )}
               </p>
             </div>
 

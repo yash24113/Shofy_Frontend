@@ -7,7 +7,14 @@ import { TbBadge } from 'react-icons/tb';
 import LoginForm from '../forms/login-form';
 import styles from '../../components/auth/AuthArea.module.css';
 
-const LoginArea: React.FC = () => {
+type Props = {
+  /** Optional: close the modal from a parent without relying on history */
+  onClose?: () => void;
+  /** Optional: open register modal from parent (used to swap modals) */
+  onSwitchToRegister?: () => void;
+};
+
+const LoginArea: React.FC<Props> = ({ onClose, onSwitchToRegister }) => {
   const router = useRouter();
 
   // Lock page scroll while modal is open
@@ -18,9 +25,13 @@ const LoginArea: React.FC = () => {
   }, []);
 
   const handleClose = useCallback(() => {
+    if (onClose) {
+      onClose();
+      return;
+    }
     if (typeof window !== 'undefined' && window.history.length > 1) router.back();
     else router.push('/');
-  }, [router]);
+  }, [onClose, router]);
 
   // ESC to close
   useEffect(() => {
@@ -63,11 +74,19 @@ const LoginArea: React.FC = () => {
             <div className={styles.header}>
               <h3 id="auth-title" className={styles.title}>Login</h3>
               <p className={styles.subtitle}>
-                Don’t have an account? <Link href="/register" className={styles.linkBtn}>Signup</Link>
+                Don’t have an account?{' '}
+                {onSwitchToRegister ? (
+                  <button type="button" className={styles.linkBtn} onClick={onSwitchToRegister}>
+                    Signup
+                  </button>
+                ) : (
+                  <Link href="/register" className={styles.linkBtn}>Signup</Link>
+                )}
               </p>
             </div>
 
             <div className={styles.formWrapper}>
+              {/* LoginForm already reads ?redirect=... from URL. */}
               <LoginForm />
             </div>
           </div>

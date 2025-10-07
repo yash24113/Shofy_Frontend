@@ -1,25 +1,79 @@
 'use client';
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import Image from "next/image";
 import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 // internal
 import { Close } from "@/svg";
 import { add_cart_product } from "@/redux/features/cartSlice";
 import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
+import LoginArea from "@/components/login-register/login-area";
+import RegisterArea from "@/components/login-register/register-area";
 
 const WishlistItem = ({ product }) => {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const { _id, img, title, salesPrice } = product || {};
   const { cart_products } = useSelector((state) => state.cart);
   const isAddToCart = cart_products?.find?.((item) => item?._id === _id);
   const dispatch = useDispatch();
   const [moving, setMoving] = useState(false);
 
-  const imageUrl = img?.startsWith?.("http")
-    ? img
-    : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${img}`;
+  // auth modal state: 'login' | 'register' | null
+  const [authModal, setAuthModal] = useState(null);
+
+  // Build the "redirect back here" URL for your LoginForm (it reads ?redirect=...)
+  const currentUrlWithQuery = useMemo(() => {
+    const url =
+      typeof window !== "undefined"
+        ? new URL(window.location.href)
+        : new URL("http://localhost");
+    return url.pathname + url.search;
+  }, [pathname, searchParams]);
+
+  // When opening/closing a modal, reflect state in the URL so LoginForm sees ?redirect=...
+  const pushAuthQuery = useCallback(
+    (type) => {
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      if (type) {
+        url.searchParams.set("auth", type);
+        url.searchParams.set("redirect", currentUrlWithQuery);
+      } else {
+        url.searchParams.delete("auth");
+        url.searchParams.delete("redirect");
+      }
+      const qs = url.searchParams.toString();
+      router.push(qs ? `${url.pathname}?${qs}` : url.pathname, { scroll: false });
+    },
+    [currentUrlWithQuery, router]
+  );
+
+  // Close modal helper
+  const closeAuth = useCallback(() => {
+    setAuthModal(null);
+    pushAuthQuery(null);
+  }, [pushAuthQuery]);
+
+  // Open login modal and set URL
+  const openLogin = useCallback(() => {
+    setAuthModal("login");
+    pushAuthQuery("login");
+  }, [pushAuthQuery]);
+
+  // Open register modal and set URL
+  const openRegister = useCallback(() => {
+    setAuthModal("register");
+    pushAuthQuery("register");
+  }, [pushAuthQuery]);
+
+  const imageUrl =
+    img?.startsWith?.("http")
+      ? img
+      : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${img}`;
 
   const slug = product?.slug || _id;
 
@@ -29,8 +83,8 @@ const WishlistItem = ({ product }) => {
       typeof window !== "undefined" && !!localStorage.getItem("sessionId");
 
     if (!hasSession) {
-      // No session → go to login
-      router.push("/login");
+      // No session → open LOGIN MODAL (not page), and embed redirect to this URL
+      openLogin();
       return;
     }
 
@@ -47,6 +101,14 @@ const WishlistItem = ({ product }) => {
   const handleRemovePrd = (prd) => {
     dispatch(remove_wishlist_product(prd));
   };
+
+  // If the URL already has ?auth=login|register (deep-link), open accordingly
+  useEffect(() => {
+    const auth = searchParams.get("auth");
+    if (auth === "login" || auth === "register") {
+      setAuthModal(auth);
+    }
+  }, [searchParams]);
 
   return (
     <>
@@ -109,6 +171,14 @@ const WishlistItem = ({ product }) => {
         </td>
       </tr>
 
+      {/* ---------- AUTH MODALS (rendered inline) ---------- */}
+      {authModal === "login" && (
+        <LoginArea onClose={closeAuth} onSwitchToRegister={openRegister} />
+      )}
+      {authModal === "register" && (
+        <RegisterArea onClose={closeAuth} onSwitchToLogin={openLogin} />
+      )}
+
       {/* -------- INTERNAL CSS (scoped) -------- */}
       <style jsx>{`
         /* Row */
@@ -159,7 +229,7 @@ const WishlistItem = ({ product }) => {
           color: #0f172a;
         }
 
-        /* Shared square ghost-invert button (same as CartItem) */
+        /* Shared square ghost-invert button */
         .btn-ghost-invert {
           --navy: #0b1620;
           display: inline-flex;
