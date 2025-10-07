@@ -54,22 +54,23 @@ const RegisterArea: React.FC<Props> = ({ onClose, onSwitchToLogin }) => {
           <button className={styles.modalClose} onClick={handleClose} aria-label="Close">✕</button>
 
           {/* Left hero */}
-          <div className={styles.leftPanel}>
-            <div className={styles.leftContent}>
-              <img
-                src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJM0g6DS-JDkn7VvBDb6KfRzbS8ZiZfnuHJQ&s"
-                alt="Logo"
-                className={styles.logo}
-              />
-              <h2 className={styles.heading}>One-Stop Solution For All Your Fabric Sourcing Needs</h2>
-              <ul className={styles.features}>
-                <li><FiSearch className={styles.icon} /> Browse through 1000s of ready fabrics</li>
-                <li><TbBadge className={styles.icon} /> Free swatches for better decision making</li>
-                <li><FiEye className={styles.icon} /> End-to-end order visibility</li>
-                <li><FiPackage className={styles.icon} /> Lowest MOQs in the industry</li>
-              </ul>
-            </div>
-          </div>
+            <div className={styles.leftPanel}>
+  <div className={styles.leftContent}>
+    <img
+      src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJM0g6DS-JDkn7VvBDb6KfRzbS8ZiZfnuHJQ&s"
+      alt="Logo"
+      className={styles.logo}
+    />
+    <h2 className={styles.heading}>Everything you need to source fabric at scale</h2>
+    <ul className={styles.features}>
+      <li><FiSearch className={styles.icon} /> 20k+ SKUs from audited mills</li>
+      <li><TbBadge className={styles.icon} /> Free hangers & swatches on demand</li>
+      <li><FiEye className={styles.icon} /> Live stock, price & lead-time visibility</li>
+      <li><FiPackage className={styles.icon} /> Low MOQs • Faster repeat ordering</li>
+    </ul>
+  </div>
+</div>
+
 
           {/* Right form (scrolls on small screens) */}
           <div className={styles.rightPanel}>
