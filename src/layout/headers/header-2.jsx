@@ -22,17 +22,14 @@ const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
 
-  // wishlist slice shape: { wishlist } (array)
   const { wishlist } = useSelector((state) => state.wishlist || { wishlist: [] });
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
   // If you still use useCartInfo for total quantity, keep it
-  const { quantity } = useCartInfo(); // not used below, but left as-is
+  const { quantity } = useCartInfo();
 
-  // ✅ use the selector (NOT the action creator)
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
 
-  // Rehydrate cart on client so badge works after refresh
   useEffect(() => {
     dispatch(get_cart_products());
   }, [dispatch]);
@@ -178,7 +175,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                       </div>
 
                       <div className="tp-header-action d-flex align-items-center">
-                        {/* User area / Login & Sign Up links */}
+                        {/* User area / Auth CTA */}
                         <div className="tp-header-action-item me-2 position-relative">
                           {hasSession ? (
                             <>
@@ -216,7 +213,6 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       role="menuitem"
                                       onClick={() => {
                                         setUserOpen(false);
-                                        // Opens the mini cart / booking
                                         dispatch(openCartMini());
                                       }}
                                     >
@@ -237,27 +233,19 @@ const HeaderTwo = ({ style_2 = false }) => {
                               )}
                             </>
                           ) : (
-                            // No session → show Login / Sign Up links (no user icon, no dropdown)
-                            <div className="d-flex align-items-center gap-2">
-                              <Link
-                                href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
-                                className="tp-header-auth-link"
-                                aria-label="Login"
-                              >
-                                Login
-                              </Link>
-                              <Link
-                                href={`/register?redirect=${encodeURIComponent(currentUrl)}`}
-                                className="tp-header-auth-link"
-                                aria-label="Sign Up"
-                              >
-                                Sign Up
-                              </Link>
-                            </div>
+                            // ⬇️ Single "Login/SignUp" chip with user icon (matches your 2nd image)
+                            <Link
+                              href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
+                              className="tp-auth-cta"
+                              aria-label="Login or Sign Up"
+                            >
+                              <FaUser className="tp-auth-cta-icon" />
+                              <span>Login/SignUp</span>
+                            </Link>
                           )}
                         </div>
 
-                        {/* Wishlist icon (kept on header as requested change was only for dropdown) */}
+                        {/* Wishlist icon (kept on header) */}
                         <div className="tp-header-action-item d-none d-lg-block me-2">
                           <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
                             <FaHeart />
@@ -309,7 +297,7 @@ const HeaderTwo = ({ style_2 = false }) => {
         categoryType="fashion"
       />
 
-      {/* Polished dropdown styles + auth link styles */}
+      {/* Polished dropdown styles + auth CTA styles */}
       <style jsx>{`
         .user-menu-dropdown{
           position:absolute;
@@ -350,25 +338,29 @@ const HeaderTwo = ({ style_2 = false }) => {
         @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
         @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
 
-        /* Auth links (when logged out) */
-        .tp-header-auth-link {
+        /* ===== Auth CTA (logged-out) — matches your 2nd screenshot ===== */
+        .tp-auth-cta{
           display:inline-flex;
           align-items:center;
-          gap:6px;
-          padding:8px 10px;
-          font-weight:600;
-          font-size:14px;
-          color:#0f172a;
-          border:1px solid #0f172a;
-          background:#fff;
+          gap:10px;
+          padding:9px 14px;
+          background:#eef2f7;          /* soft gray */
+          color:#111827;
+          border:1px solid #cfd6df;
+          border-radius:10px;          /* rounded chip */
           text-decoration:none;
-          border-radius:0; /* square */
-          transition:background .15s ease, color .15s ease;
+          font-weight:600;
+          line-height:1;
+          transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
         }
-        .tp-header-auth-link:hover {
-          background:#0f172a;
-          color:#fff;
+        .tp-auth-cta:hover{
+          background:#e7ecf3;
+          box-shadow:0 1px 0 rgba(17,24,39,.06) inset;
         }
+        .tp-auth-cta:active{ transform:translateY(0.5px); }
+        .tp-auth-cta-icon{ opacity:.9; }
+
+        /* Optional: keep the default header action button/badge styles as-is */
       `}</style>
     </>
   );
