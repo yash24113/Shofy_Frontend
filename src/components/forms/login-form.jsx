@@ -76,7 +76,10 @@ export default function LoginForm() {
 
       notifySuccess(json.message || 'Login successful');
       resetPass();
-      router.push(redirect);
+
+      // go to same page if redirect was provided by opener
+      if (redirect) router.push(redirect);
+      else router.push('/');
     } catch (err) {
       notifyError(err?.message || 'Login failed');
     }
@@ -136,7 +139,7 @@ export default function LoginForm() {
       notifySuccess('Logged in successfully');
       setOtp('');
       if (redirect) {
-        window.location.href = redirect;
+        router.push(redirect);
       } else {
         router.push('/');
       }
@@ -153,34 +156,44 @@ export default function LoginForm() {
       {/* Email & Password Login */}
       {mode === 'password' && (
         <form onSubmit={onPassSubmit(handlePasswordLogin)} className="space-y-4">
-          <div className="tp-login-input-box">
-            <div className="tp-login-input">
-              <input {...regPass('email')} type="email" placeholder="Your Email" />
-            </div>
-            <div className="tp-login-input-title"><label>Email</label></div>
+          <div className="tp-input-box">
+            <label className="tp-label" htmlFor="lp-email">Email</label>
+            <input
+              id="lp-email"
+              autoFocus
+              {...regPass('email')}
+              type="email"
+              placeholder="you@example.com"
+              className="tp-input"
+            />
             <ErrorMsg msg={passErr?.email?.message} />
           </div>
 
-          <div className="tp-login-input-box">
-            <div className="tp-login-input">
-              <input {...regPass('password')} type="password" placeholder="Your Password" />
-            </div>
-            <div className="tp-login-input-title"><label>Password</label></div>
+          <div className="tp-input-box">
+            <label className="tp-label" htmlFor="lp-pass">Password</label>
+            <input
+              id="lp-pass"
+              {...regPass('password')}
+              type="password"
+              placeholder="Your password"
+              className="tp-input"
+              autoComplete="current-password"
+            />
             <ErrorMsg msg={passErr?.password?.message} />
           </div>
 
-          <div className="tp-login-bottom">
-            <button type="submit" className="tp-login-btn w-100">Login</button>
+          <div className="tp-actions">
+            <button type="submit" className="tp-btn tp-btn-black">Login</button>
           </div>
         </form>
       )}
 
       {/* Divider + Toggle */}
-      <div className="tp-login-mail text-center my-6">
+      <div className="tp-divider">
         {mode === 'password' ? (
           <button
             onClick={() => setMode('otpRequest')}
-            className="text-gray-500 underline focus:outline-none"
+            className="tp-link"
             type="button"
           >
             or login with OTP
@@ -188,7 +201,7 @@ export default function LoginForm() {
         ) : (
           <button
             onClick={() => setMode('password')}
-            className="text-gray-500 underline focus:outline-none"
+            className="tp-link"
             type="button"
           >
             or Sign in with Email
@@ -199,16 +212,21 @@ export default function LoginForm() {
       {/* OTP Request */}
       {mode === 'otpRequest' && (
         <form onSubmit={onOtpReqSubmit(handleOtpRequest)} className="space-y-4 mb-6">
-          <div className="tp-login-input-box">
-            <div className="tp-login-input">
-              <input {...regOtp('email')} type="email" placeholder="Your Email" />
-            </div>
-            <div className="tp-login-input-title"><label>Email</label></div>
+          <div className="tp-input-box">
+            <label className="tp-label" htmlFor="lo-email">Email</label>
+            <input
+              id="lo-email"
+              autoFocus
+              {...regOtp('email')}
+              type="email"
+              placeholder="you@example.com"
+              className="tp-input"
+            />
             <ErrorMsg msg={otpErrReq?.email?.message} />
           </div>
 
-          <div className="tp-login-bottom">
-            <button type="submit" className="tp-login-btn w-100">Get OTP</button>
+          <div className="tp-actions">
+            <button type="submit" className="tp-btn tp-btn-black">Get OTP</button>
           </div>
         </form>
       )}
@@ -216,34 +234,33 @@ export default function LoginForm() {
       {/* OTP Verify */}
       {mode === 'otpVerify' && (
         <form onSubmit={handleOtpVerify} className="space-y-4 mb-6">
-          <div className="tp-login-input-box">
-            <div className="tp-login-input">
-              <input
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                placeholder="Enter OTP"
-                required
-              />
-            </div>
-            <div className="tp-login-input-title"><label>OTP</label></div>
+          <div className="tp-input-box">
+            <label className="tp-label" htmlFor="lv-otp">OTP</label>
+            <input
+              id="lv-otp"
+              autoFocus
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              placeholder="Enter OTP"
+              className="tp-input"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              required
+            />
           </div>
 
           {error ? <ErrorMsg msg={error} /> : null}
 
-          <div className="tp-login-bottom">
-            <button
-              type="submit"
-              disabled={loading}
-              className="tp-login-btn w-100"
-            >
+          <div className="tp-actions">
+            <button type="submit" disabled={loading} className="tp-btn tp-btn-black">
               {loading ? 'Verifying…' : 'Verify OTP'}
             </button>
           </div>
 
-          <div className="text-center">
+          <div className="tp-divider">
             <button
               onClick={() => setMode('password')}
-              className="text-gray-500 underline focus:outline-none"
+              className="tp-link"
               type="button"
             >
               back to password login
@@ -251,6 +268,59 @@ export default function LoginForm() {
           </div>
         </form>
       )}
+
+      {/* Scoped styles for inputs & buttons */}
+      <style jsx>{`
+        .tp-input-box { display:flex; flex-direction:column; gap:6px; }
+        .tp-label { font-weight:600; color:#0f172a; }
+        .tp-input {
+          width:100%;
+          padding:12px 14px;
+          border:1px solid #d6dae1;
+          border-radius:0;            /* square */
+          background:#fff;
+          color:#0f172a;
+          outline:none;
+          transition:border-color .15s ease, box-shadow .15s ease;
+        }
+        .tp-input:focus {
+          border-color:#0f172a;
+          box-shadow:0 0 0 2px rgba(15,23,42,.15);
+        }
+
+        .tp-actions { margin-top:8px; }
+        .tp-btn {
+          width:100%;
+          padding:12px 18px;
+          border:1px solid transparent;
+          border-radius:0;            /* square */
+          font-weight:700;
+          cursor:pointer;
+          transition:all .18s ease;
+        }
+        .tp-btn-black {
+          background:#000;
+          color:#fff;
+          border-color:#000;
+        }
+        .tp-btn-black:hover {
+          background:#fff;
+          color:#000;
+          border-color:#000;
+        }
+
+        .tp-divider {
+          text-align:center;
+          margin:18px 0;
+        }
+        .tp-link {
+          background:none;
+          border:0;
+          color:#475569;
+          text-decoration:underline;
+          cursor:pointer;
+        }
+      `}</style>
     </div>
   );
 }
