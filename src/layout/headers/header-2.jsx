@@ -27,7 +27,7 @@ const HeaderTwo = ({ style_2 = false }) => {
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
   // if you still use useCartInfo for total quantity, keep it
-  const { quantity } = useCartInfo(); // not used below, but left as-is
+  const { quantity } = useCartInfo(); // not used below, but left as-iss
 
   // ✅ use the selector (NOT the action creator)
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
