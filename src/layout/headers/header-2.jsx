@@ -216,7 +216,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                         dispatch(openCartMini());
                                       }}
                                     >
-                                      My Booking
+                                      My Oders
                                     </button>
 
                                     <div className="user-divider" />
@@ -239,7 +239,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                               className="tp-auth-cta"
                               aria-label="Login or Sign Up"
                             >
-                              <FaUser className="tp-auth-cta-icon" />
+                              {/* <FaUser className="tp-auth-cta-icon" /> */}
                               <span className="tp-auth-cta-text">Login/SignUp</span>
                             </Link>
                           )}
