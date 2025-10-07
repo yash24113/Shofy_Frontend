@@ -27,12 +27,9 @@ const HeaderTwo = ({ style_2 = false }) => {
 
   // still present for compatibility
   const { quantity } = useCartInfo();
-
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
 
-  useEffect(() => {
-    dispatch(get_cart_products());
-  }, [dispatch]);
+  useEffect(() => { dispatch(get_cart_products()); }, [dispatch]);
 
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
   const { searchText, setSearchText, handleSubmit: handleSearchSubmit } = useSearchFormSubmit();
@@ -52,9 +49,7 @@ const HeaderTwo = ({ style_2 = false }) => {
 
   useEffect(() => {
     const check = () =>
-      setHasSession(
-        typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId')
-      );
+      setHasSession(typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId'));
     check();
     const onStorage = (e) => { if (e.key === 'sessionId') check(); };
     window.addEventListener('storage', onStorage);
@@ -104,19 +99,15 @@ const HeaderTwo = ({ style_2 = false }) => {
         try {
           import('js-cookie')
             .then((Cookies) => Cookies.default.remove('userInfo'))
-            .catch((err) => {
-              console.error("Failed to remove userInfo cookie:", err);
-            });
+            .catch((err) => console.error('Failed to remove userInfo cookie:', err));
         } catch (err) {
-          console.error("Error importing js-cookie:", err);
+          console.error('Error importing js-cookie:', err);
         }
       }
     } finally {
       setHasSession(false);
       setUserOpen(false);
-      if (typeof window !== 'undefined') {
-        window.location.href = '/';
-      }
+      if (typeof window !== 'undefined') window.location.href = '/';
     }
   };
 
@@ -159,35 +150,26 @@ const HeaderTwo = ({ style_2 = false }) => {
                   {/* Right side */}
                   <div className="col-6 col-sm-8 col-md-8 col-lg-9 col-xl-5">
                     <div className="tp-header-bottom-right d-flex align-items-center justify-content-end">
-                         <div className="tp-header-search-2 d-none d-sm-block me-3 search-spacer">
-  <form onSubmit={handleSearchSubmit}>
-    <input
-      onChange={(e) => setSearchText(e.target.value)}
-      value={searchText}
-      type="text"
-      placeholder="Search for Products..."
-      aria-label="Search products"
-    />
-    <button type="submit" aria-label="Search">
-      <Search />
-    </button>
-  </form>
-</div>
-
-<style jsx>{`
-  /* extra spacing to the right of the search box */
-  .search-spacer { margin-right: 24px !important; }     /* default */
-  @media (min-width: 992px)  { .search-spacer { margin-right: 32px !important; } }
-  @media (min-width: 1200px) { .search-spacer { margin-right: 40px !important; } }
-`}</style>
-
+                      <div className="tp-header-search-2 d-none d-sm-block me-3 search-spacer">
+                        <form onSubmit={handleSearchSubmit}>
+                          <input
+                            onChange={(e) => setSearchText(e.target.value)}
+                            value={searchText}
+                            type="text"
+                            placeholder="Search for Products..."
+                            aria-label="Search products"
+                          />
+                          <button type="submit" aria-label="Search">
+                            <Search />
+                          </button>
+                        </form>
+                      </div>
 
                       <div className="tp-header-action d-flex align-items-center">
                         {/* User area / Auth CTA */}
                         <div className="tp-header-action-item me-2 position-relative">
                           {hasSession ? (
                             <>
-                              {/* User icon with dropdown (NO wishlist item here) */}
                               <button
                                 ref={userBtnRef}
                                 onClick={() => setUserOpen((v) => !v)}
@@ -209,7 +191,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       role="menuitem"
                                       onClick={() => {
                                         setUserOpen(false);
-                                        window.location.href = "/profile";
+                                        window.location.href = '/profile';
                                       }}
                                     >
                                       My Account
@@ -224,7 +206,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                         dispatch(openCartMini());
                                       }}
                                     >
-                                      My Oders
+                                      My Orders
                                     </button>
 
                                     <div className="user-divider" />
@@ -241,14 +223,11 @@ const HeaderTwo = ({ style_2 = false }) => {
                               )}
                             </>
                           ) : (
-                            // Single "Login/SignUp" chip with user icon (fixed so icon sits INSIDE the pill)
-                         
                             <Link
                               href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
                               className="tp-auth-cta"
                               aria-label="Login or Sign Up"
                             >
-                              {/* <FaUser className="tp-auth-cta-icon" /> */}
                               <span className="tp-auth-cta-text">Login / SignUp</span>
                             </Link>
                           )}
@@ -308,13 +287,12 @@ const HeaderTwo = ({ style_2 = false }) => {
 
       {/* Polished dropdown styles + auth CTA styles + search spacing */}
       <style jsx>{`
-        /* ===== Search spacing & icon position ===== */
-        .tp-header-search-2 {
-          margin-right: 32px !important; /* extra space before Login/SignUp */
-        }
-        @media (min-width: 1200px) {
-          .tp-header-search-2 { margin-right: 40px !important; }
-        }
+        /* ===== extra spacing to the right of the search box ===== */
+        .search-spacer { margin-right: 24px !important; }
+        @media (min-width: 992px)  { .search-spacer { margin-right: 32px !important; } }
+        @media (min-width: 1200px) { .search-spacer { margin-right: 40px !important; } }
+
+        /* ===== Search icon position ===== */
         .tp-header-search-2 form { position: relative; }
         .tp-header-search-2 input { padding-right: 44px; }
         .tp-header-search-2 button {
@@ -337,9 +315,7 @@ const HeaderTwo = ({ style_2 = false }) => {
           min-width: 230px;
           background:#fff;
           border-radius:12px;
-          box-shadow:
-            0 18px 40px rgba(0,0,0,.14),
-            0 2px 6px rgba(0,0,0,.06);
+          box-shadow: 0 18px 40px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.06);
           overflow:hidden;
           animation:menuPop .14s ease-out both;
         }
@@ -375,22 +351,15 @@ const HeaderTwo = ({ style_2 = false }) => {
           gap:10px;
           padding:10px 16px;
           min-height:40px;
-          background:#eef2f7;          /* soft gray */
+          background:#eef2f7;
           color:#111827;
           border:1px solid #cfd6df;
-          border-radius:12px;          /* rounded chip */
+          border-radius:12px;
           text-decoration:none;
           font-weight:600;
           line-height:1;
           white-space:nowrap;
           transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
-        }
-        /* Reset any global SVG positioning that pushed the icon outside */
-        .tp-auth-cta svg {
-          position: static !important;
-          width: 18px;
-          height: 18px;
-          flex: 0 0 auto;
         }
         .tp-auth-cta:hover{
           background:#e7ecf3;
