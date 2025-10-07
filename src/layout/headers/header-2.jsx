@@ -235,15 +235,14 @@ const HeaderTwo = ({ style_2 = false }) => {
                           ) : (
                             // Single "Login/SignUp" chip with user icon (fixed so icon sits INSIDE the pill)
                          
-                           <Link
-  href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
-  className="tp-auth-cta"
-  aria-label="Login or Sign Up"
->
-  <FaUser aria-hidden="true" />
-  <span className="tp-auth-cta-text">Login/SignUp</span>
-</Link>
-
+                            <Link
+                              href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
+                              className="tp-auth-cta"
+                              aria-label="Login or Sign Up"
+                            >
+                              {/* <FaUser className="tp-auth-cta-icon" /> */}
+                              <span className="tp-auth-cta-text">Login/SignUp</span>
+                            </Link>
                           )}
                         </div>
 
@@ -362,36 +361,33 @@ const HeaderTwo = ({ style_2 = false }) => {
         @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
 
         /* ===== Auth CTA (logged-out) — “Login/SignUp” chip ===== */
-        /* Login/SignUp chip */
-.tp-auth-cta{
-  display:inline-flex;
-  align-items:center;
-  gap:10px;
-  padding:10px 16px;
-  min-height:40px;
-  background:#eef2f7;
-  color:#111827;
-  border:1px solid #cfd6df;
-  border-radius:12px;
-  text-decoration:none;
-  font-weight:600;
-  line-height:1;
-  white-space:nowrap;
-  transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
-}
-.tp-auth-cta:hover{
-  background:#e7ecf3;
-  box-shadow:0 1px 0 rgba(17,24,39,.06) inset;
-}
-.tp-auth-cta:active{ transform:translateY(0.5px); }
-
-/* keep the icon inside the pill and sized correctly */
-.tp-auth-cta svg{
-  position:static !important;
-  width:18px; height:18px;
-  flex:0 0 auto;
-}
-
+        .tp-auth-cta{
+          display:inline-flex;
+          align-items:center;
+          gap:10px;
+          padding:10px 16px;
+          min-height:40px;
+          background:#eef2f7;          /* soft gray */
+          color:#111827;
+          border:1px solid #cfd6df;
+          border-radius:12px;          /* rounded chip */
+          text-decoration:none;
+          font-weight:600;
+          line-height:1;
+          white-space:nowrap;
+          transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
+        }
+        /* Reset any global SVG positioning that pushed the icon outside */
+        .tp-auth-cta svg {
+          position: static !important;
+          width: 18px;
+          height: 18px;
+          flex: 0 0 auto;
+        }
+        .tp-auth-cta:hover{
+          background:#e7ecf3;
+          box-shadow:0 1px 0 rgba(17,24,39,.06) inset;
+        }
         .tp-auth-cta:active{ transform:translateY(0.5px); }
         .tp-auth-cta-text { display:inline-block; }
       `}</style>
