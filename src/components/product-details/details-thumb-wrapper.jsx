@@ -343,113 +343,120 @@ const DetailsThumbWrapper = ({
       />
 
       {/* ---------- internal styles ---------- */}
-      <style jsx>{`
-        .pdw-wrapper {
-          display: grid;
-          grid-template-columns: 96px ${imgWidth}px ${zoomPaneWidth}px;
-          gap: 16px;
-          align-items: start;
-        }
+     <style jsx>{`
+  .pdw-wrapper {
+    display: grid;
+    grid-template-columns: 96px ${imgWidth}px ${zoomPaneWidth}px;
+    gap: 16px;
+    align-items: start;
+  }
 
-        /* Thumbs */
-        .pdw-thumbs { width: 96px; }
-        .pdw-thumbs-inner {
-          display: flex; flex-direction: column; gap: 12px;
-          max-height: ${zoomPaneHeight}px;
-          overflow: auto;
-          padding-right: 4px;
-        }
-        .pdw-thumb {
-          position: relative; width: 80px; height: 80px;
-          padding: 0;
-          border: 2px solid transparent;      /* fixed border so size never changes */
-          border-radius: 8px;
-          overflow: hidden;
-          background: #fff;
-          cursor: pointer;
-          transition: transform 120ms ease, box-shadow 160ms ease, outline-color 160ms ease;
-          flex: 0 0 auto;
+  /* Thumbs */
+  .pdw-thumbs { width: 96px; }
+  .pdw-thumbs-inner {
+    display: flex; flex-direction: column; gap: 12px;
+    max-height: ${zoomPaneHeight}px;
+    overflow: auto;
+    padding-right: 4px;
+  }
 
-          display: grid;                       /* ensures perfect centering */
-          place-items: center;
-        }
-        .pdw-thumb:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,.08); }
+  .pdw-thumb {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    padding: 0;
+    border: 0;                     /* no border that can change size */
+    box-sizing: border-box;        /* be explicit */
+    border-radius: 12px;           /* ↑ match image radius */
+    overflow: hidden;
+    background: #fff;
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 160ms ease;
+    flex: 0 0 auto;
 
-        /* ✅ Active ring that DOESN'T change layout */
-        .pdw-thumb.is-active {
-          outline: 3px solid #3b82f6;
-          outline-offset: 0;
-          /* If you prefer inset ring instead of outline, use this and remove outline:
-             box-shadow: inset 0 0 0 3px #3b82f6;
-          */
-        }
+    display: grid;                 /* perfect centering */
+    place-items: center;
+  }
 
-        /* Keep keyboard focus consistent without shifting */
-        .pdw-thumb:focus { outline: none; }
-        .pdw-thumb:focus-visible {
-          outline: 3px solid #3b82f6;
-          outline-offset: 0;
-        }
+  .pdw-thumb:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0,0,0,.08);
+  }
 
-        .pdw-thumb-img {
-          width: 100%;
-          height: 100%;
-          border-radius: 6px;
-          object-fit: cover;
-          display: block;
-        }
-        .pdw-thumb-play {
-          position: absolute; inset: 0; display: grid; place-items: center;
-          color: #fff; font-size: 34px; background: linear-gradient(to top, rgba(0,0,0,.45), rgba(0,0,0,.05));
-          pointer-events: none;
-        }
+  /* ✅ Active ring INSIDE the box — no layout shift */
+  .pdw-thumb.is-active {
+    box-shadow: inset 0 0 0 3px #3b82f6;
+  }
 
-        /* Main */
-        .pdw-main {
-          width: ${imgWidth}px; height: ${imgHeight}px;
-          border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.06);
-          overflow: hidden; background: #fff;
-        }
-        .pdw-main-inner {
-          width: 100%; height: 100%; display: grid; place-items: center; position: relative;
-        }
-        .pdw-video { background: #000; }
+  /* Keyboard focus consistent with active, without moving the box */
+  .pdw-thumb:focus { outline: none; }
+  .pdw-thumb:focus-visible {
+    box-shadow: inset 0 0 0 3px #3b82f6;
+  }
 
-        /* Lens overlay */
-        .pdw-lens {
-          position: absolute; top: 0; left: 0;
-          pointer-events: none;
-          border-radius: 8px;
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,.6);
-          backdrop-filter: saturate(120%) brightness(105%);
-        }
+  .pdw-thumb-img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    border-radius: inherit;        /* keep same radius as the container */
+  }
 
-        .tp-product-badge { position: absolute; left: 10px; top: 10px; }
-        .product-hot {
-          display: inline-block; background: #ef4444; color: #fff;
-          font-size: 12px; padding: 4px 8px; border-radius: 6px;
-        }
+  .pdw-thumb-play {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    color: #fff; font-size: 34px;
+    background: linear-gradient(to top, rgba(0,0,0,.45), rgba(0,0,0,.05));
+    pointer-events: none;
+  }
 
-        /* Right zoom pane */
-        .pdw-zoom {
-          width: ${zoomPaneWidth}px; height: ${zoomPaneHeight}px;
-          border-radius: 12px; background-repeat: no-repeat; background-position: center;
-          background-color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.06);
-          opacity: 0; visibility: hidden; transform: translateY(4px);
-          transition: opacity 160ms ease, visibility 160ms ease, transform 160ms ease;
-        }
-        .pdw-zoom.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
+  /* Main */
+  .pdw-main {
+    width: ${imgWidth}px; height: ${imgHeight}px;
+    border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.06);
+    overflow: hidden; background: #fff;
+  }
+  .pdw-main-inner {
+    width: 100%; height: 100%;
+    display: grid; place-items: center; position: relative;
+  }
+  .pdw-video { background: #000; }
 
-        /* Responsive – hide zoom pane on smaller screens */
-        @media (max-width: 1200px) {
-          .pdw-wrapper { grid-template-columns: 96px ${imgWidth}px; }
-          .pdw-zoom { display: none; }
-        }
-        @media (max-width: 640px) {
-          .pdw-wrapper { grid-template-columns: 72px minmax(220px, 1fr); gap: 12px; }
-          .pdw-main { width: 100%; height: auto; aspect-ratio: ${imgWidth} / ${imgHeight}; }
-        }
-      `}</style>
+  /* Lens overlay */
+  .pdw-lens {
+    position: absolute; top: 0; left: 0;
+    pointer-events: none;
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.6);
+    backdrop-filter: saturate(120%) brightness(105%);
+  }
+
+  .tp-product-badge { position: absolute; left: 10px; top: 10px; }
+  .product-hot {
+    display: inline-block; background: #ef4444; color: #fff;
+    font-size: 12px; padding: 4px 8px; border-radius: 6px;
+  }
+
+  /* Right zoom pane */
+  .pdw-zoom {
+    width: ${zoomPaneWidth}px; height: ${zoomPaneHeight}px;
+    border-radius: 12px; background-repeat: no-repeat; background-position: center;
+    background-color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.06);
+    opacity: 0; visibility: hidden; transform: translateY(4px);
+    transition: opacity 160ms ease, visibility 160ms ease, transform 160ms ease;
+  }
+  .pdw-zoom.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
+
+  /* Responsive – hide zoom pane on smaller screens */
+  @media (max-width: 1200px) {
+    .pdw-wrapper { grid-template-columns: 96px ${imgWidth}px; }
+    .pdw-zoom { display: none; }
+  }
+  @media (max-width: 640px) {
+    .pdw-wrapper { grid-template-columns: 72px minmax(220px, 1fr); gap: 12px; }
+    .pdw-main { width: 100%; height: auto; aspect-ratio: ${imgWidth} / ${imgHeight}; }
+  }
+`}</style>
+
     </div>
   );
 };

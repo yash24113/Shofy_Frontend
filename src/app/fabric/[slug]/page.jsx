@@ -25,7 +25,7 @@ export async function generateMetadata({ params }) {
   );
 
   if (!res.ok) {
-    return { title: 'Product not found', description: '' };
+    return { title: 'Shofy', description: '' };
   }
 
   const payload = await res.json();
