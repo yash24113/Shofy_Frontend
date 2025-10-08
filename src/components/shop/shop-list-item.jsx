@@ -3,7 +3,7 @@ import React from "react";
 import { useDispatch } from "react-redux";
 import Image from "next/image";
 import Link from "next/link";
-import { CompareThree, QuickView, Wishlist, Cart } from "@/svg"; // ⬅️ added Cart
+import { CompareThree, QuickView, Wishlist, Cart } from "@/svg";
 import { handleProductModal } from "@/redux/features/productModalSlice";
 import { add_cart_product } from "@/redux/features/cartSlice";
 import { add_to_wishlist } from "@/redux/features/wishlist-slice";
@@ -13,7 +13,7 @@ import { useGetSubstructureQuery } from "@/redux/features/substructureApi";
 import { useGetContentByIdQuery } from "@/redux/features/contentApi";
 import { useGetSubfinishQuery } from "@/redux/features/subfinishApi";
 
-/* helpers */
+/* --------------------------- helpers --------------------------- */
 const nonEmpty = (v) =>
   Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== "";
 const pick = (...xs) => xs.find(nonEmpty);
@@ -26,31 +26,33 @@ const normId = (v) => {
   return null;
 };
 
-const getSessionId = () => {
-  if (typeof window === "undefined") return null;
-  try {
-    const sid = localStorage.getItem("sessionId");
-    return sid && String(sid).trim() ? sid : null;
-  } catch {
-    return null;
-  }
+/** Keep this identical to your wishlist’s session reading style */
+const getSessionUser = () => {
+  if (typeof window === 'undefined') return { sessionId: null, userId: null };
+  return {
+    sessionId: localStorage.getItem('sessionId') || null,
+    userId: localStorage.getItem('userId') || null,
+  };
 };
 
+/** Fire the same login modal event your header listens for */
 const openLoginModal = () => {
   if (typeof window === "undefined") return;
   try {
-    // Fire a global event your header/modal can listen to
     window.dispatchEvent(new CustomEvent("auth:open", { detail: { mode: "login" } }));
-  } catch(err) { console.log("error",err); }
+  } catch (err) {
+    console.log("auth:open event error", err);
+  }
 };
 
 const ShopListItem = ({ product }) => {
   const { img, image, title, price, salesPrice, discount, description } = product || {};
   const dispatch = useDispatch();
 
+  /** Gate add-to-cart behind session like wishlist does */
   const guardedAddToCart = (prd) => {
-    const sid = getSessionId();
-    if (sid) {
+    const { sessionId } = getSessionUser();
+    if (sessionId) {
       dispatch(add_cart_product(prd));
     } else {
       openLoginModal();
@@ -154,7 +156,7 @@ const ShopListItem = ({ product }) => {
   const gsmValue   = nonEmpty(product?.gsm)   ? product?.gsm   : "—";
   const widthValue = nonEmpty(product?.width) ? product?.width : "—";
 
-  /* small row component: fixes label/value size & alignment only */
+  /* small row component: label/value alignment only */
   const Row = ({ label, value }) => (
     <div
       className="tp-product-details-query-item d-flex align-items-center"
@@ -219,7 +221,7 @@ const ShopListItem = ({ product }) => {
               <span className="tp-product-tooltip tp-product-tooltip-right">Quick View</span>
             </button>
 
-            {/* ❤️ Wishlist (unchanged) */}
+            {/* ❤️ Wishlist */}
             <button
               type="button"
               onClick={() => handleWishlistProduct(product)}
@@ -229,7 +231,7 @@ const ShopListItem = ({ product }) => {
               <span className="tp-product-tooltip tp-product-tooltip-right">Add To Wishlist</span>
             </button>
 
-            {/* 🛒 Cart icon with session check */}
+            {/* 🛒 Cart icon → same gate as wishlist page */}
             <button
               type="button"
               onClick={() => guardedAddToCart(product)}
@@ -239,7 +241,7 @@ const ShopListItem = ({ product }) => {
               <span className="tp-product-tooltip tp-product-tooltip-right">Add To Cart</span>
             </button>
 
-            {/* ⇄ Compare (unchanged) */}
+            {/* ⇄ Compare */}
             <button
               type="button"
               onClick={() => handleCompareProduct(product)}
@@ -254,7 +256,7 @@ const ShopListItem = ({ product }) => {
 
       <div className="tp-product-list-content">
         <div className="tp-product-content-2 pt-15">
-          <div className="tp-product-tag-2">{/* category pill removed intentionally */}</div>
+          <div className="tp-product-tag-2" />
 
           <h3 className="tp-product-title-2">
             <Link href={`/fabric/${slug}`}>{titleText}</Link>
@@ -286,7 +288,7 @@ const ShopListItem = ({ product }) => {
             <Row label="Width:"     value={widthValue} />
           </div>
 
-          {/* Add To Cart button with same guarded logic */}
+          {/* Add To Cart button with the same guarded logic */}
           <div className="tp-product-list-add-to-cart">
             <button
               onClick={() => guardedAddToCart(product)}
