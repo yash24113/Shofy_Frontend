@@ -16,6 +16,13 @@ const processImageUrl = (url) => {
   return `${cleanBaseUrl}/uploads/${cleanPath}`;
 };
 
+const NO_IMG = `data:image/svg+xml;utf8,
+<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'>
+  <rect width='100%' height='100%' fill='%23f5f5f5'/>
+  <text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle'
+        font-family='Arial' font-size='24' fill='%23999'>No image available</text>
+</svg>`;
+
 /* Dedup while keeping the **first** occurrence */
 const uniqueByUrl = (arr) => {
   const seen = new Set();
@@ -269,46 +276,30 @@ const DetailsThumbWrapper = ({
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           ) : (
-           <div style={{
-  position: 'relative',
-  width: '100%',
-  height: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  backgroundColor: '#fafafa',
-  border: '1px solid #1b0cf4ff',
-  overflow: 'hidden',
-  marginBottom: '12px'     // ← add this
-}}>
-              {mainSrc ? (
-                <img
-                  src={mainSrc}
-                  alt="product img"
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '100%',
-                    objectFit: 'contain',
-                    display: 'block'
-                  }}
-                  onLoad={handleImageLoaded}
-                  onError={(e) => {
-                    console.error('Error loading image:', mainSrc);
-                    e.target.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <div style={{
-                  color: '#999',
-                  textAlign: 'center',
-                  padding: '20px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: '8px'
-                }}>
-                  No image available
-                </div>
-              )}
-            </div>
+          <img
+  src={mainSrc || NO_IMG}
+  alt="product img"
+  style={{
+    display: 'block',
+    width: '100%',
+    /* keep a nice framed box; adjust if you want square like the sidebar: '1 / 1' */
+    aspectRatio: '16 / 9',
+    objectFit: 'contain',          // same centering behavior as before
+    backgroundColor: '#fafafa',
+    border: '1px solid #1b0cf4ff', // match sidebar border
+    borderRadius: '12px',          // match sidebar rounding
+    padding: '8px',
+    boxSizing: 'border-box',
+    marginBottom: '12px',          // same spacing
+    overflow: 'hidden'
+  }}
+  onLoad={handleImageLoaded}
+  onError={(e) => {
+    console.error('Error loading image:', mainSrc);
+    // fall back without needing any wrapper elements
+    if (e.currentTarget.src !== NO_IMG) e.currentTarget.src = NO_IMG;
+  }}
+/>
           )}
 
           {/* Lens overlay */}
