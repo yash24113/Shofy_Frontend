@@ -16,13 +16,6 @@ const processImageUrl = (url) => {
   return `${cleanBaseUrl}/uploads/${cleanPath}`;
 };
 
-const NO_IMG = `data:image/svg+xml;utf8,
-<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'>
-  <rect width='100%' height='100%' fill='%23f5f5f5'/>
-  <text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle'
-        font-family='Arial' font-size='24' fill='%23999'>No image available</text>
-</svg>`;
-
 /* Dedup while keeping the **first** occurrence */
 const uniqueByUrl = (arr) => {
   const seen = new Set();
@@ -34,6 +27,14 @@ const uniqueByUrl = (arr) => {
     return true;
   });
 };
+
+/* Fallback image (no wrapper div needed) */
+const NO_IMG = `data:image/svg+xml;utf8,
+<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='900'>
+  <rect width='100%' height='100%' fill='%23f5f5f5'/>
+  <text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle'
+        font-family='Arial' font-size='28' fill='%23999'>No image available</text>
+</svg>`;
 
 /* ---------------- component ---------------- */
 const DetailsThumbWrapper = ({
@@ -276,30 +277,28 @@ const DetailsThumbWrapper = ({
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           ) : (
-          <img
-  src={mainSrc || NO_IMG}
-  alt="product img"
-  style={{
-    display: 'block',
-    width: '100%',
-    /* keep a nice framed box; adjust if you want square like the sidebar: '1 / 1' */
-    aspectRatio: '16 / 9',
-    objectFit: 'contain',          // same centering behavior as before
-    backgroundColor: '#fafafa',
-    border: '1px solid #1b0cf4ff', // match sidebar border
-    borderRadius: '12px',          // match sidebar rounding
-    padding: '8px',
-    boxSizing: 'border-box',
-    marginBottom: '12px',          // same spacing
-    overflow: 'hidden'
-  }}
-  onLoad={handleImageLoaded}
-  onError={(e) => {
-    console.error('Error loading image:', mainSrc);
-    // fall back without needing any wrapper elements
-    if (e.currentTarget.src !== NO_IMG) e.currentTarget.src = NO_IMG;
-  }}
-/>
+            /* ✅ No wrapper <div> — the IMG itself carries the frame/background/spacing */
+            <img
+              src={mainSrc || NO_IMG}
+              alt="product img"
+              style={{
+                display: 'block',
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',          // same centering & scaling
+                backgroundColor: '#fafafa',
+                border: '1px solid #1b0cf4ff', // same border as requested
+                borderRadius: '12px',
+                padding: '8px',
+                boxSizing: 'border-box',
+                marginBottom: '12px'
+              }}
+              onLoad={(e) => handleImageLoaded(e.currentTarget)}
+              onError={(e) => {
+                console.error('Error loading image:', mainSrc);
+                if (e.currentTarget.src !== NO_IMG) e.currentTarget.src = NO_IMG;
+              }}
+            />
           )}
 
           {/* Lens overlay */}
@@ -335,7 +334,7 @@ const DetailsThumbWrapper = ({
       />
 
       {/* ---------- internal styles ---------- */}
-     <style jsx>{`
+      <style jsx>{`
   .pdw-wrapper {
     display: grid;
     grid-template-columns: 96px ${imgWidth}px ${zoomPaneWidth}px;
@@ -357,41 +356,23 @@ const DetailsThumbWrapper = ({
     width: 80px;
     height: 80px;
     padding: 0;
-    border: 0;                     /* no border that can change size */
-    box-sizing: border-box;        /* be explicit */
-    border-radius: 12px;           /* ↑ match image radius */
+    border: 0;
+    box-sizing: border-box;
+    border-radius: 12px;
     overflow: hidden;
     background: #fff;
     cursor: pointer;
     transition: transform 120ms ease, box-shadow 160ms ease;
     flex: 0 0 auto;
-
-    display: grid;                 /* perfect centering */
-    place-items: center;
+    display: grid; place-items: center;
   }
-
-  .pdw-thumb:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(0,0,0,.08);
-  }
-
-  /* ✅ Active ring INSIDE the box — no layout shift */
-  .pdw-thumb.is-active {
-    box-shadow: inset 0 0 0 3px #3b82f6;
-  }
-
-  /* Keyboard focus consistent with active, without moving the box */
+  .pdw-thumb:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,.08); }
+  .pdw-thumb.is-active { box-shadow: inset 0 0 0 3px #3b82f6; }
   .pdw-thumb:focus { outline: none; }
-  .pdw-thumb:focus-visible {
-    box-shadow: inset 0 0 0 3px #3b82f6;
-  }
+  .pdw-thumb:focus-visible { box-shadow: inset 0 0 0 3px #3b82f6; }
 
   .pdw-thumb-img {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
-    border-radius: inherit;        /* keep same radius as the container */
+    width: 100%; height: 100%; display: block; object-fit: cover; border-radius: inherit;
   }
 
   .pdw-thumb-play {
@@ -402,13 +383,13 @@ const DetailsThumbWrapper = ({
   }
 
   /* Main */
-.pdw-main {
-  width: ${imgWidth}px; height: ${imgHeight}px;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.06);
-  overflow: hidden;
-  background: #fff;
-}
+  .pdw-main {
+    width: ${imgWidth}px; height: ${imgHeight}px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.06);
+    overflow: hidden;
+    background: #fff;
+  }
   .pdw-main-inner {
     width: 100%; height: 100%;
     display: grid; place-items: center; position: relative;
@@ -431,28 +412,20 @@ const DetailsThumbWrapper = ({
   }
 
   /* Right zoom pane */
- .pdw-zoom {
-  width: ${zoomPaneWidth}px; height: ${zoomPaneHeight}px;
-
-  /* make visuals identical to main box */
-  border-radius: 12px;
-  border: 1px solid #f0f0f0;
-  background-color: #fafafa;
-
-  /* clip background to the content box so it lines up with the rounded corners */
-  background-repeat: no-repeat;
-  background-origin: content-box;
-  background-clip: content-box;
-
-  /* match elevation and hide any spill */
-  box-shadow: 0 8px 24px rgba(0,0,0,.06);
-  overflow: hidden;
-
-  /* transition states */
-  opacity: 0; visibility: hidden; transform: translateY(4px);
-  transition: opacity 160ms ease, visibility 160ms ease, transform 160ms ease;
-}
- .pdw-zoom.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
+  .pdw-zoom {
+    width: ${zoomPaneWidth}px; height: ${zoomPaneHeight}px;
+    border-radius: 12px;
+    border: 1px solid #f0f0f0;
+    background-color: #fafafa;
+    background-repeat: no-repeat;
+    background-origin: content-box;
+    background-clip: content-box;
+    box-shadow: 0 8px 24px rgba(0,0,0,.06);
+    overflow: hidden;
+    opacity: 0; visibility: hidden; transform: translateY(4px);
+    transition: opacity 160ms ease, visibility 160ms ease, transform 160ms ease;
+  }
+  .pdw-zoom.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
 
   /* Responsive – hide zoom pane on smaller screens */
   @media (max-width: 1200px) {
@@ -464,7 +437,6 @@ const DetailsThumbWrapper = ({
     .pdw-main { width: 100%; height: auto; aspect-ratio: ${imgWidth} / ${imgHeight}; }
   }
 `}</style>
-
     </div>
   );
 };
