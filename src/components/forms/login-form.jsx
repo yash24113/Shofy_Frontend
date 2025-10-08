@@ -9,38 +9,36 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import ErrorMsg from '../common/error-msg';
 import { notifyError, notifySuccess } from '@/utils/toast';
 
-// validation schemas
-const passwordSchema = Yup.object().shape({
-  email: Yup.string().required('Email is required').email('Enter a valid email'),
-  password: Yup.string().required('Password is required').min(6, 'At least 6 characters'),
-});
+/* ---------------- helpers ---------------- */
+const isEmail = (v) => /^\S+@\S+\.\S+$/.test(String(v || '').trim());
+const isPhone = (v) => /^[0-9]{8,15}$/.test(String(v || '').trim());
+const emailOrPhoneMsg = 'Enter a valid email or mobile number';
+
+/* old password schema kept commented (not deleted) */
+// const passwordSchema = Yup.object().shape({
+//   email: Yup.string().required('Email is required').email('Enter a valid email'),
+//   password: Yup.string().required('Password is required').min(6, 'At least 6 characters'),
+// });
+
+/* single input validation: accepts email or phone */
 const otpRequestSchema = Yup.object().shape({
-  email: Yup.string().required('Email is required').email('Enter a valid email'),
+  identifier: Yup.string()
+    .required(emailOrPhoneMsg)
+    .test('email-or-phone', emailOrPhoneMsg, (v) => isEmail(v) || isPhone(v)),
 });
 
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get('redirect') || '/profile';
+  const redirect = searchParams.get('redirect') || '/';
 
-  // modes: 'password' | 'otpRequest' | 'otpVerify'
-  const [mode, setMode] = useState('password');
-  const [savedEmail, setSavedEmail] = useState('');
+  const [savedIdentifier, setSavedIdentifier] = useState('');
   const [otp, setOtp] = useState('');
+  const [showVerify, setShowVerify] = useState(false);
 
-  // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // password form
-  const {
-    register: regPass,
-    handleSubmit: onPassSubmit,
-    formState: { errors: passErr },
-    reset: resetPass,
-  } = useForm({ resolver: yupResolver(passwordSchema) });
-
-  // OTP request form
   const {
     register: regOtp,
     handleSubmit: onOtpReqSubmit,
@@ -51,44 +49,18 @@ export default function LoginForm() {
   const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const KEY = process.env.NEXT_PUBLIC_API_KEY;
 
-  // 1) Email/password login
-  const handlePasswordLogin = async (data) => {
-    try {
-      const res = await fetch(`${API}/users/login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(KEY ? { 'x-api-key': KEY } : {}),
-        },
-        body: JSON.stringify({ identifier: data.email, password: data.password }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message || 'Login failed');
-
-      // store user for UI
-      Cookies.set('userInfo', JSON.stringify({ user: json.user }), { expires: 0.5 });
-
-      // store sessionId for logout
-      if (typeof window !== 'undefined' && json.sessionId) {
-        localStorage.setItem('sessionId', json.sessionId);
-      }
-
-      notifySuccess(json.message || 'Login successful');
-      resetPass();
-
-      // go to same page if redirect was provided by opener
-      if (redirect) router.push(redirect);
-      else router.push('/');
-    } catch (err) {
-      notifyError(err?.message || 'Login failed');
-    }
-  };
-
-  // 2) Request OTP
+  /* =============== OTP REQUEST (step 1) =============== */
   const handleOtpRequest = async (data) => {
     try {
-      setSavedEmail(data.email);
+      setLoading(true);
+      const identifier = data.identifier?.trim();
+      setSavedIdentifier(identifier);
+
+      // ✅ FRONTEND FIX — dynamically send correct key to backend
+      const payload = isEmail(identifier)
+        ? { email: identifier }
+        : { phone: identifier };
+
       const res = await fetch(`${API}/users/request-login-otp`, {
         method: 'POST',
         credentials: 'include',
@@ -96,26 +68,34 @@ export default function LoginForm() {
           'Content-Type': 'application/json',
           ...(KEY ? { 'x-api-key': KEY } : {}),
         },
-        body: JSON.stringify({ email: data.email }),
+        body: JSON.stringify(payload),
       });
+
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.message || 'OTP send failed');
 
-      notifySuccess('OTP sent to your email');
-      setMode('otpVerify');
+      notifySuccess(json.message || 'OTP sent successfully');
       resetOtpReq();
+      setShowVerify(true); // show OTP verify step
     } catch (err) {
       notifyError(err?.message || 'OTP request failed');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // 3) Verify OTP & login
+  /* =============== OTP VERIFY (step 2) =============== */
   const handleOtpVerify = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
+      // ✅ FRONTEND FIX — dynamically send correct key for verification
+      const payload = isEmail(savedIdentifier)
+        ? { email: savedIdentifier, otp }
+        : { phone: savedIdentifier, otp };
+
       const res = await fetch(`${API}/users/verify-login-otp`, {
         method: 'POST',
         credentials: 'include',
@@ -123,122 +103,62 @@ export default function LoginForm() {
           'Content-Type': 'application/json',
           ...(KEY ? { 'x-api-key': KEY } : {}),
         },
-        body: JSON.stringify({ email: savedEmail, otp }),
+        body: JSON.stringify(payload),
       });
+
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.message || 'Invalid OTP');
 
-      // store user for UI
       Cookies.set('userInfo', JSON.stringify({ user: json.user }), { expires: 0.5 });
-
-      // store sessionId for logout
       if (typeof window !== 'undefined' && json.sessionId) {
         localStorage.setItem('sessionId', json.sessionId);
       }
 
-      notifySuccess('Logged in successfully');
+      notifySuccess(json.message || 'Logged in successfully');
       setOtp('');
-      if (redirect) {
-        router.push(redirect);
-      } else {
-        router.push('/');
-      }
+      router.push(redirect || '/');
     } catch (err) {
-      console.error('Login error:', err);
       setError(err?.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  /* ====================== UI ====================== */
   return (
     <div>
-      {/* Email & Password Login */}
-      {mode === 'password' && (
-        <form onSubmit={onPassSubmit(handlePasswordLogin)} className="space-y-4">
-          <div className="tp-input-box">
-            <label className="tp-label" htmlFor="lp-email">Email</label>
-            <input
-              id="lp-email"
-              autoFocus
-              {...regPass('email')}
-              type="email"
-              placeholder="you@example.com"
-              className="tp-input"
-            />
-            <ErrorMsg msg={passErr?.email?.message} />
-          </div>
-
-          <div className="tp-input-box">
-            <label className="tp-label" htmlFor="lp-pass">Password</label>
-            <input
-              id="lp-pass"
-              {...regPass('password')}
-              type="password"
-              placeholder="Your password"
-              className="tp-input"
-              autoComplete="current-password"
-            />
-            <ErrorMsg msg={passErr?.password?.message} />
-          </div>
-
-          <div className="tp-actions">
-            <button type="submit" className="tp-btn tp-btn-black">Login</button>
-          </div>
-        </form>
-      )}
-
-      {/* Divider + Toggle */}
-      <div className="tp-divider">
-        {mode === 'password' ? (
-          <button
-            onClick={() => setMode('otpRequest')}
-            className="tp-link"
-            type="button"
-          >
-            or login with OTP
-          </button>
-        ) : (
-          <button
-            onClick={() => setMode('password')}
-            className="tp-link"
-            type="button"
-          >
-            or Sign in with Email
-          </button>
-        )}
-      </div>
-
-      {/* OTP Request */}
-      {mode === 'otpRequest' && (
+      {/* STEP 1 — Request OTP */}
+      {!showVerify && (
         <form onSubmit={onOtpReqSubmit(handleOtpRequest)} className="space-y-4 mb-6">
           <div className="tp-input-box">
-            <label className="tp-label" htmlFor="lo-email">Email</label>
+            <label className="tp-label" htmlFor="lo-identifier">Enter Email/Mobile number</label>
             <input
-              id="lo-email"
+              id="lo-identifier"
               autoFocus
-              {...regOtp('email')}
-              type="email"
-              placeholder="you@example.com"
+              {...regOtp('identifier')}
+              type="text"
+              placeholder="you@example.com or 9876543210"
               className="tp-input"
+              inputMode="email"
             />
-            <ErrorMsg msg={otpErrReq?.email?.message} />
+            <ErrorMsg msg={otpErrReq?.identifier?.message} />
           </div>
 
           <div className="tp-actions">
-            <button type="submit" className="tp-btn tp-btn-black">Get OTP</button>
+            <button type="submit" className="tp-btn tp-btn-black" disabled={loading}>
+              {loading ? 'Sending…' : 'Request OTP'}
+            </button>
           </div>
         </form>
       )}
 
-      {/* OTP Verify */}
-      {mode === 'otpVerify' && (
+      {/* STEP 2 — Verify OTP */}
+      {showVerify && (
         <form onSubmit={handleOtpVerify} className="space-y-4 mb-6">
           <div className="tp-input-box">
             <label className="tp-label" htmlFor="lv-otp">OTP</label>
             <input
               id="lv-otp"
-              autoFocus
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
               placeholder="Enter OTP"
@@ -246,6 +166,7 @@ export default function LoginForm() {
               inputMode="numeric"
               pattern="[0-9]*"
               required
+              autoFocus
             />
           </div>
 
@@ -257,19 +178,20 @@ export default function LoginForm() {
             </button>
           </div>
 
+          {/* Optional: go back to change identifier */}
           <div className="tp-divider">
             <button
-              onClick={() => setMode('password')}
-              className="tp-link"
               type="button"
+              className="tp-link"
+              onClick={() => { setShowVerify(false); setOtp(''); }}
             >
-              back to password login
+              edit email / mobile
             </button>
           </div>
         </form>
       )}
 
-      {/* Scoped styles for inputs & buttons */}
+      {/* ==== Styling (unchanged) ==== */}
       <style jsx>{`
         .tp-input-box { display:flex; flex-direction:column; gap:6px; }
         .tp-label { font-weight:600; color:#0f172a; }
@@ -277,49 +199,19 @@ export default function LoginForm() {
           width:100%;
           padding:12px 14px;
           border:1px solid #d6dae1;
-          border-radius:0;            /* square */
+          border-radius:0;
           background:#fff;
           color:#0f172a;
           outline:none;
           transition:border-color .15s ease, box-shadow .15s ease;
         }
-        .tp-input:focus {
-          border-color:#0f172a;
-          box-shadow:0 0 0 2px rgba(15,23,42,.15);
-        }
-
+        .tp-input:focus { border-color:#0f172a; box-shadow:0 0 0 2px rgba(15,23,42,.15); }
         .tp-actions { margin-top:8px; }
-        .tp-btn {
-          width:100%;
-          padding:12px 18px;
-          border:1px solid transparent;
-          border-radius:0;            /* square */
-          font-weight:700;
-          cursor:pointer;
-          transition:all .18s ease;
-        }
-        .tp-btn-black {
-          background:#000;
-          color:#fff;
-          border-color:#000;
-        }
-        .tp-btn-black:hover {
-          background:#fff;
-          color:#000;
-          border-color:#000;
-        }
-
-        .tp-divider {
-          text-align:center;
-          margin:18px 0;
-        }
-        .tp-link {
-          background:none;
-          border:0;
-          color:#475569;
-          text-decoration:underline;
-          cursor:pointer;
-        }
+        .tp-btn { width:100%; padding:12px 18px; border:1px solid transparent; border-radius:0; font-weight:700; cursor:pointer; transition:all .18s ease; }
+        .tp-btn-black { background:#000; color:#fff; border-color:#000; }
+        .tp-btn-black:hover { background:#fff; color:#000; border-color:#000; }
+        .tp-divider { text-align:center; margin:18px 0; }
+        .tp-link { background:none; border:0; color:#475569; text-decoration:underline; cursor:pointer; }
       `}</style>
     </div>
   );

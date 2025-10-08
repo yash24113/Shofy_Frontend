@@ -8,16 +8,13 @@ import LoginForm from '../forms/login-form';
 import styles from '../../components/auth/AuthArea.module.css';
 
 type Props = {
-  /** Optional: close the modal from a parent without relying on history */
   onClose?: () => void;
-  /** Optional: open register modal from parent (used to swap modals) */
   onSwitchToRegister?: () => void;
 };
 
 const LoginArea: React.FC<Props> = ({ onClose, onSwitchToRegister }) => {
   const router = useRouter();
 
-  // Lock page scroll while modal is open
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -25,15 +22,11 @@ const LoginArea: React.FC<Props> = ({ onClose, onSwitchToRegister }) => {
   }, []);
 
   const handleClose = useCallback(() => {
-    if (onClose) {
-      onClose();
-      return;
-    }
+    if (onClose) { onClose(); return; }
     if (typeof window !== 'undefined' && window.history.length > 1) router.back();
     else router.push('/');
   }, [onClose, router]);
 
-  // ESC to close
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
     window.addEventListener('keydown', onKey);
@@ -52,29 +45,28 @@ const LoginArea: React.FC<Props> = ({ onClose, onSwitchToRegister }) => {
         aria-labelledby="auth-title"
       >
         <div className={styles.modalGrid}>
-          {/* ✕ inside the card */}
           <button className={styles.modalClose} aria-label="Close" onClick={handleClose}>✕</button>
 
-          {/* Left hero */}
+          {/* Left hero – unchanged */}
           <div className={styles.leftPanel}>
-  <div className={styles.leftContent}>
-    <img src="/assets/img/login/login-shape-1.png" alt="AGE" className={styles.logo} />
-    <h2 className={styles.heading}>Everything you need to source fabric at scale</h2>
-    <ul className={styles.features}>
-      <li><FiSearch className={styles.icon} /> 20k+ SKUs from audited mills</li>
-      <li><TbBadge className={styles.icon} /> Free hangers & swatches on demand</li>
-      <li><FiEye className={styles.icon} /> Live stock, price & lead-time visibility</li>
-      <li><FiPackage className={styles.icon} /> Low MOQs • Faster repeat ordering</li>
-    </ul>
-  </div>
-</div>
+            <div className={styles.leftContent}>
+              <img src="/assets/img/login/login-shape-1.png" alt="AGE" className={styles.logo} />
+              <h2 className={styles.heading}>Everything you need to source fabric at scale</h2>
+              <ul className={styles.features}>
+                <li><FiSearch className={styles.icon} /> 20k+ SKUs from audited mills</li>
+                <li><TbBadge className={styles.icon} /> Free hangers & swatches on demand</li>
+                <li><FiEye className={styles.icon} /> Live stock, price & lead-time visibility</li>
+                <li><FiPackage className={styles.icon} /> Low MOQs • Faster repeat ordering</li>
+              </ul>
+            </div>
+          </div>
 
-
-          {/* Right form (scrolls on small screens) */}
+          {/* Right form – unchanged, but copy mentions OTP */}
           <div className={styles.rightPanel}>
             <div className={styles.header}>
               <h3 id="auth-title" className={styles.title}>Login</h3>
               <p className={styles.subtitle}>
+                {/* Old text kept same; signup flow untouched */}
                 Don’t have an account?{' '}
                 {onSwitchToRegister ? (
                   <button type="button" className={styles.linkBtn} onClick={onSwitchToRegister}>
@@ -84,10 +76,14 @@ const LoginArea: React.FC<Props> = ({ onClose, onSwitchToRegister }) => {
                   <Link href="/register" className={styles.linkBtn}>Signup</Link>
                 )}
               </p>
+
+              {/* ⛔ If you had any “or login with password” link in this header, keep it commented out.
+              <p className={styles.subtitleSmall}>or sign in with password</p>
+              */}
             </div>
 
             <div className={styles.formWrapper}>
-              {/* LoginForm already reads ?redirect=... from URL. */}
+              {/* OTP-only logic lives inside LoginForm now */}
               <LoginForm />
             </div>
           </div>
