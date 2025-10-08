@@ -279,7 +279,7 @@ const DetailsThumbWrapper = ({
   backgroundColor: '#fafafa',
   border: '1px solid #1b0cf4ff',
   overflow: 'hidden',
-  marginBottom: '30px'     // ← add this
+  marginBottom: '12px'     // ← add this
 }}>
               {mainSrc ? (
                 <img
