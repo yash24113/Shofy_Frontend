@@ -410,11 +410,13 @@ const DetailsThumbWrapper = ({
   }
 
   /* Main */
-  .pdw-main {
-    width: ${imgWidth}px; height: ${imgHeight}px;
-    border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.06);
-    overflow: hidden; background: #fff;
-  }
+.pdw-main {
+  width: ${imgWidth}px; height: ${imgHeight}px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.06);
+  overflow: hidden;
+  background: #fff;
+}
   .pdw-main-inner {
     width: 100%; height: 100%;
     display: grid; place-items: center; position: relative;
@@ -437,14 +439,28 @@ const DetailsThumbWrapper = ({
   }
 
   /* Right zoom pane */
-  .pdw-zoom {
-    width: ${zoomPaneWidth}px; height: ${zoomPaneHeight}px;
-    border-radius: 12px; background-repeat: no-repeat; background-position: center;
-    background-color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.06);
-    opacity: 0; visibility: hidden; transform: translateY(4px);
-    transition: opacity 160ms ease, visibility 160ms ease, transform 160ms ease;
-  }
-  .pdw-zoom.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
+ .pdw-zoom {
+  width: ${zoomPaneWidth}px; height: ${zoomPaneHeight}px;
+
+  /* make visuals identical to main box */
+  border-radius: 12px;
+  border: 1px solid #f0f0f0;
+  background-color: #fafafa;
+
+  /* clip background to the content box so it lines up with the rounded corners */
+  background-repeat: no-repeat;
+  background-origin: content-box;
+  background-clip: content-box;
+
+  /* match elevation and hide any spill */
+  box-shadow: 0 8px 24px rgba(0,0,0,.06);
+  overflow: hidden;
+
+  /* transition states */
+  opacity: 0; visibility: hidden; transform: translateY(4px);
+  transition: opacity 160ms ease, visibility 160ms ease, transform 160ms ease;
+}
+ .pdw-zoom.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
 
   /* Responsive – hide zoom pane on smaller screens */
   @media (max-width: 1200px) {
