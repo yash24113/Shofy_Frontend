@@ -3,25 +3,25 @@
 import React, { useState, useEffect } from 'react';
 
 import DetailsThumbWrapper from './details-thumb-wrapper';
-import DetailsWrapper      from './details-wrapper';
-import DetailsTabNav       from './details-tab-nav';
-import RelatedProducts     from './related-products';
+import DetailsWrapper from './details-wrapper';
+import DetailsTabNav from './details-tab-nav';
+import RelatedProducts from './related-products';
 
 import { useGetSeoByProductQuery } from '@/redux/features/seoApi';
 
 export default function ProductDetailsContent({ productItem }) {
-  const {
-    _id,
-    img,
-    image1,
-    image2,
-    imageURLs,          // optional extra images (merged after the 3 main)
-    videoId,            // fallback video url
-    video,              // optional
-    videoThumbnail,     // optional
-    status,
-    groupcodeId,
-  } = productItem ?? {};
+  // normalize possible backend field names to ensure `img` is always present
+  const p = productItem ?? {};
+  const _id = p._id;
+  const img = p.img || p.image || null;
+  const image1 = p.image1 || null;
+  const image2 = p.image2 || null;
+  const imageURLs = p.imageURLs || null;   // optional extra images (merged after the 3 main)
+  const videoId = p.videoId || p.video || null; // fallback video url
+  const video = p.video || null;           // optional
+  const videoThumbnail = p.videoThumbnail || null; // optional
+  const status = p.status;
+  const groupcodeId = p.groupcodeId;
 
   // active image for the details panel
   const [activeImg, setActiveImg] = useState(img || null);
@@ -38,7 +38,7 @@ export default function ProductDetailsContent({ productItem }) {
 
   const SeoStatus = () => {
     if (seoLoading) return <span className="text-muted small">Loading SEO…</span>;
-    if (seoError)   return null;
+    if (seoError) return null;
     return null;
   };
 
@@ -65,6 +65,7 @@ export default function ProductDetailsContent({ productItem }) {
                 handleImageActive={handleImageActive}
                 imgWidth={580}
                 imgHeight={670}
+                zoomPaneHeight={670}
                 videoId={videoId}
                 status={status}
               />
