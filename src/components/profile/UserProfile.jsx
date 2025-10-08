@@ -393,7 +393,7 @@ export default function UserProfile() {
           </div>
 
           <div className={styles.titleBlock}>
-            <h1 className={styles.h1}>{user?.name || 'Unnamed User'}</h1>
+            <h1 className={styles.h1}>{user?.name || 'Guest User'}</h1>
             <div className={styles.subRow}>
               {user?.email ? <span className={styles.email}>{user.email}</span> : null}
             </div>
@@ -407,7 +407,7 @@ export default function UserProfile() {
           <SideTab id="profile"  label="My Profile"       active={active} setActive={setActive} />
           <SideTab
             id="edit"
-            label="Edit Information"
+            label="Edit Profile"
             active={active}
             setActive={(id) => {
               // persist userId BEFORE entering Edit tab to avoid any guard flicker
@@ -415,7 +415,7 @@ export default function UserProfile() {
               setActive(id);
             }}
           />
-          <SideTab id="booking"  label="My Booking"       active={active} setActive={setActive} />
+          <SideTab id="booking"  label="My Orders"       active={active} setActive={setActive} />
           <button type="button" className={styles.sideTab} onClick={handleLogout}>Logout</button>
         </aside>
 

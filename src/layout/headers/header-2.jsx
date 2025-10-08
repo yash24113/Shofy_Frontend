@@ -194,7 +194,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                         window.location.href = '/profile';
                                       }}
                                     >
-                                      My Account
+                                      My Profile
                                     </button>
 
                                     <button
