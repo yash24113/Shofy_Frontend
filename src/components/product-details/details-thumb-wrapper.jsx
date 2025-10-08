@@ -269,17 +269,18 @@ const DetailsThumbWrapper = ({
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           ) : (
-            <div style={{
-              position: 'relative',
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#fafafa',
-              border: '1px solid #f0f0f0',
-              overflow: 'hidden'
-            }}>
+           <div style={{
+  position: 'relative',
+  width: '100%',
+  height: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#fafafa',
+  border: '1px solid #f0f0f0',
+  overflow: 'hidden',
+  marginBottom: '12px'     // ← add this
+}}>
               {mainSrc ? (
                 <img
                   src={mainSrc}
