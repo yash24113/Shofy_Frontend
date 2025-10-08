@@ -3,7 +3,7 @@ import React from "react";
 import { useDispatch } from "react-redux";
 import Image from "next/image";
 import Link from "next/link";
-import { CompareThree, QuickView, Wishlist } from "@/svg";
+import { CompareThree, QuickView, Wishlist, Cart } from "@/svg"; // ⬅️ added Cart
 import { handleProductModal } from "@/redux/features/productModalSlice";
 import { add_cart_product } from "@/redux/features/cartSlice";
 import { add_to_wishlist } from "@/redux/features/wishlist-slice";
@@ -26,11 +26,37 @@ const normId = (v) => {
   return null;
 };
 
+const getSessionId = () => {
+  if (typeof window === "undefined") return null;
+  try {
+    const sid = localStorage.getItem("sessionId");
+    return sid && String(sid).trim() ? sid : null;
+  } catch {
+    return null;
+  }
+};
+
+const openLoginModal = () => {
+  if (typeof window === "undefined") return;
+  try {
+    // Fire a global event your header/modal can listen to
+    window.dispatchEvent(new CustomEvent("auth:open", { detail: { mode: "login" } }));
+  } catch(err) { console.log("error",err); }
+};
+
 const ShopListItem = ({ product }) => {
   const { img, image, title, price, salesPrice, discount, description } = product || {};
   const dispatch = useDispatch();
 
-  const handleAddProduct = (prd) => dispatch(add_cart_product(prd));
+  const guardedAddToCart = (prd) => {
+    const sid = getSessionId();
+    if (sid) {
+      dispatch(add_cart_product(prd));
+    } else {
+      openLoginModal();
+    }
+  };
+
   const handleWishlistProduct = (prd) => dispatch(add_to_wishlist(prd));
   const handleCompareProduct = (prd) => dispatch(add_to_compare(prd));
 
@@ -60,9 +86,6 @@ const ShopListItem = ({ product }) => {
   const imageUrl     = getImageUrl(img || image);
   const isCloudinary = isCloudinaryUrl(imageUrl);
   const slug         = product?.slug || '';
-
-/*   const categoryLabel =
-    pick(product?.category?.name, product?.product?.category?.name, product?.categoryName) || null; */
 
   const titleText =
     pick(product?.name, product?.product?.name, product?.productname, title, product?.productTitle) || "—";
@@ -139,10 +162,10 @@ const ShopListItem = ({ product }) => {
     >
       <span
         style={{
-          minWidth: 86,            // fixed label width for perfect alignment
+          minWidth: 86,
           fontSize: 14,
           lineHeight: '20px',
-          color: '#6B7280',        // gray-500 style
+          color: '#6B7280',
           whiteSpace: 'nowrap',
         }}
       >
@@ -153,7 +176,7 @@ const ShopListItem = ({ product }) => {
           margin: 0,
           fontSize: 15,
           lineHeight: '20px',
-          color: '#0B1223',        // keep your dark heading color
+          color: '#0B1223',
           fontWeight: 500,
         }}
       >
@@ -184,7 +207,7 @@ const ShopListItem = ({ product }) => {
           )}
         </Link>
 
-        {/* actions (unchanged) */}
+        {/* actions */}
         <div className="tp-product-action-2 tp-product-action-blackStyle">
           <div className="tp-product-action-item-2 d-flex flex-column">
             <button
@@ -195,6 +218,8 @@ const ShopListItem = ({ product }) => {
               <QuickView />
               <span className="tp-product-tooltip tp-product-tooltip-right">Quick View</span>
             </button>
+
+            {/* ❤️ Wishlist (unchanged) */}
             <button
               type="button"
               onClick={() => handleWishlistProduct(product)}
@@ -203,6 +228,18 @@ const ShopListItem = ({ product }) => {
               <Wishlist />
               <span className="tp-product-tooltip tp-product-tooltip-right">Add To Wishlist</span>
             </button>
+
+            {/* 🛒 Cart icon with session check */}
+            <button
+              type="button"
+              onClick={() => guardedAddToCart(product)}
+              className="tp-product-action-btn-2 tp-product-add-to-cart-btn"
+            >
+              <Cart />
+              <span className="tp-product-tooltip tp-product-tooltip-right">Add To Cart</span>
+            </button>
+
+            {/* ⇄ Compare (unchanged) */}
             <button
               type="button"
               onClick={() => handleCompareProduct(product)}
@@ -217,9 +254,7 @@ const ShopListItem = ({ product }) => {
 
       <div className="tp-product-list-content">
         <div className="tp-product-content-2 pt-15">
-          <div className="tp-product-tag-2">
-{/*             {categoryLabel ? <a href="#">{categoryLabel}</a> : null}
- */}          </div>
+          <div className="tp-product-tag-2">{/* category pill removed intentionally */}</div>
 
           <h3 className="tp-product-title-2">
             <Link href={`/fabric/${slug}`}>{titleText}</Link>
@@ -242,7 +277,7 @@ const ShopListItem = ({ product }) => {
 
           <p>{description?.substring(0, 100)}</p>
 
-          {/* Details: typography only, card & button sizes untouched */}
+          {/* Details */}
           <div className="tp-product-details-query" style={{ marginBottom: 10 }}>
             <Row label="Structure:" value={structureName} />
             <Row label="Content:"   value={contentName} />
@@ -251,8 +286,12 @@ const ShopListItem = ({ product }) => {
             <Row label="Width:"     value={widthValue} />
           </div>
 
+          {/* Add To Cart button with same guarded logic */}
           <div className="tp-product-list-add-to-cart">
-            <button onClick={() => handleAddProduct(product)} className="tp-product-list-add-to-cart-btn">
+            <button
+              onClick={() => guardedAddToCart(product)}
+              className="tp-product-list-add-to-cart-btn"
+            >
               Add To Cart
             </button>
           </div>
