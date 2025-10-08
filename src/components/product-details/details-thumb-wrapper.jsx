@@ -28,7 +28,7 @@ const uniqueByUrl = (arr) => {
   });
 };
 
-/* Fallback image (no wrapper div needed) */
+/* Fallback image (still fills via object-fit: cover) */
 const NO_IMG = `data:image/svg+xml;utf8,
 <svg xmlns='http://www.w3.org/2000/svg' width='1200' height='900'>
   <rect width='100%' height='100%' fill='%23f5f5f5'/>
@@ -38,16 +38,14 @@ const NO_IMG = `data:image/svg+xml;utf8,
 
 /* ---------------- component ---------------- */
 const DetailsThumbWrapper = ({
-  /** Explicit product fields (preferred) */
   img, image1, image2,
   video, videoThumbnail,
 
-  /** Optional legacy sources (will be merged after the 3 preferred fields) */
   imageURLs,          // [{ type:'image'|'video', img, video? }]
   apiImages,          // { img?, image1?, image2?, video?, videoThumbnail? }
 
   handleImageActive,
-  activeImg,          // default large image (we prefer `img` if provided)
+  activeImg,          // default large image
   imgWidth = 416,
   imgHeight = 480,
   videoId = false,
@@ -62,42 +60,26 @@ const DetailsThumbWrapper = ({
   const [isVideoActive, setIsVideoActive] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
 
-  /* ---------- Build the thumbnail list including main img, image1 and image2 ---------- */
+  /* ---------- Build thumbs (img → image1 → image2 → video) ---------- */
   const primaryThumbs = useMemo(() => {
     const list = [];
-
-    // include main img first in the thumbs
-    if (img) {
-      list.push({ type: 'image', img: processImageUrl(img) });
-    }
-
-    // then image1 and image2
-    if (image1) {
-      list.push({ type: 'image', img: processImageUrl(image1) });
-    }
-
-    if (image2 && image2 !== image1) {
-      list.push({ type: 'image', img: processImageUrl(image2) });
-    }
-
-    // optional video from explicit fields
+    if (img) list.push({ type: 'image', img: processImageUrl(img) });
+    if (image1) list.push({ type: 'image', img: processImageUrl(image1) });
+    if (image2 && image2 !== image1) list.push({ type: 'image', img: processImageUrl(image2) });
     if (video || videoThumbnail) {
       const vUrl = video ? (isRemote(video) ? video : processImageUrl(video)) : null;
       const poster = processImageUrl(videoThumbnail) || list[0]?.img || null;
       if (vUrl || poster) list.push({ type: 'video', img: poster, video: vUrl });
     }
-
     return list;
   }, [img, image1, image2, video, videoThumbnail]);
 
-  /* ---------- Merge optional apiImages and imageURLs AFTER the 3 primaries ---------- */
   const extrasFromApiImages = useMemo(() => {
     const src = apiImages || {};
     const pics = [src.img, src.image1, src.image2]
       .map(processImageUrl)
       .filter(Boolean)
       .map((p) => ({ type: 'image', img: p }));
-
     if (src.video || src.videoThumbnail) {
       const vUrl = src.video ? (isRemote(src.video) ? src.video : processImageUrl(src.video)) : null;
       const poster = processImageUrl(src.videoThumbnail) || pics[0]?.img || null;
@@ -113,19 +95,18 @@ const DetailsThumbWrapper = ({
         if (!item) return null;
         const type = item.type === 'video' ? 'video' : 'image';
         const thumb = processImageUrl(item.img || item.thumbnail || item.poster);
-        const vUrl =
-          type === 'video'
-            ? (isRemote(item.video) ? item.video : processImageUrl(item.video))
-            : null;
+        const vUrl = type === 'video'
+          ? (isRemote(item.video) ? item.video : processImageUrl(item.video))
+          : null;
         return thumb ? { type, img: thumb, video: vUrl } : null;
       })
       .filter(Boolean);
   }, [imageURLs]);
 
-  const processedImageURLs = useMemo(() => {
-    // enforce order: img → image1 → image2 → (video) → apiImages → imageURLs
-    return uniqueByUrl([...primaryThumbs, ...extrasFromApiImages, ...extrasFromImageURLs]);
-  }, [primaryThumbs, extrasFromApiImages, extrasFromImageURLs]);
+  const processedImageURLs = useMemo(
+    () => uniqueByUrl([...primaryThumbs, ...extrasFromApiImages, ...extrasFromImageURLs]),
+    [primaryThumbs, extrasFromApiImages, extrasFromImageURLs]
+  );
 
   /* ---------- Main image handling ---------- */
   const mainImageUrl = useMemo(() => {
@@ -179,15 +160,9 @@ const DetailsThumbWrapper = ({
   };
 
   const handleMouseEnter = () => {
-    if (!isVideoActive) {
-      setShowZoom(true);
-      setShowLens(true);
-    }
+    if (!isVideoActive) { setShowZoom(true); setShowLens(true); }
   };
-  const handleMouseLeave = () => {
-    setShowZoom(false);
-    setShowLens(false);
-  };
+  const handleMouseLeave = () => { setShowZoom(false); setShowLens(false); };
   const handleMouseMove = (e) => {
     if (!imgWrapRef.current || isVideoActive) return;
     const rect = imgWrapRef.current.getBoundingClientRect();
@@ -277,7 +252,7 @@ const DetailsThumbWrapper = ({
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           ) : (
-            /* ✅ No wrapper <div> — the IMG itself carries the frame/background/spacing */
+            /* ✅ No extra wrapper — the IMG fills the box */
             <img
               src={mainSrc || NO_IMG}
               alt="product img"
@@ -285,13 +260,11 @@ const DetailsThumbWrapper = ({
                 display: 'block',
                 width: '100%',
                 height: '100%',
-                objectFit: 'contain',          // same centering & scaling
-                backgroundColor: '#fafafa',
-                border: '1px solid #1b0cf4ff', // same border as requested
-                borderRadius: '12px',
-                padding: '8px',
-                boxSizing: 'border-box',
-                marginBottom: '12px'
+                objectFit: 'cover',           // ← FULL COVER
+                objectPosition: 'center',
+                /* edge-to-edge inside the frame (no gaps) */
+                padding: 0,
+                margin: 0,
               }}
               onLoad={(e) => handleImageLoaded(e.currentTarget)}
               onError={(e) => {
@@ -382,19 +355,21 @@ const DetailsThumbWrapper = ({
     pointer-events: none;
   }
 
-  /* Main */
+  /* Main viewer frame (keeps the visual border & rounding) */
   .pdw-main {
     width: ${imgWidth}px; height: ${imgHeight}px;
     border-radius: 12px;
     box-shadow: 0 8px 24px rgba(0,0,0,.06);
     overflow: hidden;
     background: #fff;
+    border: 1px solid #1b0cf4ff;   /* frame is on the box, not the img */
+    background-color: #fafafa;
   }
   .pdw-main-inner {
     width: 100%; height: 100%;
     display: grid; place-items: center; position: relative;
   }
-  .pdw-video { background: #000; }
+  .pdw-video { background: #000; width: 100%; height: 100%; }
 
   /* Lens overlay */
   .pdw-lens {
