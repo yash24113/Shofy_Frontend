@@ -277,7 +277,7 @@ const DetailsThumbWrapper = ({
   alignItems: 'center',
   justifyContent: 'center',
   backgroundColor: '#fafafa',
-  border: '1px solid #f0f0f0',
+  border: '1px solid #1b0cf4ff',
   overflow: 'hidden',
   marginBottom: '30px'     // ← add this
 }}>
