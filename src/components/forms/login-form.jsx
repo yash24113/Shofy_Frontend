@@ -14,12 +14,6 @@ const isEmail = (v) => /^\S+@\S+\.\S+$/.test(String(v || '').trim());
 const isPhone = (v) => /^[0-9]{8,15}$/.test(String(v || '').trim());
 const emailOrPhoneMsg = 'Enter a valid email or mobile number';
 
-/* old password schema kept commented (not deleted) */
-// const passwordSchema = Yup.object().shape({
-//   email: Yup.string().required('Email is required').email('Enter a valid email'),
-//   password: Yup.string().required('Password is required').min(6, 'At least 6 characters'),
-// });
-
 /* single input validation: accepts email or phone */
 const otpRequestSchema = Yup.object().shape({
   identifier: Yup.string()
@@ -56,7 +50,6 @@ export default function LoginForm() {
       const identifier = data.identifier?.trim();
       setSavedIdentifier(identifier);
 
-      // ✅ FRONTEND FIX — dynamically send correct key to backend
       const payload = isEmail(identifier)
         ? { email: identifier }
         : { phone: identifier };
@@ -72,11 +65,11 @@ export default function LoginForm() {
       });
 
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message || 'OTP send failed');
+      if (!res.ok || !json?.success) throw new Error(json?.message || 'OTP send failed');
 
-      notifySuccess(json.message || 'OTP sent successfully');
+      notifySuccess(json?.message || 'OTP sent successfully');
       resetOtpReq();
-      setShowVerify(true); // show OTP verify step
+      setShowVerify(true);
     } catch (err) {
       notifyError(err?.message || 'OTP request failed');
     } finally {
@@ -91,7 +84,6 @@ export default function LoginForm() {
     setError('');
 
     try {
-      // ✅ FRONTEND FIX — dynamically send correct key for verification
       const payload = isEmail(savedIdentifier)
         ? { email: savedIdentifier, otp }
         : { phone: savedIdentifier, otp };
@@ -107,16 +99,39 @@ export default function LoginForm() {
       });
 
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message || 'Invalid OTP');
+      if (!res.ok || !json?.success) throw new Error(json?.message || 'Invalid OTP');
 
-      Cookies.set('userInfo', JSON.stringify({ user: json.user }), { expires: 0.5 });
-      if (typeof window !== 'undefined' && json.sessionId) {
-        localStorage.setItem('sessionId', json.sessionId);
+      // ====== 🔐 Persist Session both ways ======
+      // 1) localStorage (client-side checks & UX)
+      if (typeof window !== 'undefined') {
+        if (json.sessionId) localStorage.setItem('sessionId', json.sessionId);
+        if (json?.user?._id) localStorage.setItem('userId', json.user._id);
       }
 
-      notifySuccess(json.message || 'Logged in successfully');
+      // 2) Cookies (middleware / server-side redirects)
+      //    Keep path `/` so all routes see it. Enable `secure` on HTTPS.
+      if (json.sessionId) {
+        Cookies.set('sessionId', json.sessionId, {
+          expires: 7,
+          sameSite: 'lax',
+          path: '/',
+          // secure: true,
+        });
+      }
+      // Optional: store basic user cookie (non-HTTPOnly). Keep your existing behavior:
+      Cookies.set('userInfo', JSON.stringify({ user: json.user }), {
+        expires: 0.5, // 12 hours
+        sameSite: 'lax',
+        path: '/',
+        // secure: true,
+      });
+
+      notifySuccess(json?.message || 'Logged in successfully');
       setOtp('');
-      router.push(redirect || '/');
+
+      // honor ?redirect= from middleware
+      const dest = redirect || '/';
+      router.push(dest);
     } catch (err) {
       setError(err?.message || 'Login failed. Please try again.');
     } finally {
@@ -178,7 +193,6 @@ export default function LoginForm() {
             </button>
           </div>
 
-          {/* Optional: go back to change identifier */}
           <div className="tp-divider">
             <button
               type="button"
@@ -191,7 +205,6 @@ export default function LoginForm() {
         </form>
       )}
 
-      {/* ==== Styling (unchanged) ==== */}
       <style jsx>{`
         .tp-input-box { display:flex; flex-direction:column; gap:6px; }
         .tp-label { font-weight:600; color:#0f172a; }

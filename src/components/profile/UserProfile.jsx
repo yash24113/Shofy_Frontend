@@ -68,7 +68,40 @@ const editSchema = Yup.object().shape({
   pincode: Yup.string().nullable(),
 });
 
+/* ---------------- session helpers (client) ---------------- */
+const getClientSessionId = () => {
+  // Prefer cookie (authoritative), but also check localStorage as you requested
+  const fromCookie = Cookies.get('sessionId');
+  if (fromCookie) return fromCookie;
+  try {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sessionId') || '';
+    }
+  } catch(err) { console.log('localStorage read error', err); }
+  return '';
+};
+
+const redirectToLogin = () => {
+  try {
+    const redirect = typeof window !== 'undefined'
+      ? window.location.pathname + window.location.search
+      : '/profile';
+    window.location.href = `/login?redirect=${encodeURIComponent(redirect)}`;
+  } catch {
+    window.location.href = '/login';
+  }
+};
+
 export default function UserProfile() {
+  /* ---------- Client-side guard: if no session (cookie or localStorage), redirect ---------- */
+  useEffect(() => {
+    const sid = getClientSessionId();
+    if (!sid) {
+      redirectToLogin();
+    }
+  }, []);
+  /* --------------------------------------------------------------------------------------- */
+
   const authUser = useSelector((s) => s?.auth?.user);
   const cookieUser = useMemo(() => pickInitialUser(authUser), [authUser]);
   const derivedUserId = (authUser?._id || cookieUser?._id);
@@ -251,7 +284,7 @@ export default function UserProfile() {
       ? `${normalizeDial(dialSelected)}${onlyDigits(phoneLocal)}`
       : (user?.phone || '');
     setValue('phone', composed, { shouldValidate: false, shouldDirty: true });
-  }, [dialSelected, phoneLocal, setValue]);
+  }, [dialSelected, phoneLocal, setValue, user?.phone]);
 
   const onPickAvatar = (file) => {
     if (!file) return;
@@ -336,7 +369,7 @@ export default function UserProfile() {
     });
     setAvatarPreview(updatedUser?.avatarUrl || updatedUser?.avatar || null);
 
-    try { writeUserInfoCookiePreserving(updatedUser); }catch(err) {console.log('Refetch session failed', err);}
+    try { writeUserInfoCookiePreserving(updatedUser); }catch(err) {console.log('Cookie write failed', err);}
 
     try {
       const p = refetchSession?.();
@@ -351,6 +384,8 @@ export default function UserProfile() {
     try {
       await logoutUser({ userId }).unwrap();
       Cookies.remove('userInfo');
+      // Optional: also clear local session mirror
+      try { localStorage.removeItem('sessionId'); } catch(err) {console.log('localStorage clear error', err);}
       window.location.href = '/login';
     } catch (err) {
       notifyError(err?.data?.message || 'Logout failed');
