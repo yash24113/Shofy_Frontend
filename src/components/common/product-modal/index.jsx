@@ -139,10 +139,10 @@ export default function ProductModal() {
             /* wider viewer inside modal; disable external zoom pane */
             imgWidth={420}
             imgHeight={420}
-           // zoomPaneWidth={0}
+            zoomPaneWidth={0}
             /* keep thumbs scrollable by giving them height */
-           // zoomPaneHeight={420}
-          //  status={normalized?.status}
+            zoomPaneHeight={420}
+            status={normalized?.status}
             /* keep videoId fallback for safety */
             videoId={productItem?.video}
           />
