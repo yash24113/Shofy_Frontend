@@ -18,6 +18,10 @@ import { FaHeart, FaUser } from 'react-icons/fa';
 import { FiMenu } from 'react-icons/fi';
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 
+/* ------------ config for search dropdown ------------ */
+const PAGE_SIZE = 20;       // how many results to fetch per “page”
+const MAX_LIMIT = 200;      // hard cap to avoid runaway fetches
+
 /* ------------------ small helpers ------------------ */
 const baseApi = () => {
   const b = process.env.NEXT_PUBLIC_API_BASE_URL || '';
@@ -25,7 +29,7 @@ const baseApi = () => {
 };
 const nonEmpty = (v) => v !== undefined && v !== null && String(v).trim() !== '';
 
-/* Shape normalizer so any backend shape works */
+/* Normalize any backend shape to our display shape */
 function normalizeProduct(p) {
   const id = p._id || p.id || p.slug || String(Math.random());
   const slug = p.slug || p.seoSlug || p.handle || '';
@@ -37,8 +41,8 @@ function normalizeProduct(p) {
   return { id, slug, name, img, price };
 }
 
-/* Try a few endpoints, first that returns ok+json wins */
-async function searchProducts(q, limit = 10, signal) {
+/* Try multiple endpoints; first OK+JSON wins */
+async function searchProducts(q, limit = PAGE_SIZE, signal) {
   const b = baseApi();
   const queries = [
     `${b}/product/search?q=${encodeURIComponent(q)}&limit=${limit}`,
@@ -57,7 +61,9 @@ async function searchProducts(q, limit = 10, signal) {
           : Array.isArray(data?.items) ? data.items
           : [];
       return arr.map(normalizeProduct);
-    } catch(err) {console.log("error:",err)}
+    } catch (err) {
+      // ignore and try next endpoint
+    }
   }
   return [];
 }
@@ -70,36 +76,68 @@ const HeaderTwo = ({ style_2 = false }) => {
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
   // (compat)
-  const { quantity } = useCartInfo(); // unused, kept for compatibility with other parts
+  useCartInfo(); // quantity not used visibly but keep hook side-effects
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
 
   useEffect(() => { dispatch(get_cart_products()); }, [dispatch]);
 
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
 
-  // ===== GLOBAL SEARCH (shared company-wide) =====
+  // ===== GLOBAL SEARCH (shared) =====
   const { query, setQuery, debounced } = useGlobalSearch(250);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);          // loading current batch
+  const [loadingMore, setLoadingMore] = useState(false);  // tail spinner for infinite scroll
   const [results, setResults] = useState([]);
   const [selIndex, setSelIndex] = useState(-1);
+  const [limit, setLimit] = useState(PAGE_SIZE);          // grows as you scroll
   const searchWrapRef = useRef(null);
+  const dropRef = useRef(null);
 
-  // Fetch as you type (2+ chars) for header suggestions panel
+  // Reset when query changes
+  useEffect(() => {
+    setLimit(PAGE_SIZE);
+  }, [debounced]);
+
+  // Fetch as you type (2+ chars) for suggestions
   useEffect(() => {
     const controller = new AbortController();
     const q = (debounced || '').trim();
     if (q.length < 2) {
-      setResults([]); setSelIndex(-1); setLoading(false);
+      setResults([]); setSelIndex(-1); setLoading(false); setLoadingMore(false);
       return;
     }
     setLoading(true);
     setSearchOpen(true);
-    searchProducts(q, 10, controller.signal)
-      .then((arr) => { setResults(arr); setSelIndex(arr.length ? 0 : -1); })
+    searchProducts(q, Math.min(limit, MAX_LIMIT), controller.signal)
+      .then((arr) => {
+        setResults(arr);
+        setSelIndex(arr.length ? 0 : -1);
+      })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [debounced]);
+  }, [debounced, limit]);
+
+  // Infinite scroll inside dropdown: grow limit → refetch bigger set
+  useEffect(() => {
+    const el = dropRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      if (loading || loadingMore) return;
+      // near bottom?
+      const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
+      if (nearBottom && limit < MAX_LIMIT) {
+        setLoadingMore(true);
+        // grow limit; fetch handled by the effect above
+        setLimit((l) => Math.min(l + PAGE_SIZE, MAX_LIMIT));
+        // small delay just for UX (spinner visible if network is fast)
+        setTimeout(() => setLoadingMore(false), 120);
+      }
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [limit, loading, loadingMore]);
 
   // Close popover on outside click / ESC
   useEffect(() => {
@@ -120,17 +158,17 @@ const HeaderTwo = ({ style_2 = false }) => {
   }, []);
 
   const onSearchSubmit = (e) => {
-    e.preventDefault(); // stay on the same page
+    e.preventDefault();
     if (selIndex >= 0 && results[selIndex]) {
       const p = results[selIndex];
       const href = p.slug ? `/product-details/${p.slug}` : `/product-details?id=${encodeURIComponent(p.id)}`;
-      window.location.href = href; // only on Enter with an active item
+      window.location.href = href;
     } else {
       setSearchOpen(true);
     }
   };
 
-  // Keyboard nav inside suggestions
+  // Keyboard nav
   const onSearchKeyDown = (e) => {
     if (!searchOpen) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setSelIndex((i) => Math.min((results.length || 0) - 1, (i < 0 ? 0 : i + 1))); }
@@ -143,7 +181,6 @@ const HeaderTwo = ({ style_2 = false }) => {
   const userBtnRef = useRef(null);
   const userMenuRef = useRef(null);
 
-  // Build current URL for redirect query
   const currentUrl = useMemo(() => {
     if (typeof window === 'undefined') return '/';
     const url = new URL(window.location.href);
@@ -159,24 +196,17 @@ const HeaderTwo = ({ style_2 = false }) => {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // Close dropdown on outside click / touch / ESC / scroll / resize / tab hide
   useEffect(() => {
     const close = () => setUserOpen(false);
-
     const onPointer = (e) => {
-      const btn = userBtnRef.current;
-      const menu = userMenuRef.current;
-      const target = e.target;
-      if (btn && btn.contains(target)) return;
-      if (menu && menu.contains(target)) return;
+      const btn = userBtnRef.current, menu = userMenuRef.current, t = e.target;
+      if (btn?.contains(t) || menu?.contains(t)) return;
       close();
     };
-
     const onEsc = (e) => { if (e.key === 'Escape') close(); };
     const onScroll = () => close();
     const onResize = () => close();
     const onVisibility = () => { if (document.visibilityState === 'hidden') close(); };
-
     if (userOpen) {
       document.addEventListener('mousedown', onPointer, true);
       document.addEventListener('touchstart', onPointer, true);
@@ -218,10 +248,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     <>
       <header>
         <div className={`tp-header-area tp-header-style-${style_2 ? 'primary' : 'darkRed'} tp-header-height`}>
-          <div
-            id="header-sticky"
-            className={`tp-header-bottom-2 tp-header-sticky ${sticky ? 'header-sticky' : ''}`}
-          >
+          <div id="header-sticky" className={`tp-header-bottom-2 tp-header-sticky ${sticky ? 'header-sticky' : ''}`}>
             <div className="container">
               <div className="tp-mega-menu-wrapper p-relative">
                 <div className="row align-items-center">
@@ -252,7 +279,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                   <div className="col-6 col-sm-8 col-md-8 col-lg-9 col-xl-5">
                     <div className="tp-header-bottom-right d-flex align-items-center justify-content-end">
 
-                      {/* ======= SEARCH (inline + global publisher) ======= */}
+                      {/* ======= SEARCH (inline + global) ======= */}
                       <div className="tp-header-search-2 d-none d-sm-block me-3 search-spacer" ref={searchWrapRef}>
                         <form onSubmit={onSearchSubmit}>
                           <input
@@ -269,32 +296,48 @@ const HeaderTwo = ({ style_2 = false }) => {
 
                         {/* Results popover */}
                         {searchOpen && (
-                          <div className="search-drop">
+                          <div className="search-drop" ref={dropRef}>
                             {loading ? (
                               <div className="search-empty">Searching…</div>
                             ) : results.length ? (
-                              <ul className="search-list" role="listbox">
-                                {results.map((p, idx) => {
-                                  const href = p.slug ? `/product-details/${p.slug}` : `/product-details?id=${encodeURIComponent(p.id)}`;
-                                  return (
-                                    <li
-                                      key={p.id || p.slug || idx}
-                                      className={`search-item ${idx === selIndex ? 'is-active' : ''}`}
-                                      role="option"
-                                      aria-selected={idx === selIndex}
-                                      onMouseEnter={() => setSelIndex(idx)}
-                                    >
-                                      <Link href={href} className="search-link" onClick={() => setSearchOpen(false)}>
-                                        <img src={p.img} alt={p.name} width={44} height={44} loading="lazy" />
-                                        <span className="search-meta">
-                                          <span className="search-name">{p.name}</span>
-                                          {p.price ? <span className="search-price">₹{p.price}</span> : null}
-                                        </span>
-                                      </Link>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
+                              <>
+                                <ul className="search-list" role="listbox">
+                                  {results.map((p, idx) => {
+                                    const href = p.slug ? `/product-details/${p.slug}` : `/product-details?id=${encodeURIComponent(p.id)}`;
+                                    return (
+                                      <li
+                                        key={p.id || p.slug || idx}
+                                        className={`search-item ${idx === selIndex ? 'is-active' : ''}`}
+                                        role="option"
+                                        aria-selected={idx === selIndex}
+                                        onMouseEnter={() => setSelIndex(idx)}
+                                      >
+                                        <Link href={href} className="search-link" onClick={() => setSearchOpen(false)}>
+                                          <img
+                                            src={p.img}
+                                            alt={p.name}
+                                            width={44}
+                                            height={44}
+                                            loading="lazy"
+                                            onError={(e) => { e.currentTarget.src = '/assets/img/product/default-product-img.jpg'; }}
+                                          />
+                                          <span className="search-meta">
+                                            <span className="search-name" title={p.name}>{p.name}</span>
+                                            {p.price ? <span className="search-price">₹{p.price}</span> : null}
+                                          </span>
+                                        </Link>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+
+                                {/* tail loader for infinite scroll */}
+                                {loadingMore && <div className="search-more">Loading more…</div>}
+                                {/* soft cap notice */}
+                                {limit >= MAX_LIMIT && (
+                                  <div className="search-cap">Showing first {MAX_LIMIT} results</div>
+                                )}
+                              </>
                             ) : (
                               <div className="search-empty">
                                 No results. {nonEmpty(query) ? 'Refine your keywords.' : 'Type at least 2 letters.'}
@@ -417,7 +460,19 @@ const HeaderTwo = ({ style_2 = false }) => {
         .tp-header-search-2 input { padding-right: 44px; }
         .tp-header-search-2 button { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: 0; display: inline-flex; align-items: center; }
 
-        .search-drop{ position:absolute; z-index:1100; width:min(560px,70vw); max-height:60vh; overflow:auto; margin-top:10px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 18px 40px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.06); padding:6px; }
+        .search-drop{
+          position:absolute;
+          z-index:1100;
+          width:min(560px,70vw);
+          max-height:60vh;
+          overflow:auto;
+          margin-top:10px;
+          background:#fff;
+          border:1px solid #e5e7eb;
+          border-radius:12px;
+          box-shadow:0 18px 40px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.06);
+          padding:6px;
+        }
         .search-empty{ padding:14px 16px; font-size:14px; color:#374151; }
         .search-hint{ font-size:12px; color:#6b7280; margin-top:4px; }
         .search-list{ list-style:none; padding:0; margin:0; }
@@ -430,7 +485,14 @@ const HeaderTwo = ({ style_2 = false }) => {
         .search-name{ font-weight:600; font-size:14px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:360px; }
         .search-price{ font-size:12px; color:#6b7280; margin-top:2px; }
 
-        /* ===== Dropdown ===== */
+        .search-more, .search-cap{
+          padding:10px 12px;
+          font-size:12px;
+          color:#6b7280;
+          text-align:center;
+        }
+
+        /* ===== Dropdown (account) ===== */
         .user-menu-dropdown{
           position:absolute;
           right:0;
@@ -468,7 +530,7 @@ const HeaderTwo = ({ style_2 = false }) => {
         @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
         @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
 
-        /* ===== Auth CTA (logged-out) — “Login / SignUp” chip ===== */
+        /* ===== Auth CTA (logged-out) ===== */
         .tp-auth-cta{
           display:inline-flex;
           align-items:center;
