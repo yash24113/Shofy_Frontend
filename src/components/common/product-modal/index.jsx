@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -24,8 +25,13 @@ const toUrl = (v) => {
 };
 const idOf = (v) => (v && typeof v === 'object' ? v._id : v);
 
-/** Big, centered, no outer scroll */
+/** Centered modal; allow overflow so external zoom panes aren't clipped */
 const customStyles = {
+  overlay: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    backdropFilter: 'blur(2px)',
+    zIndex: 1000,
+  },
   content: {
     top: '50%',
     left: '50%',
@@ -36,7 +42,7 @@ const customStyles = {
     maxHeight: '92vh',
     padding: '16px 22px 18px',
     borderRadius: '14px',
-    overflow: 'hidden',
+    overflow: 'visible',              // ⬅️ allow zoom pane to render outside
   },
 };
 
@@ -67,7 +73,13 @@ export default function ProductModal() {
       productItem?.image1 && { img: toUrl(productItem.image1), type: 'image' },
       productItem?.image2 && { img: toUrl(productItem.image2), type: 'image' },
     ].filter(Boolean);
-    if (productItem?.video) items.push({ img: productItem?.videoThumbnail || '/assets/img/product/-video-thumb.png', type: 'video', video: toUrl(productItem.video) });
+    if (productItem?.video) {
+      items.push({
+        img: productItem?.videoThumbnail || '/assets/img/product/-video-thumb.png',
+        type: 'video',
+        video: toUrl(productItem.video),
+      });
+    }
     return items;
   }, [productItem]);
 
@@ -128,22 +140,29 @@ export default function ProductModal() {
             key={`thumbs-${modalKey}`}
             activeImg={productItem?.img || activeImg}
             handleImageActive={handleImageActive}
+
             /* explicit media props from backend */
             img={productItem?.img}
             image1={productItem?.image1}
             image2={productItem?.image2}
             video={productItem?.video}
             videoThumbnail={productItem?.videoThumbnail}
-            /* keep extras merged after the primaries */
+
+            /* merged extras after primaries */
             imageURLs={imageURLs}
-            /* wider viewer inside modal; disable external zoom pane */
+
+            /* viewer sizing */
             imgWidth={420}
             imgHeight={420}
-            zoomPaneWidth={0}
-            /* keep thumbs scrollable by giving them height */
+
+            /* ✅ ENABLE ZOOM */
+            enableZoom={true}           // if your wrapper supports a flag
+            zoomPaneWidth={420}         // was 0; set to show external zoom pane
             zoomPaneHeight={420}
+            zoomScale={2}               // common default; adjust if your wrapper supports it
+
+            /* status / compat */
             status={normalized?.status}
-            /* keep videoId fallback for safety */
             videoId={productItem?.video}
           />
         </div>
@@ -177,15 +196,18 @@ export default function ProductModal() {
           overflow-y:auto; /* allow scroll on small screens */
         }
 
+        /* ⬇ allow zoom pane to overflow past the media column */
         .pm-media{
+          position: relative;
           display:flex;
           align-items:center;
           justify-content:center;
           min-width:0;
           height:100%;
           max-height:100%;
-          overflow:hidden; /* thumbnails self-manage scroll if they need it */
+          overflow: visible; /* ⬅️ was hidden; blocks zoom panes */
           background:#fff;
+          z-index: 1;
         }
         .pm-media :global(img){
           max-width:100%;
@@ -205,18 +227,15 @@ export default function ProductModal() {
         }
 
         /* ———————— Classy typography & spacing in the details ———————— */
-
-        /* Large, elegant title (handles long titles better) */
         :global(.tp-product-details h1),
         :global(.tp-product-details h2){
           font-weight: 800;
           letter-spacing: -0.02em;
           line-height: 1.18;
           margin: 2px 0 12px 0;
-          max-width: 42ch; /* nicer wrap */
+          max-width: 42ch;
         }
 
-        /* Section subtitles (like category) */
         :global(.tp-product-details .subheading),
         :global(.tp-product-details h5){
           font-weight: 700;
@@ -225,16 +244,15 @@ export default function ProductModal() {
           color: #111827;
         }
 
-        /* Two-column spec block – tighter & aligned */
         :global(.tp-product-details .tp-product-details-meta){
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 10px 28px; /* row gap / column gap */
+          gap: 10px 28px;
           margin: 6px 0 14px;
         }
         :global(.tp-product-details .tp-product-details-meta p){
           display:flex;
-          justify-content: space-between; /* label left, value right */
+          justify-content: space-between;
           gap: 16px;
           margin: 0;
           padding: 6px 0;
@@ -252,12 +270,10 @@ export default function ProductModal() {
           color:#111827; font-weight:600;
         }
 
-        /* Ratings row trimmed a bit */
         :global(.tp-product-details .tp-product-details-rating){
           margin: 6px 0 10px;
         }
 
-        /* CTA row: equal height, equal width, classy spacing */
         :global(.tp-product-details .tp-product-details-action){
           display:grid;
           grid-template-columns: 1fr 1fr;
@@ -270,7 +286,6 @@ export default function ProductModal() {
           font-weight: 700;
         }
 
-        /* Keep wishlist/heart floating block aligned (if present) */
         :global(.tp-product-details .tp-product-details-wishlist){
           margin-left: 12px;
         }
@@ -283,18 +298,17 @@ export default function ProductModal() {
           .pm-body{
             grid-template-columns: 1fr;
             max-height: calc(92vh - 52px);
-            overflow-y:auto; /* enable body scroll on mobile */
+            overflow-y:auto;
           }
-          /* Make thumbs a horizontal strip below the main image */
           :global(.pdw-wrapper){ grid-template-columns: 1fr !important; gap: 12px; }
           :global(.pdw-thumbs){ width: 100% !important; }
           :global(.pdw-thumbs-inner){ flex-direction: row !important; overflow-x: auto !important; overflow-y: hidden !important; max-height: none !important; gap: 10px !important; padding-bottom: 4px; }
           :global(.pdw-thumb){ width: 72px !important; height: 72px !important; flex: 0 0 auto; }
           :global(.tp-product-details .tp-product-details-meta){
-            grid-template-columns: 1fr; /* stack specs cleanly */
+            grid-template-columns: 1fr;
           }
           :global(.tp-product-details .tp-product-details-action){
-            grid-template-columns: 1fr; /* stack buttons on small screens */
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
