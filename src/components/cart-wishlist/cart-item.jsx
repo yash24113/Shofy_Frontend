@@ -1,5 +1,5 @@
 'use client';
-import React from "react";
+import React, { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useDispatch } from "react-redux";
@@ -12,8 +12,15 @@ import {
 } from "@/redux/features/cartSlice";
 import { add_to_wishlist } from "@/redux/features/wishlist-slice";
 
+/* 🔎 add search */
+import useGlobalSearch from "@/hooks/useGlobalSearch";
+import { buildSearchPredicate } from "@/utils/searchMiddleware";
+
 const CartItem = ({ product }) => {
   const dispatch = useDispatch();
+
+  /* 🔎 global query */
+  const { debounced: q } = useGlobalSearch();
 
   // normalize fields
   const {
@@ -62,6 +69,22 @@ const CartItem = ({ product }) => {
     dispatch(remove_product({ _id: PID, id: PID, title }));
   };
 
+  /* 🔎 decide row visibility */
+  const rowVisible = useMemo(() => {
+    const query = (q || '').trim();
+    if (query.length < 2) return true;
+    const fields = [
+      () => title || '',
+      () => slug || '',
+      () => String(product?.design || ''),
+      () => String(product?.color || ''),
+    ];
+    const pred = buildSearchPredicate(query, fields, { mode: 'AND', normalize: true });
+    return pred(product);
+  }, [q, title, slug, product]);
+
+  if (!rowVisible) return null;
+
   return (
     <>
       <tr className="cart-row">
@@ -92,18 +115,15 @@ const CartItem = ({ product }) => {
           <span className="price">${lineTotal.toFixed(2)}</span>
         </td>
 
-        {/* quantity (shows numeric value clearly) */}
+        {/* quantity */}
         <td className="col-qty">
           <div className="qty">
             <button type="button" className="qty-btn" onClick={dec} aria-label={`Decrease ${title}`}>
               <Minus />
             </button>
-
-            {/* 👇 visible quantity */}
             <span className="qty-value" aria-live="polite" aria-label={`Quantity of ${title}`}>
               {orderQuantity}
             </span>
-
             <button type="button" className="qty-btn" onClick={inc} aria-label={`Increase ${title}`}>
               <Plus />
             </button>
@@ -120,7 +140,6 @@ const CartItem = ({ product }) => {
       </tr>
 
       <style jsx>{`
-        /* row + cells */
         .cart-row :global(td){ vertical-align: middle; padding:16px 12px; }
         .cart-row { border-bottom:1px solid #e5e7eb; }
 
@@ -130,106 +149,27 @@ const CartItem = ({ product }) => {
         .col-qty   { width:200px; }
         .col-action{ width:200px; text-align:right; }
 
-        /* image box */
         .thumb-wrap{ display:inline-block; }
         .thumb{ width:96px; height:96px; border-radius:12px; overflow:hidden; background:#f3f4f6; display:block; }
         .thumb-img{ width:100%; height:100%; object-fit:cover; display:block; }
 
-        /* title */
         .title-link{ text-decoration:none; color:#0b1220; }
-        .title-text{
-          display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
-          overflow:hidden; word-break:break-word;
-          font-weight:700; font-size:18px; line-height:1.35; color:#0b1220;
-        }
+        .title-text{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; word-break:break-word; font-weight:700; font-size:18px; line-height:1.35; color:#0b1220; }
 
-        /* price */
         .price{ font-weight:700; font-size:16px; color:#0b1220; }
 
-        /* qty pill */
-        .qty{
-          display:inline-flex; align-items:center; gap:14px;
-          border:1px solid #e5e7eb; border-radius:999px; background:#fff; padding:8px 14px;
-        }
-        .qty-btn{
-          display:inline-flex; align-items:center; justify-content:center;
-          width:32px; height:32px; border-radius:999px; border:0;
-          background:#f3f4f6; cursor:pointer;
-          transition:background .15s ease, transform .04s ease;
-        }
+        .qty{ display:inline-flex; align-items:center; gap:14px; border:1px solid #e5e7eb; border-radius:999px; background:#fff; padding:8px 14px; }
+        .qty-btn{ display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:999px; border:0; background:#f3f4f6; cursor:pointer; transition:background .15s ease, transform .04s ease; }
         .qty-btn:hover{ background:#e5e7eb; }
         .qty-btn:active{ transform:scale(.98); }
+        .qty-value{ min-width:28px; text-align:center; font-weight:700; font-size:16px; color:#0b1220; line-height:1; letter-spacing:.2px; }
 
-        /* 👇 the visible number */
-        .qty-value{
-          min-width:28px; text-align:center;
-          font-weight:700; font-size:16px; color:#0b1220;
-          line-height:1; letter-spacing:.2px;
-        }
+        .btn-ghost-invert.square { --navy: #0b1620; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 22px; min-height: 44px; background: var(--navy); color: #fff; font-weight: 600; font-size: 15px; line-height: 1; border: 1px solid var(--navy); border-radius: 0; cursor: pointer; user-select: none; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); transition: background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 120ms ease; }
+        .btn-ghost-invert.square:hover { background: #fff; color: var(--navy); border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,.12); transform: translateY(-1px); }
+        .btn-ghost-invert.square:active { transform: translateY(0); background: #f8fafc; color: var(--navy); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15); }
+        .btn-ghost-invert.square:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(11, 22, 32, 0.35); }
 
-        /* remove button */
-  .btn-ghost-invert.square {
-    --navy: #0b1620;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 22px;
-    min-height: 44px;
-    background: var(--navy);
-    color: #fff;
-    font-weight: 600;
-    font-size: 15px;
-    line-height: 1;
-    border: 1px solid var(--navy);
-    border-radius: 0;               /* ← Square corners */
-    text-transform: none;
-    cursor: pointer;
-    user-select: none;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-    transition:
-      background 180ms ease,
-      color 180ms ease,
-      border-color 180ms ease,
-      box-shadow 180ms ease,
-      transform 120ms ease;
-  }
-
-  .btn-ghost-invert.square:hover {
-    background: #fff;
-    color: var(--navy);
-    border-color: var(--navy);
-    box-shadow:
-      0 0 0 1px var(--navy) inset,
-      0 8px 20px rgba(0, 0, 0, 0.12);
-    transform: translateY(-1px);
-  }
-
-  .btn-ghost-invert.square:active {
-    transform: translateY(0);
-    background: #f8fafc;
-    color: var(--navy);
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
-  }
-
-  .btn-ghost-invert.square:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(11, 22, 32, 0.35);
-  }
-
-  @media (max-width: 640px) {
-    .btn-ghost-invert.square {
-      padding: 9px 16px;
-      font-size: 14px;
-    }
-  }
-
-
-        /* responsive */
-        @media (max-width:992px){
-          .col-title{ max-width:420px; }
-          .col-action{ width:160px; }
-        }
+        @media (max-width:992px){ .col-title{ max-width:420px; } .col-action{ width:160px; } }
         @media (max-width:640px){
           .cart-row :global(td){ padding:12px 8px; }
           .col-img{ width:100px; min-width:100px; }
@@ -241,7 +181,6 @@ const CartItem = ({ product }) => {
           .qty-btn{ width:28px; height:28px; }
           .qty-value{ min-width:24px; font-size:15px; }
           .col-action{ text-align:left; width:auto; }
-          .btn-ghost-invert{ min-height:42px; padding:10px 16px; }
         }
       `}</style>
     </>

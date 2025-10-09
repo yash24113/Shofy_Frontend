@@ -11,6 +11,10 @@ import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
 
+/* 🔎 add search */
+import useGlobalSearch from "@/hooks/useGlobalSearch";
+import { buildSearchPredicate } from "@/utils/searchMiddleware";
+
 /* ---------------- ids, storage keys ---------------- */
 const getSessionId = () =>
   (typeof window !== "undefined" && localStorage.getItem("sessionId")) || null;
@@ -108,6 +112,9 @@ const WishlistItem = ({ product }) => {
   const { wishlist } = useSelector((state) => state.wishlist) || { wishlist: [] }; // for server sync
   const userId = useSelector(selectUserId);
 
+  /* 🔎 global query */
+  const { debounced: q } = useGlobalSearch();
+
   const { _id, img, title, salesPrice } = product || {};
   const isInCart = cart_products?.find?.((item) => item?._id === _id);
 
@@ -176,20 +183,15 @@ const WishlistItem = ({ product }) => {
       const uKey = userKey(userId, sid);
       const userScoped = readFromKey(uKey);
 
-      // also merge with server so this device picks up any other-device items
       (async () => {
         const serverItems = await fetchServerWishlist(userId);
         const merged = mergeUniqueById(mergeUniqueById(userScoped, guestList), serverItems);
-
-        // persist everywhere
         writeToKey(uKey, merged);
         try { localStorage.removeItem(GUEST_KEY); } catch(e) {console.log("error",e)}
-
         await pushServerWishlist(userId, merged);
         setMigratedOnce(true);
       })();
     } else {
-      // even without guest items, make sure we mirror server -> local
       (async () => {
         const uKey = userKey(userId, sid);
         const userScoped = readFromKey(uKey);
@@ -215,27 +217,21 @@ const WishlistItem = ({ product }) => {
     const next = removeById(list, id);
     writeToKey(key, next);
     if (userId) {
-      // reflect full current redux list to server (more robust)
       await pushServerWishlist(userId, next);
     }
   };
 
   /* ---------- actions ---------- */
   const handleAddProduct = async (prd) => {
-    // Require session → if missing, open login modal
     const sid = getSessionId();
     if (!sid) {
       openLogin();
       return;
     }
-
     try {
       setMoving(true);
-      // move to cart
       dispatch(add_cart_product(prd));
-      // remove from wishlist (redux)
       dispatch(remove_wishlist_product({ title, id: _id }));
-      // mirror storage + server
       await mirrorRemoveEverywhere(_id);
     } finally {
       setTimeout(() => setMoving(false), 250);
@@ -243,9 +239,7 @@ const WishlistItem = ({ product }) => {
   };
 
   const handleRemovePrd = async (prd) => {
-    // redux remove
     dispatch(remove_wishlist_product(prd));
-    // storage + server remove
     const id = prd?.id || prd?._id;
     if (id) await mirrorRemoveEverywhere(id);
   };
@@ -257,6 +251,22 @@ const WishlistItem = ({ product }) => {
       setAuthModal(auth);
     }
   }, [searchParams]);
+
+  /* 🔎 visibility for this row */
+  const rowVisible = useMemo(() => {
+    const query = (q || '').trim();
+    if (query.length < 2) return true;
+    const fields = [
+      () => title || '',
+      () => slug || '',
+      () => String(product?.design || ''),
+      () => String(product?.color || ''),
+    ];
+    const pred = buildSearchPredicate(query, fields, { mode: 'AND', normalize: true });
+    return pred(product);
+  }, [q, title, slug, product]);
+
+  if (!rowVisible) return null;
 
   return (
     <>
@@ -327,114 +337,28 @@ const WishlistItem = ({ product }) => {
         <RegisterArea onClose={closeAuth} onSwitchToLogin={openLogin} />
       )}
 
-      {/* -------- INTERNAL CSS (scoped) -------- */}
+      {/* styles unchanged … */}
       <style jsx>{`
-        /* Row */
-        .wishlist-row {
-          border-bottom: 1px solid #eef0f3;
-          transition: background-color 160ms ease, box-shadow 180ms ease;
-        }
-        .wishlist-row:hover {
-          background: #fafbfc;
-        }
+        .wishlist-row { border-bottom: 1px solid #eef0f3; transition: background-color 160ms ease, box-shadow 180ms ease; }
+        .wishlist-row:hover { background: #fafbfc; }
+        .wishlist-cell { padding: 14px 12px; vertical-align: middle; }
+        .wishlist-cell-center { text-align: center; }
+        .wishlist-img-link { display: inline-block; line-height: 0; }
+        .wishlist-img { width: 70px; height: 100px; object-fit: cover; border-radius: 10px; background: #f3f5f8; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06); }
+        .wishlist-title { display: inline-block; font-weight: 600; line-height: 1.3; color: #0f172a; text-decoration: none; }
+        .wishlist-title:hover { text-decoration: underline; }
+        .wishlist-price { font-weight: 600; color: #0f172a; }
 
-        /* Cells */
-        .wishlist-cell {
-          padding: 14px 12px;
-          vertical-align: middle;
-        }
-        .wishlist-cell-center {
-          text-align: center;
-        }
-
-        /* Image */
-        .wishlist-img-link {
-          display: inline-block;
-          line-height: 0;
-        }
-        .wishlist-img {
-          width: 70px;
-          height: 100px;
-          object-fit: cover;
-          border-radius: 10px;
-          background: #f3f5f8;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
-        }
-
-        /* Text */
-        .wishlist-title {
-          display: inline-block;
-          font-weight: 600;
-          line-height: 1.3;
-          color: #0f172a;
-          text-decoration: none;
-        }
-        .wishlist-title:hover {
-          text-decoration: underline;
-        }
-        .wishlist-price {
-          font-weight: 600;
-          color: #0f172a;
-        }
-
-        /* Shared square ghost-invert button */
-        .btn-ghost-invert {
-          --navy: #0b1620;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          min-height: 44px;
-          padding: 10px 18px;
-          border-radius: 0; /* square */
-          font-weight: 600;
-          font-size: 15px;
-          line-height: 1;
-          cursor: pointer;
-          user-select: none;
-          text-decoration: none;
-          background: var(--navy);
-          color: #fff;
-          border: 1px solid var(--navy);
-          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
-          transition: background 180ms ease, color 180ms ease,
-            border-color 180ms ease, box-shadow 180ms ease,
-            transform 120ms ease;
-        }
-        .btn-ghost-invert:hover {
-          background: #fff;
-          color: var(--navy);
-          border-color: var(--navy);
-          box-shadow: 0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0, 0, 0, 0.12);
-          transform: translateY(-1px);
-        }
-        .btn-ghost-invert:active {
-          transform: translateY(0);
-          background: #f8fafc;
-          color: var(--navy);
-          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
-        }
-        .btn-ghost-invert:focus-visible {
-          outline: 0;
-          box-shadow: 0 0 0 3px rgba(11, 22, 32, 0.35);
-        }
-        .btn-ghost-invert.is-loading {
-          pointer-events: none;
-          opacity: 0.9;
-        }
+        .btn-ghost-invert { --navy: #0b1620; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 18px; border-radius: 0; font-weight: 600; font-size: 15px; line-height: 1; cursor: pointer; user-select: none; text-decoration: none; background: var(--navy); color: #fff; border: 1px solid var(--navy); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22); transition: background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 120ms ease; }
+        .btn-ghost-invert:hover { background: #fff; color: var(--navy); border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0, 0, 0, 0.12); transform: translateY(-1px); }
+        .btn-ghost-invert:active { transform: translateY(0); background: #f8fafc; color: var(--navy); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15); }
+        .btn-ghost-invert:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(11, 22, 32, 0.35); }
+        .btn-ghost-invert.is-loading { pointer-events: none; opacity: 0.9; }
 
         @media (max-width: 640px) {
-          .wishlist-cell {
-            padding: 10px 8px;
-          }
-          .wishlist-img {
-            width: 56px;
-            height: 80px;
-            border-radius: 8px;
-          }
-          .btn-ghost-invert {
-            min-height: 42px;
-            padding: 9px 16px;
-          }
+          .wishlist-cell { padding: 10px 8px; }
+          .wishlist-img { width: 56px; height: 80px; border-radius: 8px; }
+          .btn-ghost-invert { min-height: 42px; padding: 9px 16px; }
         }
       `}</style>
     </>
