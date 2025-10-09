@@ -19,7 +19,7 @@ import { FiMenu } from 'react-icons/fi';
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 
 /* ------------ config for search dropdown ------------ */
-const PAGE_SIZE = 20;       // how many results to show per “page”
+const PAGE_SIZE = 20;       // how many results to fetch per “page”
 const MAX_LIMIT = 200;      // hard cap to avoid runaway fetches
 
 /* ------------------ small helpers ------------------ */
@@ -41,8 +41,7 @@ function normalizeProduct(p) {
   return { id, slug, name, img, price };
 }
 
-/* Try multiple endpoints; first OK+JSON wins.
-   Returns { items: Product[], total: number | null } */
+/* Try multiple endpoints; first OK+JSON wins */
 async function searchProducts(q, limit = PAGE_SIZE, signal) {
   const b = baseApi();
   const queries = [
@@ -55,28 +54,18 @@ async function searchProducts(q, limit = PAGE_SIZE, signal) {
       const res = await fetch(url, { signal });
       if (!res.ok) continue;
       const data = await res.json();
-
-      // Try to detect arrays + total counts from common shapes
-      let raw = [];
-      if (Array.isArray(data)) raw = data;
-      else if (Array.isArray(data?.data)) raw = data.data;
-      else if (Array.isArray(data?.results)) raw = data.results;
-      else if (Array.isArray(data?.items)) raw = data.items;
-
-      const total =
-        (typeof data?.total === 'number' && data.total) ||
-        (typeof data?.count === 'number' && data.count) ||
-        (typeof data?.pagination?.total === 'number' && data.pagination.total) ||
-        (typeof data?.data?.total === 'number' && data.data.total) ||
-        (typeof data?.meta?.total === 'number' && data.meta.total) ||
-        null;
-
-      return { items: raw.map(normalizeProduct), total };
-    } catch {
+      const arr =
+        Array.isArray(data) ? data
+          : Array.isArray(data?.data) ? data.data
+            : Array.isArray(data?.results) ? data.results
+              : Array.isArray(data?.items) ? data.items
+                : [];
+      return arr.map(normalizeProduct);
+    } catch (err) {
       // ignore and try next endpoint
     }
   }
-  return { items: [], total: 0 };
+  return [];
 }
 
 const HeaderTwo = ({ style_2 = false }) => {
@@ -97,25 +86,16 @@ const HeaderTwo = ({ style_2 = false }) => {
   // ===== GLOBAL SEARCH (shared) =====
   const { query, setQuery, debounced } = useGlobalSearch(250);
   const [searchOpen, setSearchOpen] = useState(false);
-
-  // data
   const [loading, setLoading] = useState(false);          // loading current batch
   const [loadingMore, setLoadingMore] = useState(false);  // tail spinner for infinite scroll
   const [results, setResults] = useState([]);
-  const [totalResults, setTotalResults] = useState(null);
-
-  // pagination (inside dropdown)
-  const [page, setPage] = useState(1);            // 1-indexed
-  const [limit, setLimit] = useState(PAGE_SIZE);  // grows with page and scroll
-
   const [selIndex, setSelIndex] = useState(-1);
-
+  const [limit, setLimit] = useState(PAGE_SIZE);          // grows as you scroll
   const searchWrapRef = useRef(null);
   const dropRef = useRef(null);
 
   // Reset when query changes
   useEffect(() => {
-    setPage(1);
     setLimit(PAGE_SIZE);
   }, [debounced]);
 
@@ -124,20 +104,15 @@ const HeaderTwo = ({ style_2 = false }) => {
     const controller = new AbortController();
     const q = (debounced || '').trim();
     if (q.length < 2) {
-      setResults([]);
-      setTotalResults(null);
-      setSelIndex(-1);
-      setLoading(false);
-      setLoadingMore(false);
+      setResults([]); setSelIndex(-1); setLoading(false); setLoadingMore(false);
       return;
     }
     setLoading(true);
     setSearchOpen(true);
     searchProducts(q, Math.min(limit, MAX_LIMIT), controller.signal)
-      .then(({ items, total }) => {
-        setResults(items);
-        setTotalResults(typeof total === 'number' ? total : items.length);
-        setSelIndex(items.length ? 0 : -1);
+      .then((arr) => {
+        setResults(arr);
+        setSelIndex(arr.length ? 0 : -1);
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
@@ -150,10 +125,13 @@ const HeaderTwo = ({ style_2 = false }) => {
 
     const onScroll = () => {
       if (loading || loadingMore) return;
+      // near bottom?
       const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
       if (nearBottom && limit < MAX_LIMIT) {
         setLoadingMore(true);
-        setLimit((l) => Math.min(l + PAGE_SIZE, MAX_LIMIT)); // fetching larger window
+        // grow limit; fetch handled by the effect above
+        setLimit((l) => Math.min(l + PAGE_SIZE, MAX_LIMIT));
+        // small delay just for UX (spinner visible if network is fast)
         setTimeout(() => setLoadingMore(false), 120);
       }
     };
@@ -179,47 +157,22 @@ const HeaderTwo = ({ style_2 = false }) => {
     };
   }, []);
 
-  // submit or go to selected
   const onSearchSubmit = (e) => {
     e.preventDefault();
     if (selIndex >= 0 && results[selIndex]) {
       const p = results[selIndex];
       const href = p.slug ? `/product-details/${p.slug}` : `/product-details?id=${encodeURIComponent(p.id)}`;
-      if (typeof window !== 'undefined') window.location.href = href;
+      window.location.href = href;
     } else {
-      // optional: navigate to your search page
-      if (typeof window !== 'undefined') window.location.href = `/shop?search=${encodeURIComponent(query)}`;
+      setSearchOpen(true);
     }
   };
 
-  // Keyboard nav inside list
+  // Keyboard nav
   const onSearchKeyDown = (e) => {
     if (!searchOpen) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelIndex((i) => Math.min((results.length || 0) - 1, (i < 0 ? 0 : i + 1)));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelIndex((i) => Math.max(-1, i - 1));
-    }
-  };
-
-  // derived for pagination UI
-  const total = totalResults ?? results.length;
-  const totalPages = Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const shown = Math.min(results.length, currentPage * PAGE_SIZE);
-
-  // page click → set page and expand limit if needed
-  const goToPage = (p) => {
-    const clamped = Math.max(1, Math.min(p, totalPages));
-    setPage(clamped);
-    const needed = clamped * PAGE_SIZE;
-    if (needed > limit) setLimit(Math.min(needed, MAX_LIMIT));
-    // scroll dropdown to top for better UX
-    requestAnimationFrame(() => {
-      if (dropRef.current) dropRef.current.scrollTop = 0;
-    });
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSelIndex((i) => Math.min((results.length || 0) - 1, (i < 0 ? 0 : i + 1))); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIndex((i) => Math.max(-1, i - 1)); }
   };
 
   // ===== Session & user dropdown =====
@@ -342,19 +295,14 @@ const HeaderTwo = ({ style_2 = false }) => {
                         </form>
 
                         {/* Results popover */}
-                        {searchOpen && (
+                        {/* {searchOpen && (
                           <div className="search-drop" ref={dropRef}>
                             {loading ? (
                               <div className="search-empty">Searching…</div>
                             ) : results.length ? (
                               <>
-                                {/* Summary / count */}
-                                <div className="search-summary">
-                                  Showing <b>{shown}</b>{typeof total === 'number' ? <> of <b>{total}</b></> : null} products
-                                </div>
-
                                 <ul className="search-list" role="listbox">
-                                  {results.slice(0, shown).map((p, idx) => {
+                                  {results.map((p, idx) => {
                                     const href = p.slug ? `/product-details/${p.slug}` : `/product-details?id=${encodeURIComponent(p.id)}`;
                                     return (
                                       <li
@@ -383,45 +331,16 @@ const HeaderTwo = ({ style_2 = false }) => {
                                   })}
                                 </ul>
 
-                                {/* Pagination (shows “1” only if single page) */}
-                                {totalPages > 0 && (
-                                  <div className="search-pager" role="navigation" aria-label="Search pagination">
-                                    {Array.from({ length: totalPages }).map((_, i) => {
-                                      const pg = i + 1;
-                                      return (
-                                        <button
-                                          key={pg}
-                                          type="button"
-                                          className={`pager-btn ${pg === currentPage ? 'is-active' : ''}`}
-                                          onClick={() => goToPage(pg)}
-                                          aria-current={pg === currentPage ? 'page' : undefined}
-                                        >
-                                          {pg}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-
                                 {/* tail loader for infinite scroll */}
-                                {loadingMore && <div className="search-more">Loading more…</div>}
+                                {/* {loadingMore && <div className="search-more">Loading more…</div>}
                                 {/* soft cap notice */}
-                                {limit >= MAX_LIMIT && total > MAX_LIMIT && (
-                                  <div className="search-cap">Showing first {MAX_LIMIT} items</div>
-                                )}
-                              </>
-                            ) : (
-                              <div className="search-empty">No product found</div>
-                            )}
-                          </div>
-                        )}
+                               
                       </div>
 
                       {/* Actions */}
                       <div className="tp-header-action d-flex align-items-center">
                         {/* User / Auth */}
                         <div className="tp-header-action-item me-2 position-relative">
-                          {/* session-driven */}
                           {hasSession ? (
                             <>
                               <button
@@ -445,7 +364,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       role="menuitem"
                                       onClick={() => {
                                         setUserOpen(false);
-                                        if (typeof window !== 'undefined') window.location.href = '/profile';
+                                        window.location.href = '/profile';
                                       }}
                                     >
                                       My Profile
@@ -543,13 +462,6 @@ const HeaderTwo = ({ style_2 = false }) => {
           box-shadow:0 18px 40px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.06);
           padding:6px;
         }
-        .search-summary{
-          padding:10px 12px 6px;
-          font-size:13px;
-          color:#374151;
-          border-bottom:1px solid #f3f4f6;
-          margin-bottom:6px;
-        }
         .search-empty{ padding:14px 16px; font-size:14px; color:#374151; }
         .search-hint{ font-size:12px; color:#6b7280; margin-top:4px; }
         .search-list{ list-style:none; padding:0; margin:0; }
@@ -567,35 +479,6 @@ const HeaderTwo = ({ style_2 = false }) => {
           font-size:12px;
           color:#6b7280;
           text-align:center;
-        }
-
-        .search-pager{
-          display:flex;
-          gap:8px;
-          align-items:center;
-          justify-content:center;
-          padding:8px 6px 4px;
-          border-top:1px solid #f3f4f6;
-          margin-top:6px;
-          flex-wrap:wrap;
-        }
-        .pager-btn{
-          min-width:34px;
-          height:32px;
-          padding:0 10px;
-          border-radius:8px;
-          border:1px solid #e5e7eb;
-          background:#fff;
-          font-size:13px;
-          line-height:32px;
-          cursor:pointer;
-          transition:background .15s ease, border-color .15s ease, transform .02s ease;
-        }
-        .pager-btn:hover{ background:#f9fafb; }
-        .pager-btn.is-active{
-          background:#eef2ff;
-          border-color:#dbeafe;
-          font-weight:700;
         }
 
         /* ===== Dropdown (account) ===== */
