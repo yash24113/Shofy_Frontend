@@ -52,8 +52,8 @@ export default function ProductModal() {
       title: p.title || p.name || '',
       category: p.category || p.newCategoryId,
       structureId: p.structureId || idOf(p.substructure) || idOf(p.structure),
-      contentId:   p.contentId   || idOf(p.content),
-      finishId:    p.finishId    || idOf(p.subfinish) || idOf(p.finish),
+      contentId: p.contentId || idOf(p.content),
+      finishId: p.finishId || idOf(p.subfinish) || idOf(p.finish),
       gsm: p.gsm ?? p.GSM,
       width: p.width ?? p.widthCm ?? p.Width,
       slug: p.slug || p._id,
@@ -63,11 +63,11 @@ export default function ProductModal() {
   const imageURLs = useMemo(() => {
     if (!productItem) return [];
     const items = [
-      productItem?.image  && { img: toUrl(productItem.image),  type: 'image' },
+      productItem?.img && { img: toUrl(productItem.img), type: 'image' },
       productItem?.image1 && { img: toUrl(productItem.image1), type: 'image' },
       productItem?.image2 && { img: toUrl(productItem.image2), type: 'image' },
     ].filter(Boolean);
-    if (productItem?.video) items.push({ img: '/assets/img/product/-video-thumb.png', type: 'video' });
+    if (productItem?.video) items.push({ img: productItem?.videoThumbnail || '/assets/img/product/-video-thumb.png', type: 'video', video: toUrl(productItem.video) });
     return items;
   }, [productItem]);
 
@@ -126,12 +126,24 @@ export default function ProductModal() {
         <div className="pm-media">
           <DetailsThumbWrapper
             key={`thumbs-${modalKey}`}
-            activeImg={activeImg}
+            activeImg={productItem?.img || activeImg}
             handleImageActive={handleImageActive}
+            /* explicit media props from backend */
+            img={productItem?.img}
+            image1={productItem?.image1}
+            image2={productItem?.image2}
+            video={productItem?.video}
+            videoThumbnail={productItem?.videoThumbnail}
+            /* keep extras merged after the primaries */
             imageURLs={imageURLs}
-            imgWidth={380}
-            imgHeight={380}
+            /* wider viewer inside modal; disable external zoom pane */
+            imgWidth={420}
+            imgHeight={420}
+            zoomPaneWidth={0}
+            /* keep thumbs scrollable by giving them height */
+            zoomPaneHeight={420}
             status={normalized?.status}
+            /* keep videoId fallback for safety */
             videoId={productItem?.video}
           />
         </div>
@@ -159,15 +171,29 @@ export default function ProductModal() {
 
         .pm-body{
           display:grid;
-          grid-template-columns: 380px 1fr;
+          grid-template-columns: 540px 1fr; /* allow thumbs + main image to fit */
           gap:20px;
           max-height: calc(92vh - 52px);
+          overflow-y:auto; /* allow scroll on small screens */
         }
 
         .pm-media{
+          display:flex;
+          align-items:center;
+          justify-content:center;
           min-width:0;
+          height:100%;
           max-height:100%;
           overflow:hidden; /* thumbnails self-manage scroll if they need it */
+          background:#fff;
+        }
+        .pm-media :global(img){
+          max-width:100%;
+          max-height:100%;
+          width:auto;
+          height:auto;
+          object-fit:contain !important;
+          display:block;
         }
 
         .pm-details{
@@ -251,16 +277,19 @@ export default function ProductModal() {
 
         /* Responsiveness */
         @media (max-width: 1080px){
-          .pm-body{ grid-template-columns: 340px 1fr; gap:18px; }
+          .pm-body{ grid-template-columns: 420px 1fr; gap:18px; }
         }
         @media (max-width: 900px){
           .pm-body{
             grid-template-columns: 1fr;
+            max-height: calc(92vh - 52px);
+            overflow-y:auto; /* enable body scroll on mobile */
           }
-          .pm-media{
-            justify-self:center;
-            max-width: 380px;
-          }
+          /* Make thumbs a horizontal strip below the main image */
+          :global(.pdw-wrapper){ grid-template-columns: 1fr !important; gap: 12px; }
+          :global(.pdw-thumbs){ width: 100% !important; }
+          :global(.pdw-thumbs-inner){ flex-direction: row !important; overflow-x: auto !important; overflow-y: hidden !important; max-height: none !important; gap: 10px !important; padding-bottom: 4px; }
+          :global(.pdw-thumb){ width: 72px !important; height: 72px !important; flex: 0 0 auto; }
           :global(.tp-product-details .tp-product-details-meta){
             grid-template-columns: 1fr; /* stack specs cleanly */
           }
