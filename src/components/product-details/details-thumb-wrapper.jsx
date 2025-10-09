@@ -21,20 +21,57 @@ const uniqueByUrl = (arr) => {
   const seen = new Set();
   return arr.filter((it) => {
     const key = `${it.type}|${it.img}|${it.video || ''}`;
-    if (!it.img) return false;
+    if (!it?.img) return false;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 };
 
-/* Fallback image (still fills via object-fit: cover) */
+/* Fallback image (still fills via object-fit) */
 const NO_IMG = `data:image/svg+xml;utf8,
 <svg xmlns='http://www.w3.org/2000/svg' width='1200' height='900'>
   <rect width='100%' height='100%' fill='%23f5f5f5'/>
   <text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle'
         font-family='Arial' font-size='28' fill='%23999'>No image available</text>
 </svg>`;
+
+/* ------ math to get how the image is rendered inside the box (cover/contain) ------ */
+function getRenderedMetrics({
+  boxW, boxH, naturalW, naturalH, objectFit = 'cover'
+}) {
+  const imgAR = naturalW / naturalH;
+  const boxAR = boxW / boxH;
+  let renderW, renderH, offsetX, offsetY;
+
+  if (objectFit === 'contain') {
+    if (imgAR > boxAR) {
+      renderW = boxW;
+      renderH = boxW / imgAR;
+    } else {
+      renderH = boxH;
+      renderW = boxH * imgAR;
+    }
+    offsetX = (boxW - renderW) / 2;
+    offsetY = (boxH - renderH) / 2;
+  } else {
+    // cover
+    if (imgAR > boxAR) {
+      // image wider -> height matches box; width overflows
+      renderH = boxH;
+      renderW = boxH * imgAR;
+      offsetX = (boxW - renderW) / 2;
+      offsetY = 0;
+    } else {
+      // image taller -> width matches box; height overflows
+      renderW = boxW;
+      renderH = boxW / imgAR;
+      offsetX = 0;
+      offsetY = (boxH - renderH) / 2;
+    }
+  }
+  return { renderW, renderH, offsetX, offsetY };
+}
 
 /* ---------------- component ---------------- */
 const DetailsThumbWrapper = ({
@@ -56,6 +93,8 @@ const DetailsThumbWrapper = ({
   lensSize = 140,
   lensBorder = '2px solid rgba(59,130,246,.75)',
   lensBg = 'rgba(255,255,255,.25)',
+  // toggle if you ever want contain; all math supports both
+  objectFitMode = 'cover',           // 'cover' | 'contain'
 }) => {
   const [isVideoActive, setIsVideoActive] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
@@ -119,7 +158,7 @@ const DetailsThumbWrapper = ({
   const [mainSrc, setMainSrc] = useState(mainImageUrl);
 
   useEffect(() => {
-    if (!mainSrc && mainImageUrl) {
+    if (mainImageUrl && mainImageUrl !== mainSrc) {
       setMainSrc(mainImageUrl);
       setIsVideoActive(false);
       setCurrentVideoUrl(null);
@@ -127,11 +166,11 @@ const DetailsThumbWrapper = ({
         handleImageActive({ img: mainImageUrl, type: 'image' });
       }
     }
-  }, [mainImageUrl, mainSrc, handleImageActive]);
+  }, [mainImageUrl]); // eslint-disable-line
 
   const isActiveThumb = (item) =>
     (!isVideoActive && item.type === 'image' && item.img === mainSrc) ||
-    (isVideoActive && item.type === 'video' && item.video === (currentVideoUrl || videoId));
+    (isVideoActive && item.type === 'video' && (item.video || null) === (currentVideoUrl || videoId || null));
 
   const onThumbClick = (item) => {
     if (item.type === 'video') {
@@ -146,7 +185,7 @@ const DetailsThumbWrapper = ({
     }
   };
 
-  /* ---------------- Zoom + Lens logic ---------------- */
+  /* ---------------- Zoom + Lens logic (accurate with cover/contain) ---------------- */
   const imgWrapRef = useRef(null);
   const [showZoom, setShowZoom] = useState(false);
   const [zoomBgPos, setZoomBgPos] = useState('50% 50%');
@@ -156,27 +195,51 @@ const DetailsThumbWrapper = ({
   const [lensPos, setLensPos] = useState({ x: 0, y: 0 });
 
   const handleImageLoaded = ({ naturalWidth, naturalHeight }) => {
-    setNaturalSize({ w: naturalWidth || imgWidth, h: naturalHeight || imgHeight });
+    setNaturalSize({
+      w: naturalWidth || imgWidth,
+      h: naturalHeight || imgHeight
+    });
   };
 
   const handleMouseEnter = () => {
-    if (!isVideoActive) { setShowZoom(true); setShowLens(true); }
+    if (!isVideoActive && mainSrc) { setShowZoom(true); setShowLens(true); }
   };
   const handleMouseLeave = () => { setShowZoom(false); setShowLens(false); };
+
   const handleMouseMove = (e) => {
-    if (!imgWrapRef.current || isVideoActive) return;
+    if (!imgWrapRef.current || isVideoActive || !mainSrc) return;
+
     const rect = imgWrapRef.current.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
+    const cx = e.clientX - rect.left;   // cursor in box coords
     const cy = e.clientY - rect.top;
 
+    // compute how the image is drawn in the box
+    const { renderW, renderH, offsetX, offsetY } = getRenderedMetrics({
+      boxW: rect.width,
+      boxH: rect.height,
+      naturalW: naturalSize.w,
+      naturalH: naturalSize.h,
+      objectFit: objectFitMode
+    });
+
+    // clamp cursor to the drawn image area (ignore margins created by fit)
+    const imgX = Math.max(0, Math.min(renderW, cx - offsetX));
+    const imgY = Math.max(0, Math.min(renderH, cy - offsetY));
+
+    // lens should move only over the drawn image area, not margins
     const half = lensSize / 2;
-    const lx = Math.max(0, Math.min(rect.width - lensSize, cx - half));
-    const ly = Math.max(0, Math.min(rect.height - lensSize, cy - half));
+    const lx = Math.max(offsetX, Math.min(offsetX + renderW - lensSize, cx - half));
+    const ly = Math.max(offsetY, Math.min(offsetY + renderH - lensSize, cy - half));
     setLensPos({ x: lx, y: ly });
 
-    const centerX = (lx + half) / rect.width;
-    const centerY = (ly + half) / rect.height;
-    setZoomBgPos(`${centerX * 100}% ${centerY * 100}%`);
+    // translate to natural pixel coordinates
+    const px = (imgX / renderW) * naturalSize.w;
+    const py = (imgY / renderH) * naturalSize.h;
+
+    // background-position in % based on the natural pixel
+    const posX = (px / naturalSize.w) * 100;
+    const posY = (py / naturalSize.h) * 100;
+    setZoomBgPos(`${posX}% ${posY}%`);
   };
 
   const zoomBgSize = `${naturalSize.w * zoomScale}px ${naturalSize.h * zoomScale}px`;
@@ -252,7 +315,6 @@ const DetailsThumbWrapper = ({
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           ) : (
-            /* ✅ No extra wrapper — the IMG fills the box */
             <img
               src={mainSrc || NO_IMG}
               alt="product img"
@@ -260,15 +322,13 @@ const DetailsThumbWrapper = ({
                 display: 'block',
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',           // ← FULL COVER
+                objectFit: objectFitMode,      // ← accurate mapping for cover/contain
                 objectPosition: 'center',
-                /* edge-to-edge inside the frame (no gaps) */
                 padding: 0,
                 margin: 0,
               }}
               onLoad={(e) => handleImageLoaded(e.currentTarget)}
               onError={(e) => {
-                console.error('Error loading image:', mainSrc);
                 if (e.currentTarget.src !== NO_IMG) e.currentTarget.src = NO_IMG;
               }}
             />
@@ -355,14 +415,14 @@ const DetailsThumbWrapper = ({
     pointer-events: none;
   }
 
-  /* Main viewer frame (keeps the visual border & rounding) */
+  /* Main viewer frame */
   .pdw-main {
     width: ${imgWidth}px; height: ${imgHeight}px;
     border-radius: 12px;
     box-shadow: 0 8px 24px rgba(0,0,0,.06);
     overflow: hidden;
     background: #fff;
-    border: 1px solid #1b0cf4ff;   /* frame is on the box, not the img */
+    border: 1px solid #1b0cf4ff;
     background-color: #fafafa;
   }
   .pdw-main-inner {
@@ -402,7 +462,7 @@ const DetailsThumbWrapper = ({
   }
   .pdw-zoom.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
 
-  /* Responsive – hide zoom pane on smaller screens */
+  /* Responsive – hide zoom panel on smaller screens */
   @media (max-width: 1200px) {
     .pdw-wrapper { grid-template-columns: 96px ${imgWidth}px; }
     .pdw-zoom { display: none; }
@@ -411,7 +471,7 @@ const DetailsThumbWrapper = ({
     .pdw-wrapper { grid-template-columns: 72px minmax(220px, 1fr); gap: 12px; }
     .pdw-main { width: 100%; height: auto; aspect-ratio: ${imgWidth} / ${imgHeight}; }
   }
-`}</style>  
+`}</style>
     </div>
   );
 };
