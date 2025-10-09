@@ -16,7 +16,7 @@ import Menus from './header-com/menus';
 import { CartTwo, Search } from '@/svg';
 import { FaHeart, FaUser } from 'react-icons/fa';
 import { FiMenu } from 'react-icons/fi';
-import useGlobalSearch from '@/hooks/useGlobalSearch';           // ← NEW
+import useGlobalSearch from '@/hooks/useGlobalSearch';
 
 /* ------------------ small helpers ------------------ */
 const baseApi = () => {
@@ -57,7 +57,7 @@ async function searchProducts(q, limit = 10, signal) {
           : Array.isArray(data?.items) ? data.items
           : [];
       return arr.map(normalizeProduct);
-    } catch {}
+    } catch(err) {console.log("error:",err)}
   }
   return [];
 }
@@ -69,15 +69,15 @@ const HeaderTwo = ({ style_2 = false }) => {
   const { wishlist } = useSelector((state) => state.wishlist || { wishlist: [] });
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
-  // still present for compatibility
-  const { quantity } = useCartInfo();
+  // (compat)
+  const { quantity } = useCartInfo(); // unused, kept for compatibility with other parts
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
 
   useEffect(() => { dispatch(get_cart_products()); }, [dispatch]);
 
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
 
-  // ---- GLOBAL search state (shared company-wide) ----
+  // ===== GLOBAL SEARCH (shared company-wide) =====
   const { query, setQuery, debounced } = useGlobalSearch(250);
   const [searchOpen, setSearchOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -137,12 +137,13 @@ const HeaderTwo = ({ style_2 = false }) => {
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIndex((i) => Math.max(-1, i - 1)); }
   };
 
-  // ---- Session & user dropdown ----
+  // ===== Session & user dropdown =====
   const [hasSession, setHasSession] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const userBtnRef = useRef(null);
   const userMenuRef = useRef(null);
 
+  // Build current URL for redirect query
   const currentUrl = useMemo(() => {
     if (typeof window === 'undefined') return '/';
     const url = new URL(window.location.href);
@@ -158,17 +159,24 @@ const HeaderTwo = ({ style_2 = false }) => {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
+  // Close dropdown on outside click / touch / ESC / scroll / resize / tab hide
   useEffect(() => {
     const close = () => setUserOpen(false);
+
     const onPointer = (e) => {
-      const btn = userBtnRef.current, menu = userMenuRef.current, t = e.target;
-      if (btn?.contains(t) || menu?.contains(t)) return;
+      const btn = userBtnRef.current;
+      const menu = userMenuRef.current;
+      const target = e.target;
+      if (btn && btn.contains(target)) return;
+      if (menu && menu.contains(target)) return;
       close();
     };
+
     const onEsc = (e) => { if (e.key === 'Escape') close(); };
     const onScroll = () => close();
     const onResize = () => close();
     const onVisibility = () => { if (document.visibilityState === 'hidden') close(); };
+
     if (userOpen) {
       document.addEventListener('mousedown', onPointer, true);
       document.addEventListener('touchstart', onPointer, true);
@@ -192,12 +200,16 @@ const HeaderTwo = ({ style_2 = false }) => {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('sessionId');
         try {
-          import('js-cookie').then((Cookies) => Cookies.default.remove('userInfo'))
+          import('js-cookie')
+            .then((Cookies) => Cookies.default.remove('userInfo'))
             .catch((err) => console.error('Failed to remove userInfo cookie:', err));
-        } catch (err) { console.error('Error importing js-cookie:', err); }
+        } catch (err) {
+          console.error('Error importing js-cookie:', err);
+        }
       }
     } finally {
-      setHasSession(false); setUserOpen(false);
+      setHasSession(false);
+      setUserOpen(false);
       if (typeof window !== 'undefined') window.location.href = '/';
     }
   };
@@ -206,7 +218,10 @@ const HeaderTwo = ({ style_2 = false }) => {
     <>
       <header>
         <div className={`tp-header-area tp-header-style-${style_2 ? 'primary' : 'darkRed'} tp-header-height`}>
-          <div id="header-sticky" className={`tp-header-bottom-2 tp-header-sticky ${sticky ? 'header-sticky' : ''}`}>
+          <div
+            id="header-sticky"
+            className={`tp-header-bottom-2 tp-header-sticky ${sticky ? 'header-sticky' : ''}`}
+          >
             <div className="container">
               <div className="tp-mega-menu-wrapper p-relative">
                 <div className="row align-items-center">
@@ -294,8 +309,61 @@ const HeaderTwo = ({ style_2 = false }) => {
                       <div className="tp-header-action d-flex align-items-center">
                         {/* User / Auth */}
                         <div className="tp-header-action-item me-2 position-relative">
-                          {/* ... unchanged user dropdown code ... */}
-                          {/* (kept as-is from your last version) */}
+                          {hasSession ? (
+                            <>
+                              <button
+                                ref={userBtnRef}
+                                onClick={() => setUserOpen((v) => !v)}
+                                className="tp-header-action-btn"
+                                aria-haspopup="menu"
+                                aria-expanded={userOpen}
+                                aria-label="Account menu"
+                                type="button"
+                              >
+                                <FaUser />
+                              </button>
+
+                              {userOpen && (
+                                <div ref={userMenuRef} role="menu" className="user-menu-dropdown">
+                                  <div className="user-menu-inner">
+                                    <button
+                                      className="user-item"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setUserOpen(false);
+                                        window.location.href = '/profile';
+                                      }}
+                                    >
+                                      My Profile
+                                    </button>
+
+                                    <div className="user-divider" />
+
+                                    <button
+                                      className="user-item danger"
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={handleLogout}
+                                    >
+                                      Logout
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <Link
+                              href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
+                              className="tp-auth-cta"
+                              aria-label="Login or Sign Up"
+                            >
+                              <span className="tp-auth-cta-text">
+                                <FaUser className="tp-auth-cta-icon" />
+                                <span>Login&nbsp;/&nbsp;SignUp</span>
+                              </span>
+                            </Link>
+                          )}
                         </div>
 
                         {/* Wishlist */}
@@ -305,12 +373,26 @@ const HeaderTwo = ({ style_2 = false }) => {
                           </Link>
                         </div>
 
-                        {/* Cart */}
-                        {/* ... unchanged cart code ... */}
+                        {/* Cart — (show only when logged in) */}
+                        {hasSession && (
+                          <div className="tp-header-action-item me-2">
+                            <button
+                              onClick={() => dispatch(openCartMini())}
+                              className="tp-header-action-btn cartmini-open-btn"
+                              aria-label="Open cart"
+                              type="button"
+                            >
+                              <CartTwo />
+                              <span className="tp-header-action-badge">{distinctCount}</span>
+                            </button>
+                          </div>
+                        )}
 
                         {/* Mobile hamburger */}
                         <div className="tp-header-action-item tp-header-hamburger d-xl-none">
-                          <button onClick={() => setIsCanvasOpen(true)} type="button" className="tp-offcanvas-open-btn" aria-label="Open menu"><FiMenu /></button>
+                          <button onClick={() => setIsCanvasOpen(true)} type="button" className="tp-offcanvas-open-btn" aria-label="Open menu">
+                            <FiMenu />
+                          </button>
                         </div>
                       </div>
 
@@ -347,6 +429,83 @@ const HeaderTwo = ({ style_2 = false }) => {
         .search-meta{ display:flex; flex-direction:column; min-width:0; }
         .search-name{ font-weight:600; font-size:14px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:360px; }
         .search-price{ font-size:12px; color:#6b7280; margin-top:2px; }
+
+        /* ===== Dropdown ===== */
+        .user-menu-dropdown{
+          position:absolute;
+          right:0;
+          top:calc(100% + 12px);
+          z-index:1000;
+          min-width: 230px;
+          background:#fff;
+          border-radius:12px;
+          box-shadow: 0 18px 40px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.06);
+          overflow:hidden;
+          animation:menuPop .14s ease-out both;
+        }
+        .user-menu-dropdown::before{
+          content:"";
+          position:absolute;
+          right:18px;
+          top:-7px;
+          width:14px;height:14px;
+          background:#fff;
+          transform:rotate(45deg);
+          box-shadow:-2px -2px 6px rgba(0,0,0,.05);
+        }
+        .user-menu-inner{ display:flex; flex-direction:column; gap:6px; padding:8px; }
+        .user-item{
+          display:block !important; width:100%; padding:10px 14px; border-radius:8px;
+          font-size:14px; line-height:1.25; color:#111827; background:transparent; border:0; text-align:left;
+          cursor:pointer; transition:background .15s ease,color .15s ease,transform .02s ease;
+        }
+        .user-item:hover{ background:#f3f4f6; }
+        .user-item:focus-visible{ outline:none; background:#eef2ff; box-shadow:0 0 0 3px rgba(99,102,241,.25) inset; }
+        .user-item:active{ transform:scale(.995); }
+        .user-item.danger{ color:#b91c1c; }
+        .user-item.danger:hover{ background:#fee2e2; }
+        .user-divider{ height:1px; background:#e5e7eb; margin:2px 6px; border-radius:1px; }
+        @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
+        @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
+
+        /* ===== Auth CTA (logged-out) — “Login / SignUp” chip ===== */
+        .tp-auth-cta{
+          display:inline-flex;
+          align-items:center;
+          gap:10px;
+          padding:10px 16px;
+          min-height:40px;
+          background:#eef2f7;
+          color:#111827;
+          border:1px solid #cfd6df;
+          border-radius:12px;
+          text-decoration:none;
+          font-weight:600;
+          line-height:1;
+          white-space:nowrap;
+          transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
+        }
+        .tp-auth-cta:hover{
+          background:#e7ecf3;
+          box-shadow:0 1px 0 rgba(17,24,39,.06) inset;
+        }
+        .tp-auth-cta:active{ transform:translateY(0.5px); }
+
+        .tp-auth-cta-text{
+          display:inline-flex;
+          align-items:center;
+          gap:8px;
+          white-space:nowrap;
+          line-height:1;
+        }
+        .tp-auth-cta-text svg,
+        .tp-auth-cta-icon{
+          width:18px;
+          height:18px;
+          flex:0 0 auto;
+          display:inline-block;
+          vertical-align:middle;
+        }
       `}</style>
     </>
   );
