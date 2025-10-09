@@ -9,18 +9,17 @@ const isCloudinaryUrl = (url) => !!url && /res\.cloudinary\.com/i.test(url);
 
 const processImageUrl = (url) => {
   if (!url) return null;
-  if (isRemote(url)) return url; // http/https → use as-is
+  if (isRemote(url)) return url;
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
   const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
   const cleanPath = url.startsWith('/') ? url.slice(1) : url;
   return `${cleanBaseUrl}/uploads/${cleanPath}`;
 };
 
-/* Dedup while keeping the **first** occurrence */
 const uniqueByUrl = (arr) => {
   const seen = new Set();
   return arr.filter((it) => {
-    const key = `${it.type}|${it.img}|${it.video || ''}`;
+    const key = `${it?.type}|${it?.img}|${it?.video || ''}`;
     if (!it?.img) return false;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -28,7 +27,6 @@ const uniqueByUrl = (arr) => {
   });
 };
 
-/* Fallback image (still fills via object-fit) */
 const NO_IMG = `data:image/svg+xml;utf8,
 <svg xmlns='http://www.w3.org/2000/svg' width='1200' height='900'>
   <rect width='100%' height='100%' fill='%23f5f5f5'/>
@@ -36,38 +34,28 @@ const NO_IMG = `data:image/svg+xml;utf8,
         font-family='Arial' font-size='28' fill='%23999'>No image available</text>
 </svg>`;
 
-/* ------ math to get how the image is rendered inside the box (cover/contain) ------ */
-function getRenderedMetrics({
-  boxW, boxH, naturalW, naturalH, objectFit = 'cover'
-}) {
+/* how the image is rendered inside the box */
+function getRenderedMetrics({ boxW, boxH, naturalW, naturalH, objectFit = 'cover' }) {
   const imgAR = naturalW / naturalH;
   const boxAR = boxW / boxH;
   let renderW, renderH, offsetX, offsetY;
 
   if (objectFit === 'contain') {
     if (imgAR > boxAR) {
-      renderW = boxW;
-      renderH = boxW / imgAR;
+      renderW = boxW; renderH = boxW / imgAR;
     } else {
-      renderH = boxH;
-      renderW = boxH * imgAR;
+      renderH = boxH; renderW = boxH * imgAR;
     }
     offsetX = (boxW - renderW) / 2;
     offsetY = (boxH - renderH) / 2;
   } else {
     // cover
     if (imgAR > boxAR) {
-      // image wider -> height matches box; width overflows
-      renderH = boxH;
-      renderW = boxH * imgAR;
-      offsetX = (boxW - renderW) / 2;
-      offsetY = 0;
+      renderH = boxH; renderW = boxH * imgAR;
+      offsetX = (boxW - renderW) / 2; offsetY = 0;
     } else {
-      // image taller -> width matches box; height overflows
-      renderW = boxW;
-      renderH = boxW / imgAR;
-      offsetX = 0;
-      offsetY = (boxH - renderH) / 2;
+      renderW = boxW; renderH = boxW / imgAR;
+      offsetX = 0; offsetY = (boxH - renderH) / 2;
     }
   }
   return { renderW, renderH, offsetX, offsetY };
@@ -78,28 +66,33 @@ const DetailsThumbWrapper = ({
   img, image1, image2,
   video, videoThumbnail,
 
-  imageURLs,          // [{ type:'image'|'video', img, video? }]
-  apiImages,          // { img?, image1?, image2?, video?, videoThumbnail? }
+  imageURLs,
+  apiImages,
 
   handleImageActive,
-  activeImg,          // default large image
+  activeImg,
+
   imgWidth = 416,
   imgHeight = 480,
+
   videoId = false,
   status,
-  zoomScale = 2.2,
+
+  /* lens & zoom */
+  lensSize = 140,
+  objectFitMode = 'cover',      // 'cover' | 'contain'
   zoomPaneWidth = 620,
   zoomPaneHeight = 480,
-  lensSize = 140,
+  // extra magnification on top of the exact lens→pane mapping
+  extraZoom = 1.0,
+
   lensBorder = '2px solid rgba(59,130,246,.75)',
   lensBg = 'rgba(255,255,255,.25)',
-  // toggle if you ever want contain; all math supports both
-  objectFitMode = 'cover',           // 'cover' | 'contain'
 }) => {
   const [isVideoActive, setIsVideoActive] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
 
-  /* ---------- Build thumbs (img → image1 → image2 → video) ---------- */
+  /* ---------- Build thumbs ---------- */
   const primaryThumbs = useMemo(() => {
     const list = [];
     if (img) list.push({ type: 'image', img: processImageUrl(img) });
@@ -116,8 +109,7 @@ const DetailsThumbWrapper = ({
   const extrasFromApiImages = useMemo(() => {
     const src = apiImages || {};
     const pics = [src.img, src.image1, src.image2]
-      .map(processImageUrl)
-      .filter(Boolean)
+      .map(processImageUrl).filter(Boolean)
       .map((p) => ({ type: 'image', img: p }));
     if (src.video || src.videoThumbnail) {
       const vUrl = src.video ? (isRemote(src.video) ? src.video : processImageUrl(src.video)) : null;
@@ -129,17 +121,15 @@ const DetailsThumbWrapper = ({
 
   const extrasFromImageURLs = useMemo(() => {
     const list = Array.isArray(imageURLs) ? imageURLs : [];
-    return list
-      .map((item) => {
-        if (!item) return null;
-        const type = item.type === 'video' ? 'video' : 'image';
-        const thumb = processImageUrl(item.img || item.thumbnail || item.poster);
-        const vUrl = type === 'video'
-          ? (isRemote(item.video) ? item.video : processImageUrl(item.video))
-          : null;
-        return thumb ? { type, img: thumb, video: vUrl } : null;
-      })
-      .filter(Boolean);
+    return list.map((item) => {
+      if (!item) return null;
+      const type = item.type === 'video' ? 'video' : 'image';
+      const thumb = processImageUrl(item.img || item.thumbnail || item.poster);
+      const vUrl = type === 'video'
+        ? (isRemote(item.video) ? item.video : processImageUrl(item.video))
+        : null;
+      return thumb ? { type, img: thumb, video: vUrl } : null;
+    }).filter(Boolean);
   }, [imageURLs]);
 
   const processedImageURLs = useMemo(
@@ -147,16 +137,15 @@ const DetailsThumbWrapper = ({
     [primaryThumbs, extrasFromApiImages, extrasFromImageURLs]
   );
 
-  /* ---------- Main image handling ---------- */
+  /* ---------- Main image ---------- */
   const mainImageUrl = useMemo(() => {
     if (activeImg) return processImageUrl(activeImg);
     if (img) return processImageUrl(img);
-    const firstImage = processedImageURLs.find(x => x?.type === 'image');
-    return firstImage?.img || null;
+    const first = processedImageURLs.find(x => x?.type === 'image');
+    return first?.img || null;
   }, [img, activeImg, processedImageURLs]);
 
   const [mainSrc, setMainSrc] = useState(mainImageUrl);
-
   useEffect(() => {
     if (mainImageUrl && mainImageUrl !== mainSrc) {
       setMainSrc(mainImageUrl);
@@ -166,7 +155,7 @@ const DetailsThumbWrapper = ({
         handleImageActive({ img: mainImageUrl, type: 'image' });
       }
     }
-  }, [mainImageUrl]); // eslint-disable-line
+  }, [mainImageUrl]); // keep in sync
 
   const isActiveThumb = (item) =>
     (!isVideoActive && item.type === 'image' && item.img === mainSrc) ||
@@ -185,21 +174,20 @@ const DetailsThumbWrapper = ({
     }
   };
 
-  /* ---------------- Zoom + Lens logic (accurate with cover/contain) ---------------- */
+  /* ---------------- Accurate lens → pane mapping ---------------- */
   const imgWrapRef = useRef(null);
   const [showZoom, setShowZoom] = useState(false);
-  const [zoomBgPos, setZoomBgPos] = useState('50% 50%');
   const [naturalSize, setNaturalSize] = useState({ w: imgWidth, h: imgHeight });
+
+  // Zoom pane CSS values (in pixels) — top-left of lens == top-left of zoom pane
+  const [bgSizePx, setBgSizePx] = useState({ w: 0, h: 0 });
+  const [bgPosPx, setBgPosPx] = useState({ x: 0, y: 0 });
 
   const [showLens, setShowLens] = useState(false);
   const [lensPos, setLensPos] = useState({ x: 0, y: 0 });
 
-  const handleImageLoaded = ({ naturalWidth, naturalHeight }) => {
-    setNaturalSize({
-      w: naturalWidth || imgWidth,
-      h: naturalHeight || imgHeight
-    });
-  };
+  const handleImageLoaded = ({ naturalWidth, naturalHeight }) =>
+    setNaturalSize({ w: naturalWidth || imgWidth, h: naturalHeight || imgHeight });
 
   const handleMouseEnter = () => {
     if (!isVideoActive && mainSrc) { setShowZoom(true); setShowLens(true); }
@@ -213,7 +201,7 @@ const DetailsThumbWrapper = ({
     const cx = e.clientX - rect.left;   // cursor in box coords
     const cy = e.clientY - rect.top;
 
-    // compute how the image is drawn in the box
+    // image placement inside the box
     const { renderW, renderH, offsetX, offsetY } = getRenderedMetrics({
       boxW: rect.width,
       boxH: rect.height,
@@ -222,31 +210,41 @@ const DetailsThumbWrapper = ({
       objectFit: objectFitMode
     });
 
-    // clamp cursor to the drawn image area (ignore margins created by fit)
-    const imgX = Math.max(0, Math.min(renderW, cx - offsetX));
-    const imgY = Math.max(0, Math.min(renderH, cy - offsetY));
-
-    // lens should move only over the drawn image area, not margins
+    // lens position (clamped to the drawn image area)
     const half = lensSize / 2;
-    const lx = Math.max(offsetX, Math.min(offsetX + renderW - lensSize, cx - half));
-    const ly = Math.max(offsetY, Math.min(offsetY + renderH - lensSize, cy - half));
+    const minX = offsetX;
+    const maxX = offsetX + renderW - lensSize;
+    const minY = offsetY;
+    const maxY = offsetY + renderH - lensSize;
+
+    const lx = Math.max(minX, Math.min(maxX, cx - half));
+    const ly = Math.max(minY, Math.min(maxY, cy - half));
     setLensPos({ x: lx, y: ly });
 
-    // translate to natural pixel coordinates
-    const px = (imgX / renderW) * naturalSize.w;
-    const py = (imgY / renderH) * naturalSize.h;
+    // convert the LENS TOP-LEFT inside the drawn image -> natural pixels
+    const imgLx = lx - offsetX;                 // px inside drawn image
+    const imgLy = ly - offsetY;
+    const natLx = (imgLx / renderW) * naturalSize.w;
+    const natLy = (imgLy / renderH) * naturalSize.h;
 
-    // background-position in % based on the natural pixel
-    const posX = (px / naturalSize.w) * 100;
-    const posY = (py / naturalSize.h) * 100;
-    setZoomBgPos(`${posX}% ${posY}%`);
+    // scale so lens area exactly fills the pane (with optional extra magnification)
+    const scaleX = (zoomPaneWidth / lensSize) * extraZoom;
+    const scaleY = (zoomPaneHeight / lensSize) * extraZoom;
+
+    // background-size in pixels (natural * scale)
+    const bgW = naturalSize.w * scaleX;
+    const bgH = naturalSize.h * scaleY;
+    setBgSizePx({ w: bgW, h: bgH });
+
+    // background-position in pixels: negative to align lens TL with pane TL
+    const bgX = natLx * scaleX;
+    const bgY = natLy * scaleY;
+    setBgPosPx({ x: bgX, y: bgY });
   };
-
-  const zoomBgSize = `${naturalSize.w * zoomScale}px ${naturalSize.h * zoomScale}px`;
 
   return (
     <div className="pdw-wrapper">
-      {/* Thumbs column */}
+      {/* Thumbs */}
       <nav className="pdw-thumbs">
         <div className="pdw-thumbs-inner">
           {processedImageURLs?.map((item, i) =>
@@ -322,19 +320,15 @@ const DetailsThumbWrapper = ({
                 display: 'block',
                 width: '100%',
                 height: '100%',
-                objectFit: objectFitMode,      // ← accurate mapping for cover/contain
+                objectFit: objectFitMode,
                 objectPosition: 'center',
-                padding: 0,
-                margin: 0,
               }}
               onLoad={(e) => handleImageLoaded(e.currentTarget)}
-              onError={(e) => {
-                if (e.currentTarget.src !== NO_IMG) e.currentTarget.src = NO_IMG;
-              }}
+              onError={(e) => { if (e.currentTarget.src !== NO_IMG) e.currentTarget.src = NO_IMG; }}
             />
           )}
 
-          {/* Lens overlay */}
+          {/* Lens */}
           {!isVideoActive && showLens && mainSrc && (
             <span
               className="pdw-lens"
@@ -355,18 +349,19 @@ const DetailsThumbWrapper = ({
         </div>
       </div>
 
-      {/* Right zoom panel */}
+      {/* Right zoom pane — EXACT lens region */}
       <aside
         className={`pdw-zoom ${showZoom && !isVideoActive ? 'is-visible' : ''}`}
         style={{
           backgroundImage: mainSrc ? `url(${mainSrc})` : 'none',
-          backgroundSize: zoomBgSize,
-          backgroundPosition: zoomBgPos
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: `${bgSizePx.w}px ${bgSizePx.h}px`,
+          backgroundPosition: `-${bgPosPx.x}px -${bgPosPx.y}px`,
         }}
         aria-hidden={!showZoom || isVideoActive}
       />
 
-      {/* ---------- internal styles ---------- */}
+      {/* ---------- styles ---------- */}
       <style jsx>{`
   .pdw-wrapper {
     display: grid;
@@ -375,38 +370,24 @@ const DetailsThumbWrapper = ({
     align-items: start;
   }
 
-  /* Thumbs */
   .pdw-thumbs { width: 96px; }
   .pdw-thumbs-inner {
     display: flex; flex-direction: column; gap: 12px;
     max-height: ${zoomPaneHeight}px;
-    overflow: auto;
-    padding-right: 4px;
+    overflow: auto; padding-right: 4px;
   }
-
   .pdw-thumb {
-    position: relative;
-    width: 80px;
-    height: 80px;
-    padding: 0;
-    border: 0;
-    box-sizing: border-box;
-    border-radius: 12px;
-    overflow: hidden;
-    background: #fff;
-    cursor: pointer;
-    transition: transform 120ms ease, box-shadow 160ms ease;
-    flex: 0 0 auto;
-    display: grid; place-items: center;
+    position: relative; width: 80px; height: 80px;
+    padding: 0; border: 0; box-sizing: border-box;
+    border-radius: 12px; overflow: hidden; background: #fff; cursor: pointer;
+    transition: transform .12s ease, box-shadow .16s ease;
+    flex: 0 0 auto; display: grid; place-items: center;
   }
   .pdw-thumb:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,.08); }
   .pdw-thumb.is-active { box-shadow: inset 0 0 0 3px #3b82f6; }
-  .pdw-thumb:focus { outline: none; }
   .pdw-thumb:focus-visible { box-shadow: inset 0 0 0 3px #3b82f6; }
 
-  .pdw-thumb-img {
-    width: 100%; height: 100%; display: block; object-fit: cover; border-radius: inherit;
-  }
+  .pdw-thumb-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
 
   .pdw-thumb-play {
     position: absolute; inset: 0; display: grid; place-items: center;
@@ -415,54 +396,33 @@ const DetailsThumbWrapper = ({
     pointer-events: none;
   }
 
-  /* Main viewer frame */
   .pdw-main {
     width: ${imgWidth}px; height: ${imgHeight}px;
-    border-radius: 12px;
+    border-radius: 12px; overflow: hidden;
+    background: #fff; border: 1px solid #1b0cf4ff;
     box-shadow: 0 8px 24px rgba(0,0,0,.06);
-    overflow: hidden;
-    background: #fff;
-    border: 1px solid #1b0cf4ff;
-    background-color: #fafafa;
   }
-  .pdw-main-inner {
-    width: 100%; height: 100%;
-    display: grid; place-items: center; position: relative;
-  }
+  .pdw-main-inner { width: 100%; height: 100%; position: relative; display: grid; place-items: center; }
   .pdw-video { background: #000; width: 100%; height: 100%; }
 
-  /* Lens overlay */
   .pdw-lens {
-    position: absolute; top: 0; left: 0;
-    pointer-events: none;
-    border-radius: 8px;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,.6);
+    position: absolute; top: 0; left: 0; pointer-events: none;
+    border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.6);
     backdrop-filter: saturate(120%) brightness(105%);
   }
 
   .tp-product-badge { position: absolute; left: 10px; top: 10px; }
-  .product-hot {
-    display: inline-block; background: #ef4444; color: #fff;
-    font-size: 12px; padding: 4px 8px; border-radius: 6px;
-  }
+  .product-hot { display: inline-block; background: #ef4444; color: #fff; font-size: 12px; padding: 4px 8px; border-radius: 6px; }
 
-  /* Right zoom pane */
   .pdw-zoom {
     width: ${zoomPaneWidth}px; height: ${zoomPaneHeight}px;
-    border-radius: 12px;
-    border: 1px solid #f0f0f0;
-    background-color: #fafafa;
-    background-repeat: no-repeat;
-    background-origin: content-box;
-    background-clip: content-box;
-    box-shadow: 0 8px 24px rgba(0,0,0,.06);
-    overflow: hidden;
+    border-radius: 12px; border: 1px solid #f0f0f0; background-color: #fafafa;
+    box-shadow: 0 8px 24px rgba(0,0,0,.06); overflow: hidden;
     opacity: 0; visibility: hidden; transform: translateY(4px);
-    transition: opacity 160ms ease, visibility 160ms ease, transform 160ms ease;
+    transition: opacity .16s ease, visibility .16s ease, transform .16s ease;
   }
   .pdw-zoom.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
 
-  /* Responsive – hide zoom panel on smaller screens */
   @media (max-width: 1200px) {
     .pdw-wrapper { grid-template-columns: 96px ${imgWidth}px; }
     .pdw-zoom { display: none; }
