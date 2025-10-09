@@ -12,7 +12,7 @@ const ProductDetailsBreadcrumb = ({category,title}) => {
                    <span className="breadcrumb-icon">
                       <SmDot/>{" "}
                    </span>
-                   <span><a href="#">Home</a></span>
+                   <span><a href="/">Home</a></span>
                    <span><a href="#">{category}</a></span>
                   <span
                      dangerouslySetInnerHTML={{ __html: title }}

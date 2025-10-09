@@ -10,7 +10,7 @@ const ContactBreadcrumb = () => {
               <h3 className="breadcrumb__title">Keep In Touch with Us</h3>
               <div className="breadcrumb__list">
                 <span>
-                  <a href="#">Home</a>
+                  <a href="/">Home</a>
                 </span>
                 <span>Contact</span>
               </div>
