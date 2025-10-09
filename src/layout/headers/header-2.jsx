@@ -57,9 +57,9 @@ async function searchProducts(q, limit = PAGE_SIZE, signal) {
       const arr =
         Array.isArray(data) ? data
           : Array.isArray(data?.data) ? data.data
-          : Array.isArray(data?.results) ? data.results
-          : Array.isArray(data?.items) ? data.items
-          : [];
+            : Array.isArray(data?.results) ? data.results
+              : Array.isArray(data?.items) ? data.items
+                : [];
       return arr.map(normalizeProduct);
     } catch (err) {
       // ignore and try next endpoint
@@ -295,7 +295,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                         </form>
 
                         {/* Results popover */}
-                        {searchOpen && (
+                        {/* {searchOpen && (
                           <div className="search-drop" ref={dropRef}>
                             {loading ? (
                               <div className="search-empty">Searching…</div>
@@ -332,20 +332,9 @@ const HeaderTwo = ({ style_2 = false }) => {
                                 </ul>
 
                                 {/* tail loader for infinite scroll */}
-                                {loadingMore && <div className="search-more">Loading more…</div>}
+                                {/* {loadingMore && <div className="search-more">Loading more…</div>}
                                 {/* soft cap notice */}
-                                {limit >= MAX_LIMIT && (
-                                  <div className="search-cap">Showing first {MAX_LIMIT} results</div>
-                                )}
-                              </>
-                            ) : (
-                              <div className="search-empty">
-                                No results. {nonEmpty(query) ? 'Refine your keywords.' : 'Type at least 2 letters.'}
-                                <div className="search-hint">If this persists, check your /product search API.</div>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                               
                       </div>
 
                       {/* Actions */}

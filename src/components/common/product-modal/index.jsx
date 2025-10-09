@@ -136,19 +136,12 @@ export default function ProductModal() {
             videoThumbnail={productItem?.videoThumbnail}
             /* keep extras merged after the primaries */
             imageURLs={imageURLs}
-            /* viewer size */
+            /* wider viewer inside modal; disable external zoom pane */
             imgWidth={420}
             imgHeight={420}
-
-            /* ✅ ENABLE lens on active image (only change required)
-               previously: zoomPaneWidth={0} which disables lens/zoom in most libs */
-            enableLens
-            enlargedPosition="over"   /* overlays enlarged view; no layout change */
-            zoomPaneWidth={420}       /* safe non-zero so zoom is active */
+            zoomPaneWidth={0}
+            /* keep thumbs scrollable by giving them height */
             zoomPaneHeight={420}
-            lensSize={180}            /* optional – tune as you like */
-            /* end lens-related props */
-
             status={normalized?.status}
             /* keep videoId fallback for safety */
             videoId={productItem?.video}
