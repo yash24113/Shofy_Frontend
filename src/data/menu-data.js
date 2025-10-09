@@ -65,18 +65,18 @@ const menu_data = [
   //     { title: 'Hidden Sidebar', link: '/shop-hidden-sidebar' },
   //   ],
   // },
-  {
-    id: 3,
-    sub_menu: true,
-    title: 'E-Commerce',
-    link: '/cart',
-    sub_menus: [
-      { title: 'Shopping Cart', link: '/cart' },
-      { title: 'Wishlist', link: '/wishlist' },
-      { title: 'Checkout', link: '/checkout' },
-      { title: 'My account', link: '/profile' },
-    ],
-  },
+  // {
+  //   id: 3,
+  //   sub_menu: true,
+  //   title: 'E-Commerce',
+  //   link: '/cart',
+  //   sub_menus: [
+  //     { title: 'Shopping Cart', link: '/cart' },
+  //     { title: 'Wishlist', link: '/wishlist' },
+  //     { title: 'Checkout', link: '/checkout' },
+  //     { title: 'My account', link: '/profile' },
+  //   ],
+  // },
   {
     id: 5,
     sub_menu: true,
