@@ -197,7 +197,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       My Profile
                                     </button>
 
-                                    <button
+                                    {/* <button
                                       className="user-item"
                                       type="button"
                                       role="menuitem"
@@ -207,7 +207,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       }}
                                     >
                                       My Orders
-                                    </button>
+                                    </button> */}
 
                                     <div className="user-divider" />
                                     <button

@@ -411,7 +411,7 @@ const DetailsThumbWrapper = ({
     .pdw-wrapper { grid-template-columns: 72px minmax(220px, 1fr); gap: 12px; }
     .pdw-main { width: 100%; height: auto; aspect-ratio: ${imgWidth} / ${imgHeight}; }
   }
-`}</style>
+`}</style>  
     </div>
   );
 };
