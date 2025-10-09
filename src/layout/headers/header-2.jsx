@@ -14,9 +14,72 @@ import CartMiniSidebar from '@/components/common/cart-mini-sidebar';
 import OffCanvas from '@/components/common/off-canvas';
 import Menus from './header-com/menus';
 import { CartTwo, Search } from '@/svg';
-import useSearchFormSubmit from '@/hooks/use-search-form-submit';
 import { FaHeart, FaUser } from 'react-icons/fa';
 import { FiMenu } from 'react-icons/fi';
+
+/* ------------------ small helpers ------------------ */
+const baseApi = () => {
+  const b = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+  return b.endsWith('/') ? b.slice(0, -1) : b;
+};
+const nonEmpty = (v) => v !== undefined && v !== null && String(v).trim() !== '';
+
+/* Debounce hook (for input typing) */
+function useDebounced(value, delay = 250) {
+  const [d, setD] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setD(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return d;
+}
+
+/* Shape normalizer so any backend shape works */
+function normalizeProduct(p) {
+  // Try common fields; keep it defensive
+  const id = p._id || p.id || p.slug || String(Math.random());
+  const slug = p.slug || p.seoSlug || p.handle || '';
+  const name = p.name || p.title || p.productname || p.productName || 'Untitled';
+  const img =
+    p.image ||
+    p.img ||
+    p.thumbnail ||
+    p.images?.[0] ||
+    p.mainImage ||
+    p.picture ||
+    '/assets/img/product/default-product-img.jpg';
+  const price = p.price || p.mrp || p.minPrice || null;
+  return { id, slug, name, img, price };
+}
+
+/* Try a few endpoints, first one that returns ok+json wins */
+async function searchProducts(q, limit = 10, signal) {
+  const b = baseApi();
+  const queries = [
+    `${b}/product/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    `${b}/product?q=${encodeURIComponent(q)}&limit=${limit}`,
+    `/api/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+  ];
+  for (const url of queries) {
+    try {
+      const res = await fetch(url, { signal });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const arr =
+        Array.isArray(data) ? data
+          : Array.isArray(data?.data) ? data.data
+          : Array.isArray(data?.results) ? data.results
+          : Array.isArray(data?.items) ? data.items
+          : [];
+      if (arr.length >= 0) {
+        return arr.map(normalizeProduct);
+      }
+    } catch {
+      /* ignore & try next */
+    }
+  }
+  return [];
+}
 
 const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
@@ -32,7 +95,79 @@ const HeaderTwo = ({ style_2 = false }) => {
   useEffect(() => { dispatch(get_cart_products()); }, [dispatch]);
 
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
-  const { searchText, setSearchText, handleSubmit: handleSearchSubmit } = useSearchFormSubmit();
+
+  // ---- Inline search state (new) ----
+  const [searchText, setSearchText] = useState('');
+  const debouncedQ = useDebounced(searchText, 250);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState([]);
+  const [selIndex, setSelIndex] = useState(-1);   // keyboard selection
+  const searchWrapRef = useRef(null);
+
+  // Fetch as you type (2+ chars)
+  useEffect(() => {
+    const controller = new AbortController();
+    const q = (debouncedQ || '').trim();
+    if (q.length < 2) {
+      setResults([]);
+      setSelIndex(-1);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setSearchOpen(true);
+    searchProducts(q, 10, controller.signal)
+      .then((arr) => {
+        setResults(arr);
+        setSelIndex(arr.length ? 0 : -1);
+      })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [debouncedQ]);
+
+  // Close popover on outside click / ESC
+  useEffect(() => {
+    const onDoc = (e) => {
+      const w = searchWrapRef.current;
+      if (!w) return;
+      if (!w.contains(e.target)) setSearchOpen(false);
+    };
+    const onEsc = (e) => { if (e.key === 'Escape') setSearchOpen(false); };
+    document.addEventListener('mousedown', onDoc, true);
+    document.addEventListener('touchstart', onDoc, true);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDoc, true);
+      document.removeEventListener('touchstart', onDoc, true);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, []);
+
+  const onSearchSubmit = (e) => {
+    e.preventDefault(); // stay in place
+    if (selIndex >= 0 && results[selIndex]) {
+      const p = results[selIndex];
+      const href = p.slug ? `/product-details/${p.slug}` : `/product-details?id=${encodeURIComponent(p.id)}`;
+      window.location.href = href; // explicit navigate only when user presses Enter on a selection
+    } else {
+      setSearchOpen(true); // just keep panel open
+    }
+  };
+
+  // Keyboard navigation
+  const onSearchKeyDown = (e) => {
+    if (!searchOpen) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelIndex((i) => Math.min((results.length || 0) - 1, (i < 0 ? 0 : i + 1)));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelIndex((i) => Math.max(-1, i - 1));
+    } else if (e.key === 'Enter') {
+      // handled in onSearchSubmit
+    }
+  };
 
   // ---- Session & user dropdown ----
   const [hasSession, setHasSession] = useState(false);
@@ -56,7 +191,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // Close dropdown on outside click / touch / ESC / scroll / resize / tab hide
+  // Close account dropdown on outside click / ESC / etc.
   useEffect(() => {
     const close = () => setUserOpen(false);
 
@@ -150,19 +285,61 @@ const HeaderTwo = ({ style_2 = false }) => {
                   {/* Right side */}
                   <div className="col-6 col-sm-8 col-md-8 col-lg-9 col-xl-5">
                     <div className="tp-header-bottom-right d-flex align-items-center justify-content-end">
-                      <div className="tp-header-search-2 d-none d-sm-block me-3 search-spacer">
-                        <form onSubmit={handleSearchSubmit}>
+                      {/* ======= SEARCH (inline) ======= */}
+                      <div className="tp-header-search-2 d-none d-sm-block me-3 search-spacer" ref={searchWrapRef}>
+                        <form onSubmit={onSearchSubmit}>
                           <input
-                            onChange={(e) => setSearchText(e.target.value)}
+                            onChange={(e) => { setSearchText(e.target.value); if (!searchOpen) setSearchOpen(true); }}
                             value={searchText}
+                            onKeyDown={onSearchKeyDown}
                             type="text"
                             placeholder="Search for Products..."
                             aria-label="Search products"
+                            onFocus={() => { if (nonEmpty(searchText)) setSearchOpen(true); }}
                           />
                           <button type="submit" aria-label="Search">
                             <Search />
                           </button>
                         </form>
+
+                        {/* Results popover */}
+                        {searchOpen && (
+                          <div className="search-drop">
+                            {loading ? (
+                              <div className="search-empty">Searching…</div>
+                            ) : results.length ? (
+                              <ul className="search-list" role="listbox">
+                                {results.map((p, idx) => {
+                                  const href = p.slug
+                                    ? `/product-details/${p.slug}`
+                                    : `/product-details?id=${encodeURIComponent(p.id)}`;
+                                  return (
+                                    <li
+                                      key={p.id || p.slug || idx}
+                                      className={`search-item ${idx === selIndex ? 'is-active' : ''}`}
+                                      role="option"
+                                      aria-selected={idx === selIndex}
+                                      onMouseEnter={() => setSelIndex(idx)}
+                                    >
+                                      <Link href={href} className="search-link" onClick={() => setSearchOpen(false)}>
+                                        <img src={p.img} alt={p.name} width={44} height={44} loading="lazy" />
+                                        <span className="search-meta">
+                                          <span className="search-name">{p.name}</span>
+                                          {p.price ? <span className="search-price">₹{p.price}</span> : null}
+                                        </span>
+                                      </Link>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : (
+                              <div className="search-empty">
+                                No results. {nonEmpty(searchText) ? 'Refine your keywords.' : 'Type at least 2 letters.'}
+                                <div className="search-hint">If this persists, check your /product search API.</div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="tp-header-action d-flex align-items-center">
@@ -197,18 +374,6 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       My Profile
                                     </button>
 
-                                    {/* <button
-                                      className="user-item"
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        dispatch(openCartMini());
-                                      }}
-                                    >
-                                      My Orders
-                                    </button> */}
-
                                     <div className="user-divider" />
                                     <button
                                       className="user-item danger"
@@ -224,16 +389,15 @@ const HeaderTwo = ({ style_2 = false }) => {
                             </>
                           ) : (
                             <Link
-  href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
-  className="tp-auth-cta"
-  aria-label="Login or Sign Up"
->
-  <span className="tp-auth-cta-text">
-    <FaUser className="tp-auth-cta-icon" />
-    <span>Login&nbsp;/&nbsp;SignUp</span>
-  </span>
-</Link>
-
+                              href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
+                              className="tp-auth-cta"
+                              aria-label="Login or Sign Up"
+                            >
+                              <span className="tp-auth-cta-text">
+                                <FaUser className="tp-auth-cta-icon" />
+                                <span>Login&nbsp;/&nbsp;SignUp</span>
+                              </span>
+                            </Link>
                           )}
                         </div>
 
@@ -310,6 +474,43 @@ const HeaderTwo = ({ style_2 = false }) => {
           align-items: center;
         }
 
+        /* ====== Search dropdown ====== */
+        .search-drop{
+          position:absolute;
+          z-index: 1100;
+          width:min(560px, 70vw);
+          max-height:60vh;
+          overflow:auto;
+          margin-top: 10px;
+          background:#fff;
+          border:1px solid #e5e7eb;
+          border-radius: 12px;
+          box-shadow: 0 18px 40px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
+          padding: 6px;
+        }
+        .search-empty{
+          padding:14px 16px;
+          font-size:14px;
+          color:#374151;
+        }
+        .search-hint{ font-size:12px; color:#6b7280; margin-top:4px; }
+
+        .search-list{ list-style:none; padding:0; margin:0; }
+        .search-item{ border-radius:10px; }
+        .search-item + .search-item{ margin-top:4px; }
+        .search-item.is-active{ background:#eef2ff; }
+        .search-link{
+          display:flex; align-items:center; gap:12px;
+          padding:10px 12px; text-decoration:none; color:#111827;
+        }
+        .search-link img{
+          width:44px; height:44px; object-fit:cover; border-radius:8px; flex:0 0 auto;
+          background:#f3f4f6; border:1px solid #f3f4f6;
+        }
+        .search-meta{ display:flex; flex-direction:column; min-width:0; }
+        .search-name{ font-weight:600; font-size:14px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 360px; }
+        .search-price{ font-size:12px; color:#6b7280; margin-top:2px; }
+
         /* ===== Dropdown ===== */
         .user-menu-dropdown{
           position:absolute;
@@ -348,48 +549,44 @@ const HeaderTwo = ({ style_2 = false }) => {
         @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
         @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
 
-      /* ===== Auth CTA (logged-out) — “Login / SignUp” chip ===== */
-.tp-auth-cta{
-  display:inline-flex;
-  align-items:center;
-  gap:10px;
-  padding:10px 16px;
-  min-height:40px;
-  background:#eef2f7;
-  color:#111827;
-  border:1px solid #cfd6df;
-  border-radius:12px;
-  text-decoration:none;
-  font-weight:600;
-  line-height:1;
-  white-space:nowrap;           /* prevent wrapping */
-  transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
-}
-.tp-auth-cta:hover{
-  background:#e7ecf3;
-  box-shadow:0 1px 0 rgba(17,24,39,.06) inset;
-}
-.tp-auth-cta:active{ transform:translateY(0.5px); }
+        /* ===== Auth CTA (logged-out) ===== */
+        .tp-auth-cta{
+          display:inline-flex;
+          align-items:center;
+          gap:10px;
+          padding:10px 16px;
+          min-height:40px;
+          background:#eef2f7;
+          color:#111827;
+          border:1px solid #cfd6df;
+          border-radius:12px;
+          text-decoration:none;
+          font-weight:600;
+          line-height:1;
+          white-space:nowrap;
+          transition:background .15s ease, box-shadow .15s ease, transform .02s ease;
+        }
+        .tp-auth-cta:hover{
+          background:#e7ecf3;
+          box-shadow:0 1px 0 rgba(17,24,39,.06) inset;
+        }
+        .tp-auth-cta:active{ transform:translateY(0.5px); }
 
-/* 🔒 keep icon + text on ONE line and vertically centered */
-.tp-auth-cta-text{
-  display:inline-flex;          /* was inline-block */
-  align-items:center;
-  gap:8px;
-  white-space:nowrap;           /* double-lock no wrap */
-  line-height:1;
-}
-
-/* normalize the icon so it doesn't drop */
-.tp-auth-cta-text svg,
-.tp-auth-cta-icon{
-  width:18px;
-  height:18px;
-  flex:0 0 auto;
-  display:inline-block;
-  vertical-align:middle;
-}
-
+        .tp-auth-cta-text{
+          display:inline-flex;
+          align-items:center;
+          gap:8px;
+          white-space:nowrap;
+          line-height:1;
+        }
+        .tp-auth-cta-text svg,
+        .tp-auth-cta-icon{
+          width:18px;
+          height:18px;
+          flex:0 0 auto;
+          display:inline-block;
+          vertical-align:middle;
+        }
       `}</style>
     </>
   );
