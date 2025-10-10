@@ -37,13 +37,19 @@ const isNoneish = (s) => {
 const getSessionId = () =>
   (typeof window !== "undefined" && localStorage.getItem("sessionId")) || null;
 
-const selectUserId = (state) =>
+// Prefer Redux, but fall back to localStorage key `userid` / `userId`
+const selectUserIdFromStore = (state) =>
   state?.auth?.user?._id ||
   state?.auth?.user?.id ||
   state?.auth?.userInfo?._id ||
   state?.auth?.userInfo?.id ||
   state?.user?.user?._id ||
   null;
+
+const getUserIdFromLocal = () => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("userid") || localStorage.getItem("userId") || null;
+};
 
 const GUEST_KEY = "wishlist_guest";
 const userKey = (uid, sid) => `wishlist_${uid || "anon"}_${sid || "nosid"}`;
@@ -89,16 +95,24 @@ const mergeUniqueById = (a = [], b = []) => {
 const removeById = (arr = [], id) => arr.filter((x) => (x?._id || x?.id) !== id);
 
 /* ---------- server (API) ---------- */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
 
-/** GET /api/wishlist/:userId
- *  Response can be:
- *  { success, data: { productIds: [ {_id, name?} ... ] } } OR an array of full products.
+// Ensure we hit `/shopy/wishlist/:userId` even if base env ends with `/shopy/api`
+const WISHLIST_BASE = (() => {
+  if (!API_BASE) return "https://test.amrita-fashions.com/shopy";
+  if (/\/api$/i.test(API_BASE)) return API_BASE.replace(/\/api$/i, "");
+  if (/\/shopy$/i.test(API_BASE)) return API_BASE;
+  return `${API_BASE}/shopy`;
+})();
+
+/** GET /shopy/wishlist/:userId
+ *  Normalize response to an array of {_id} or full product objects.
  */
 async function fetchServerWishlist(userId) {
-  if (!userId || !API_BASE) return [];
+  if (!userId) return [];
   try {
-    const res = await fetch(`${API_BASE}/wishlist/${encodeURIComponent(userId)}`, {
+    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
+    const res = await fetch(url, {
       method: "GET",
       credentials: "include",
       headers: { Accept: "application/json" },
@@ -107,19 +121,16 @@ async function fetchServerWishlist(userId) {
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
 
-    // try to normalize: return an array of objects with _id or id
     if (Array.isArray(data)) return data;
     if (Array.isArray(data?.items)) return data.items;
     if (Array.isArray(data?.data?.items)) return data.data.items;
 
-    // the Postman screenshot shows productIds as an array of objects:
-    // data: { productIds: [ { _id: "..." , name? } ] }
-    if (Array.isArray(data?.data?.productIds)) {
-      return data.data.productIds.map((x) => ({ _id: x?._id || x?.id || x }));
-    }
-    if (Array.isArray(data?.productIds)) {
-      return data.productIds.map((x) => ({ _id: x?._id || x?.id || x }));
-    }
+    const idsA = data?.data?.productIds;
+    const idsB = data?.productIds;
+    if (Array.isArray(idsA))
+      return idsA.map((x) => (typeof x === "string" ? { _id: x } : { _id: x?._id || x?.id || x }));
+    if (Array.isArray(idsB))
+      return idsB.map((x) => (typeof x === "string" ? { _id: x } : { _id: x?._id || x?.id || x }));
 
     return [];
   } catch (err) {
@@ -128,16 +139,17 @@ async function fetchServerWishlist(userId) {
   }
 }
 
-/** PUT /api/wishlist/:userId
+/** PUT /shopy/wishlist/:userId
  *  Body: { userId, productIds: string[] }
  */
 async function pushServerWishlist(userId, itemsOrIds) {
-  if (!userId || !API_BASE) return false;
+  if (!userId) return false;
   try {
     const productIds = Array.isArray(itemsOrIds)
       ? (typeof itemsOrIds[0] === "string" ? itemsOrIds : uniqueIds(itemsOrIds))
       : [];
-    const res = await fetch(`${API_BASE}/wishlist/${encodeURIComponent(userId)}`, {
+    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
+    const res = await fetch(url, {
       method: "PUT",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -159,15 +171,14 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
     window.__listVis = window.__listVis || {};
     const bucket = (window.__listVis[listId] = window.__listVis[listId] || { vis: 0, banner: null });
 
-    // Find this row's tbody
-    const tbody = rowRef.current?.closest('tbody');
+    const tbody = rowRef.current?.closest("tbody");
     if (!tbody) return;
 
     const ensureBannerExists = () => {
       if (bucket.banner && bucket.banner.isConnected) return bucket.banner;
-      const tr = document.createElement('tr');
-      tr.className = 'empty-row';
-      const td = document.createElement('td');
+      const tr = document.createElement("tr");
+      tr.className = "empty-row";
+      const td = document.createElement("td");
       td.colSpan = 999;
       td.innerHTML = `
         <div class="empty-wrap" role="status" aria-live="polite">
@@ -182,11 +193,8 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
       return tr;
     };
 
-    // Track previous visibility on the element (JS allows adding props)
     let prev = rowRef.current ? rowRef.current.__wasVisible : undefined;
-
     if (prev === undefined) {
-      // first run: initialize counter based on current visibility
       if (rowVisible) bucket.vis += 1;
     } else {
       if (rowVisible && !prev) bucket.vis += 1;
@@ -194,7 +202,6 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
     }
     if (rowRef.current) rowRef.current.__wasVisible = rowVisible;
 
-    // Place or remove banner
     const banner = bucket.banner;
     if (bucket.vis <= 0) {
       const b = ensureBannerExists();
@@ -203,7 +210,6 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
       banner.remove();
     }
 
-    // Cleanup on unmount
     return () => {
       const was = rowRef.current ? rowRef.current.__wasVisible : undefined;
       if (was) bucket.vis = Math.max(0, bucket.vis - 1);
@@ -230,7 +236,8 @@ const WishlistItem = ({ product }) => {
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
   const { wishlist } = useSelector((state) => state.wishlist) || { wishlist: [] };
-  const userId = useSelector(selectUserId);
+  const userIdFromStore = useSelector(selectUserIdFromStore);
+  const userId = userIdFromStore || getUserIdFromLocal();
 
   const { _id, img, title, salesPrice } = product || {};
   const isInCart = cart_products?.find?.((item) => item?._id === _id);
@@ -242,73 +249,80 @@ const WishlistItem = ({ product }) => {
   // 🔎 subscribe to global search
   const { debounced: globalQuery } = useGlobalSearch(150);
 
-  const searchableFields = useMemo(() => ([
-    (p) => p?.title, (p) => p?.name, (p) => p?._id, (p) => p?.id, (p) => p?.slug,
-    (p) => p?.fabricType || p?.fabric_type,
-    (p) => p?.content || p?.contentName || p?.content_label,
-    (p) => p?.design || p?.designName,
-    (p) => p?.colors || p?.color || p?.colorName,
-    (p) => p?.finish || p?.subfinish?.name || p?.finishName,
-    (p) => p?.structure || p?.substructure?.name || p?.structureName,
-    (p) => p?.widthLabel || p?.width_cm || p?.width,
-    (p) => p?.tags, (p) => p?.sku,
-  ]), []);
+  const searchableFields = useMemo(
+    () => [
+      (p) => p?.title,
+      (p) => p?.name,
+      (p) => p?._id,
+      (p) => p?.id,
+      (p) => p?.slug,
+      (p) => p?.fabricType || p?.fabric_type,
+      (p) => p?.content || p?.contentName || p?.content_label,
+      (p) => p?.design || p?.designName,
+      (p) => p?.colors || p?.color || p?.colorName,
+      (p) => p?.finish || p?.subfinish?.name || p?.finishName,
+      (p) => p?.structure || p?.substructure?.name || p?.structureName,
+      (p) => p?.widthLabel || p?.width_cm || p?.width,
+      (p) => p?.tags,
+      (p) => p?.sku,
+    ],
+    []
+  );
 
   const matchesQuery = useMemo(() => {
     const q = (globalQuery || "").trim();
-    if (q.length < 2) return true; // don't filter tiny queries
+    if (q.length < 2) return true;
     const pred = buildSearchPredicate(q, searchableFields, {
-      mode: "AND", normalize: true, minTokenLen: 2,
+      mode: "AND",
+      normalize: true,
+      minTokenLen: 2,
     });
     return pred(product);
   }, [globalQuery, product, searchableFields]);
 
-  // EMPTY banner manager (wishlist)
-  const { rowRef } = useEmptyBanner(
-    'wishlist',
-    !!matchesQuery,
-    'No product found in wishlist'
-  );
+  const { rowRef } = useEmptyBanner("wishlist", !!matchesQuery, "No product found in wishlist");
 
-  // current page url (for redirect after auth)
   const currentUrlWithQuery = useMemo(() => {
     const url =
       typeof window !== "undefined" ? new URL(window.location.href) : new URL("http://localhost");
     return url.pathname + url.search;
   }, [pathname, searchParams]);
 
-  const pushAuthQuery = useCallback((type) => {
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    if (type) {
-      url.searchParams.set("auth", type);
-      url.searchParams.set("redirect", currentUrlWithQuery);
-    } else {
-      url.searchParams.delete("auth");
-      url.searchParams.delete("redirect");
-    }
-    const qs = url.searchParams.toString();
-    router.push(qs ? `${url.pathname}?${qs}` : url.pathname, { scroll: false });
-  }, [currentUrlWithQuery, router]);
+  const pushAuthQuery = useCallback(
+    (type) => {
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      if (type) {
+        url.searchParams.set("auth", type);
+        url.searchParams.set("redirect", currentUrlWithQuery);
+      } else {
+        url.searchParams.delete("auth");
+        url.searchParams.delete("redirect");
+      }
+      const qs = url.searchParams.toString();
+      router.push(qs ? `${url.pathname}?${qs}` : url.pathname, { scroll: false });
+    },
+    [currentUrlWithQuery, router]
+  );
 
-  const closeAuth = useCallback(() => { setAuthModal(null); pushAuthQuery(null); }, [pushAuthQuery]);
-  const openLogin = useCallback(() => { setAuthModal("login"); pushAuthQuery("login"); }, [pushAuthQuery]);
-  const openRegister = useCallback(() => { setAuthModal("register"); pushAuthQuery("register"); }, [pushAuthQuery]);
+  const closeAuth = useCallback(() => {
+    setAuthModal(null);
+    pushAuthQuery(null);
+  }, [pushAuthQuery]);
+  const openLogin = useCallback(() => {
+    setAuthModal("login");
+    pushAuthQuery("login");
+  }, [pushAuthQuery]);
+  const openRegister = useCallback(() => {
+    setAuthModal("register");
+    pushAuthQuery("register");
+  }, [pushAuthQuery]);
 
   /* ---------- Sync helpers ---------- */
   const getActiveKey = () => {
     const sid = getSessionId();
     if (sid && userId) return userKey(userId, sid);
     return GUEST_KEY;
-  };
-
-  const pushServerFromLocal = async () => {
-    const sid = getSessionId();
-    if (!sid || !userId) return;
-    const key = userKey(userId, sid);
-    const list = readFromKey(key);
-    const ok = await pushServerWishlist(userId, list);
-    if (!ok) console.warn("pushServerFromLocal: server sync failed");
   };
 
   const mirrorRemoveEverywhere = async (id) => {
@@ -318,7 +332,7 @@ const WishlistItem = ({ product }) => {
     writeToKey(key, next);
     const sid = getSessionId();
     if (sid && userId) {
-      await pushServerWishlist(userId, next); // push productIds to server
+      await pushServerWishlist(userId, next);
     }
   };
 
@@ -329,28 +343,19 @@ const WishlistItem = ({ product }) => {
     if (!sid || !userId || migratedOnce) return;
 
     const guestList = readFromKey(GUEST_KEY);
-    if (guestList.length > 0) {
-      const uKey = userKey(userId, sid);
-      const userScoped = readFromKey(uKey);
-      (async () => {
-        const serverItems = await fetchServerWishlist(userId);
-        const merged = mergeUniqueById(mergeUniqueById(userScoped, guestList), serverItems);
-        writeToKey(uKey, merged);
-        try { localStorage.removeItem(GUEST_KEY); } catch(e) { console.log("error", e); }
-        await pushServerWishlist(userId, merged); // push productIds
-        setMigratedOnce(true);
-      })();
-    } else {
-      (async () => {
-        const uKey = userKey(userId, sid);
-        const userScoped = readFromKey(uKey);
-        const serverItems = await fetchServerWishlist(userId);
-        const merged = mergeUniqueById(userScoped, serverItems);
-        writeToKey(uKey, merged);
-        await pushServerWishlist(userId, merged); // ensure server has latest
-        setMigratedOnce(true);
-      })();
-    }
+    const uKey = userKey(userId, sid);
+    const userScoped = readFromKey(uKey);
+
+    (async () => {
+      const serverItems = await fetchServerWishlist(userId);
+      const merged = mergeUniqueById(mergeUniqueById(userScoped, guestList), serverItems);
+      writeToKey(uKey, merged);
+      try {
+        localStorage.removeItem(GUEST_KEY);
+      } catch(err) {console.log("localStorage remove error", err);}
+      await pushServerWishlist(userId, merged);
+      setMigratedOnce(true);
+    })();
   }, [userId, migratedOnce]);
 
   // Deep-link auth modal (?auth=login|register)
@@ -364,7 +369,10 @@ const WishlistItem = ({ product }) => {
   /* ---------- Actions ---------- */
   const handleAddProduct = async (prd) => {
     const sid = getSessionId();
-    if (!sid) { openLogin(); return; }
+    if (!sid || !userId) {
+      openLogin();
+      return;
+    }
     try {
       setMoving(true);
       dispatch(add_cart_product(prd));
@@ -381,21 +389,18 @@ const WishlistItem = ({ product }) => {
     if (id) await mirrorRemoveEverywhere(id);
   };
 
-  // If row is hidden for this query, keep a hidden <tr> so the banner logic can compute properly.
   const hidden = !matchesQuery;
 
-  const imageUrl = (product?.img?.startsWith?.("http") ? product.img : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${product?.img || ""}`);
+  const imageBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
+  const imageUrl =
+    product?.img?.startsWith?.("http") ? product.img : `${imageBase}/uploads/${product?.img || ""}`;
   const slug = product?.slug || _id;
 
-  // details for display
   const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
-  const fabricTypeVal =
-    toText(pick(product?.fabricType, product?.fabric_type)) || "Woven Fabrics";
+  const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type)) || "Woven Fabrics";
   const contentVal = toText(pick(product?.content, product?.contentName, product?.content_label));
   const weightVal =
-    isFinite(gsm) && gsm > 0
-      ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz`
-      : toText(product?.weight);
+    isFinite(gsm) && gsm > 0 ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz` : toText(product?.weight);
   const designVal = toText(pick(product?.design, product?.designName));
   const colorsVal = toText(pick(product?.colors, product?.color, product?.colorName));
   const widthCm = Number(pick(product?.widthCm, product?.width_cm, product?.width));
@@ -407,8 +412,14 @@ const WishlistItem = ({ product }) => {
   const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName));
 
   const allDetails = [
-    fabricTypeVal, contentVal, weightVal, designVal,
-    colorsVal, widthVal, finishVal, structureVal,
+    fabricTypeVal,
+    contentVal,
+    weightVal,
+    designVal,
+    colorsVal,
+    widthVal,
+    finishVal,
+    structureVal,
   ].filter((v) => nonEmpty(v) && !isNoneish(v));
   const topFourDetails = allDetails.slice(0, 4);
   const mid4 = Math.ceil(topFourDetails.length / 2);
@@ -417,7 +428,7 @@ const WishlistItem = ({ product }) => {
 
   return (
     <>
-      <tr className="wishlist-row" ref={rowRef} style={hidden ? { display: 'none' } : undefined}>
+      <tr className="wishlist-row" ref={rowRef} style={hidden ? { display: "none" } : undefined}>
         {/* img */}
         <td className="tp-cart-img wishlist-cell">
           <Link href={`/fabric/${slug}`} className="wishlist-img-link">
@@ -436,7 +447,9 @@ const WishlistItem = ({ product }) => {
 
         {/* title */}
         <td className="tp-cart-title wishlist-cell">
-          <Link href={`/fabric/${slug}`} className="wishlist-title">{title}</Link>
+          <Link href={`/fabric/${slug}`} className="wishlist-title">
+            {title}
+          </Link>
           {topFourDetails.length ? (
             <div className="wishlist-specs">
               <ul className="wishlist-spec-col">
@@ -459,7 +472,7 @@ const WishlistItem = ({ product }) => {
 
         {/* price */}
         <td className="tp-cart-price wishlist-cell">
-          <span className="wishlist-price">{(Number(salesPrice || 0)).toFixed(2)}</span>
+          <span className="wishlist-price">{Number(salesPrice || 0).toFixed(2)}</span>
         </td>
 
         {/* add to cart */}
@@ -484,7 +497,8 @@ const WishlistItem = ({ product }) => {
             type="button"
             title="Remove from wishlist"
           >
-            <Close /><span> Remove</span>
+            <Close />
+            <span> Remove</span>
           </button>
         </td>
       </tr>
