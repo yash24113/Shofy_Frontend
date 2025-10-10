@@ -98,13 +98,10 @@ const ShopContent = ({
       if (!entry.isIntersecting) return;
       if (loadingRef.current) return;
 
-      // if we still have items to reveal, reveal exactly one row (4 items)
       if (visibleCount < filteredRows.length) {
         loadingRef.current = true;
-        // small rAF to keep UI super smooth
         requestAnimationFrame(() => {
           setVisibleCount((c) => Math.min(c + STEP, filteredRows.length));
-          // small timeout to avoid rapid multi-fires when layout shifts
           setTimeout(() => { loadingRef.current = false; }, 120);
         });
       }
@@ -112,7 +109,7 @@ const ShopContent = ({
 
     const io = new IntersectionObserver(onIntersect, {
       root: null,
-      rootMargin: '200px 0px', // pre-load a bit earlier
+      rootMargin: '200px 0px',
       threshold: 0.01,
     });
 
@@ -155,15 +152,13 @@ const ShopContent = ({
               <div className="shop-toolbar-sticky">
                 <div className="tp-shop-top mb-45">
                   <div className="row">
-                 
                     <div className="col-xl-6">
                       <ShopTopLeft
                         showing={filteredRows.slice(0, visibleCount).length}
                         total={all_products.length}
                       />
                     </div>
-                       {/* optional toolbar blocks kept commented
-                    <div className="col-xl-6">
+                    {/* <div className="col-xl-6">
                       <ShopTopRight selectHandleFilter={selectHandleFilter} />
                     </div> */}
                   </div>
@@ -194,7 +189,9 @@ const ShopContent = ({
                                 key={item?._id || item?.id || idx}
                                 className={`product-cell ${isNew ? 'item-appear' : ''}`}
                               >
-                                <ProductItem product={item} />
+                                <div className="product-card">
+                                  <ProductItem product={item} />
+                                </div>
                               </div>
                             );
                           })}
@@ -210,7 +207,9 @@ const ShopContent = ({
                                 key={item?._id || item?.id || idx}
                                 className={`list-cell ${isNew ? 'item-appear' : ''}`}
                               >
-                                <ShopListItem product={item} />
+                                <div className="product-card">
+                                  <ShopListItem product={item} />
+                                </div>
                               </div>
                             );
                           })}
@@ -243,6 +242,7 @@ const ShopContent = ({
           display: grid;
           gap: 24px;
           grid-template-columns: repeat(4, minmax(0, 1fr));
+          align-items: stretch;
         }
         @media (max-width: 1199px) {
           .products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -255,6 +255,13 @@ const ShopContent = ({
         }
 
         .product-cell, .list-cell { will-change: transform, opacity; }
+        .product-card {
+          width: 100%;
+          max-width: 100%;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+        }
 
         /* appear animation for newly revealed items */
         .item-appear {
@@ -267,9 +274,58 @@ const ShopContent = ({
         }
 
         /* Sentinel to trigger loads (invisible) */
-        .sentinel {
+        .sentinel { width: 100%; height: 1px; }
+      `}</style>
+
+      {/* Global overrides to neutralize conflicting theme/Bootstrap rules
+          and fix “skinny image” issue inside unknown ProductItem markup */}
+      <style jsx global>{`
+        /* Force any nested bootstrap-like cols inside grid items to fill the cell */
+        .products-grid .product-card [class*="col-"] {
+          width: 100% !important;
+          max-width: 100% !important;
+          flex: 1 1 auto !important;
+          padding: 0 !important;
+        }
+
+        /* Make top product media square & cover */
+        .products-grid .product-card img {
+          display: block;
+          width: 100% !important;
+          height: auto;
+          object-fit: cover;
+        }
+
+        /* If your ProductItem uses a dedicated thumb wrapper, normalize it */
+        .products-grid .product-card .tp-product-thumb,
+        .products-grid .product-card .product-thumb,
+        .products-grid .product-card .thumb,
+        .products-grid .product-card .image,
+        .products-grid .product-card .card-img,
+        .products-grid .product-card .card-image {
+          position: relative;
           width: 100%;
-          height: 1px;
+          aspect-ratio: 1 / 1;     /* <-- prevents tall pill images */
+          overflow: hidden;
+          border-radius: 12px;
+        }
+        .products-grid .product-card .tp-product-thumb img,
+        .products-grid .product-card .product-thumb img,
+        .products-grid .product-card .thumb img,
+        .products-grid .product-card .image img,
+        .products-grid .product-card .card-img img,
+        .products-grid .product-card .card-image img {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        /* Ensure the whole card isn’t constrained to a tiny width by any external rule */
+        .products-grid .product-card,
+        .products-grid .product-card > * {
+          max-width: 100% !important;
         }
       `}</style>
     </section>
