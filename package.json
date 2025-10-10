@@ -41,6 +41,7 @@
     "react-dom": "^18",
     "react-hook-form": "^7.57.0",
     "react-icons": "^5.5.0",
+    "react-intersection-observer": "^9.16.0",
     "react-modal": "^3.16.1",
     "react-modal-video": "^2.0.1",
     "react-paginate": "^8.2.0",
