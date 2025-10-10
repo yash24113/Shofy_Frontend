@@ -105,9 +105,7 @@ const WISHLIST_BASE = (() => {
   return `${API_BASE}/shopy`;
 })();
 
-/** GET /shopy/wishlist/:userId
- *  Normalize response to an array of {_id} or full product objects.
- */
+/** GET /shopy/wishlist/:userId  → normalize to array of {_id} or full products */
 async function fetchServerWishlist(userId) {
   if (!userId) return [];
   try {
@@ -139,9 +137,7 @@ async function fetchServerWishlist(userId) {
   }
 }
 
-/** PUT /shopy/wishlist/:userId
- *  Body: { userId, productIds: string[] }
- */
+/** PUT /shopy/wishlist/:userId  Body: { userId, productIds } */
 async function pushServerWishlist(userId, itemsOrIds) {
   if (!userId) return false;
   try {
@@ -219,7 +215,7 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
         const b = ensureBannerExists();
         if (!b.isConnected && tbody.isConnected) tbody.appendChild(b);
       } else if (bucket.banner && bucket.banner.isConnected && bucket.vis > 0) {
-        bucket.banner.remove();
+        banner.remove();
       }
     };
   }, [listId, rowVisible, emptyText]);
@@ -239,12 +235,16 @@ const WishlistItem = ({ product }) => {
   const userIdFromStore = useSelector(selectUserIdFromStore);
   const userId = userIdFromStore || getUserIdFromLocal();
 
-  const { _id, img, title, salesPrice } = product || {};
+  const { _id, title, salesPrice } = product || {};
   const isInCart = cart_products?.find?.((item) => item?._id === _id);
 
   const [moving, setMoving] = useState(false);
   const [authModal, setAuthModal] = useState(null); // 'login' | 'register' | null
   const [migratedOnce, setMigratedOnce] = useState(false);
+
+  // NEW: state that mirrors server wishlist -> Set of ids
+  const [serverIds, setServerIds] = useState(null);
+  const [loadingServer, setLoadingServer] = useState(true);
 
   // 🔎 subscribe to global search
   const { debounced: globalQuery } = useGlobalSearch(150);
@@ -269,6 +269,36 @@ const WishlistItem = ({ product }) => {
     []
   );
 
+  // -------- Fetch server wishlist on page load --------
+  useEffect(() => {
+    let stop = false;
+    (async () => {
+      if (!userId) { setServerIds(new Set()); setLoadingServer(false); return; }
+      setLoadingServer(true);
+      const list = await fetchServerWishlist(userId);          // GET /shopy/wishlist/:userId
+      if (stop) return;
+
+      // normalize to ids + persist to scoped localStorage so other parts of app can read
+      const ids = uniqueIds(list);
+      const asSet = new Set(ids);
+      setServerIds(asSet);
+
+      const sid = getSessionId();
+      if (sid) {
+        const key = userKey(userId, sid);
+        // If you returned only ids, keep as { _id } objects; if full products, keep as-is
+        const normalized = Array.isArray(list) && typeof list[0] === "string"
+          ? list.map((id) => ({ _id: id }))
+          : list;
+        writeToKey(key, normalized);
+      }
+      setLoadingServer(false);
+      // Optionally tell the page something changed
+      try { window.dispatchEvent(new CustomEvent('wishlist-synced', { detail: { count: ids.length } })); } catch(err) {console.log("error",err)}
+    })();
+    return () => { stop = true; };
+  }, [userId]);
+
   const matchesQuery = useMemo(() => {
     const q = (globalQuery || "").trim();
     if (q.length < 2) return true;
@@ -280,7 +310,11 @@ const WishlistItem = ({ product }) => {
     return pred(product);
   }, [globalQuery, product, searchableFields]);
 
-  const { rowRef } = useEmptyBanner("wishlist", !!matchesQuery, "No product found in wishlist");
+  // Only show this row if server says this product is in wishlist.
+  const showByServer = serverIds ? serverIds.has(_id) : true; // while first load, allow showing
+  const hidden = !matchesQuery || !showByServer;
+
+  const { rowRef } = useEmptyBanner("wishlist", !hidden, "No product found in wishlist");
 
   const currentUrlWithQuery = useMemo(() => {
     const url =
@@ -318,61 +352,27 @@ const WishlistItem = ({ product }) => {
     pushAuthQuery("register");
   }, [pushAuthQuery]);
 
-  /* ---------- Sync helpers ---------- */
-  const getActiveKey = () => {
-    const sid = getSessionId();
-    if (sid && userId) return userKey(userId, sid);
-    return GUEST_KEY;
-  };
-
+  /* ---------- Actions ---------- */
   const mirrorRemoveEverywhere = async (id) => {
-    const key = getActiveKey();
+    const sid = getSessionId();
+    const key = sid && userId ? userKey(userId, sid) : GUEST_KEY;
     const list = readFromKey(key);
     const next = removeById(list, id);
     writeToKey(key, next);
-    const sid = getSessionId();
     if (sid && userId) {
-      await pushServerWishlist(userId, next);
+      await pushServerWishlist(userId, next); // PUT back to server
     }
+    // also update our local serverIds set so UI reacts immediately
+    setServerIds((prev) => {
+      const s = new Set(prev || []);
+      s.delete(id);
+      return s;
+    });
   };
 
-  /* ---------- Login migration & initial sync ---------- */
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const sid = getSessionId();
-    if (!sid || !userId || migratedOnce) return;
-
-    const guestList = readFromKey(GUEST_KEY);
-    const uKey = userKey(userId, sid);
-    const userScoped = readFromKey(uKey);
-
-    (async () => {
-      const serverItems = await fetchServerWishlist(userId);
-      const merged = mergeUniqueById(mergeUniqueById(userScoped, guestList), serverItems);
-      writeToKey(uKey, merged);
-      try {
-        localStorage.removeItem(GUEST_KEY);
-      } catch(err) {console.log("localStorage remove error", err);}
-      await pushServerWishlist(userId, merged);
-      setMigratedOnce(true);
-    })();
-  }, [userId, migratedOnce]);
-
-  // Deep-link auth modal (?auth=login|register)
-  useEffect(() => {
-    const auth = searchParams.get("auth");
-    if (auth === "login" || auth === "register") {
-      setAuthModal(auth);
-    }
-  }, [searchParams]);
-
-  /* ---------- Actions ---------- */
   const handleAddProduct = async (prd) => {
     const sid = getSessionId();
-    if (!sid || !userId) {
-      openLogin();
-      return;
-    }
+    if (!sid || !userId) { openLogin(); return; }
     try {
       setMoving(true);
       dispatch(add_cart_product(prd));
@@ -388,8 +388,6 @@ const WishlistItem = ({ product }) => {
     const id = prd?.id || prd?._id;
     if (id) await mirrorRemoveEverywhere(id);
   };
-
-  const hidden = !matchesQuery;
 
   const imageBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
   const imageUrl =
@@ -425,6 +423,11 @@ const WishlistItem = ({ product }) => {
   const mid4 = Math.ceil(topFourDetails.length / 2);
   const left4 = topFourDetails.slice(0, mid4);
   const right4 = topFourDetails.slice(mid4);
+
+  // While server list is loading, keep space or hide row (your choice). Here: hide until confirmed.
+  if (loadingServer && !serverIds) {
+    return null;
+  }
 
   return (
     <>
