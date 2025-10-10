@@ -43,6 +43,9 @@ export default function LoginForm() {
   const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const KEY = process.env.NEXT_PUBLIC_API_KEY;
 
+  // Explicit verify URL (as requested)
+  const VERIFY_URL = 'https://test.amrita-fashions.com/shopy/users/verify-login-otp';
+
   /* =============== OTP REQUEST (step 1) =============== */
   const handleOtpRequest = async (data) => {
     try {
@@ -88,39 +91,42 @@ export default function LoginForm() {
         ? { email: savedIdentifier, otp }
         : { phone: savedIdentifier, otp };
 
-      const res = await fetch(`${API}/users/verify-login-otp`, {
+      const res = await fetch(VERIFY_URL, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(KEY ? { 'x-api-key': KEY } : {}),
         },
         body: JSON.stringify(payload),
       });
 
       const json = await res.json();
-      if (!res.ok || !json?.success) throw new Error(json?.message || 'Invalid OTP');
-
-      // ====== 🔐 Persist Session both ways ======
-      // 1) localStorage (client-side checks & UX)
-      if (typeof window !== 'undefined') {
-        if (json.sessionId) localStorage.setItem('sessionId', json.sessionId);
-        if (json?.user?._id) localStorage.setItem('userId', json.user._id);
+      // Expected:
+      // { success, message, user: {...}, session: { id, userId } }
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || 'Invalid OTP');
       }
 
-      // 2) Cookies (middleware / server-side redirects)
-      //    Keep path `/` so all routes see it. Enable `secure` on HTTPS.
-      if (json.sessionId) {
-        Cookies.set('sessionId', json.sessionId, {
+      const sessionId = json?.session?.id;
+      const userId = json?.session?.userId || json?.user?._id;
+
+      // ====== Persist Session in localStorage (as requested) ======
+      if (typeof window !== 'undefined') {
+        if (sessionId) localStorage.setItem('sessionId', sessionId);
+        if (userId) localStorage.setItem('userId', userId);
+      }
+
+      // Optional: also mirror in a cookie (useful for SSR/middleware)
+      if (sessionId) {
+        Cookies.set('sessionId', sessionId, {
           expires: 7,
           sameSite: 'lax',
           path: '/',
-          // secure: true,
+          // secure: true, // enable on HTTPS
         });
       }
-      // Optional: store basic user cookie (non-HTTPOnly). Keep your existing behavior:
       Cookies.set('userInfo', JSON.stringify({ user: json.user }), {
-        expires: 0.5, // 12 hours
+        expires: 0.5, // ~12h
         sameSite: 'lax',
         path: '/',
         // secure: true,
@@ -129,7 +135,6 @@ export default function LoginForm() {
       notifySuccess(json?.message || 'Logged in successfully');
       setOtp('');
 
-      // honor ?redirect= from middleware
       const dest = redirect || '/';
       router.push(dest);
     } catch (err) {

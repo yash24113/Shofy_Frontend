@@ -230,8 +230,8 @@ const HeaderTwo = ({ style_2 = false }) => {
   }, []);
 
   useEffect(() => {
-   
-       const check = () => setHasSession(!!Cookies.get('sessionId'));
+    const check = () =>
+      setHasSession(typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId'));
     check();
     const onStorage = (e) => { if (e.key === 'sessionId') check(); };
     window.addEventListener('storage', onStorage);
