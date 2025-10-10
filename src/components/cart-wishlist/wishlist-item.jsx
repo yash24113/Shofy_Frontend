@@ -78,9 +78,9 @@ const writeToKey = (key, list) => {
 const uniqueIds = (arr = []) => {
   const seen = new Set();
   return arr
-    .map((x) => x?._id || x?.id)
+    .map((x) => x?._id || x?.id || x)
     .filter(Boolean)
-    .filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
+    .filter((id) => (seen.has(String(id)) ? false : (seen.add(String(id)), true)));
 };
 
 const mergeUniqueById = (a = [], b = []) => {
@@ -117,6 +117,11 @@ async function fetchServerWishlist(userId) {
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
 
+    // your current response:
+    // { success, message, data: { products: [ { _id, name } ... ] } }
+    if (Array.isArray(data?.data?.products)) return data.data.products;
+
+    // also keep older/other shapes supported just in case
     if (Array.isArray(data)) return data;
     if (Array.isArray(data?.items)) return data.items;
     if (Array.isArray(data?.data?.items)) return data.data.items;
@@ -192,7 +197,7 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
         const b = ensureBannerExists();
         if (!b.isConnected && tbody.isConnected) tbody.appendChild(b);
       } else if (bucket.banner && bucket.banner.isConnected && bucket.vis > 0) {
-        bucket.banner.remove();
+        banner.remove();
       }
     };
   }, [listId, rowVisible, emptyText]);
@@ -208,7 +213,7 @@ const WishlistItem = ({ product }) => {
 
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
-  useSelector((state) => state.wishlist); // keep subscription if needed elsewhere
+  useSelector((state) => state.wishlist);
   const userIdFromStore = useSelector(selectUserIdFromStore);
   const userId = userIdFromStore || getUserIdFromLocal();
 
@@ -216,7 +221,7 @@ const WishlistItem = ({ product }) => {
   const isInCart = cart_products?.find?.((item) => item?._id === _id);
 
   const [moving, setMoving] = useState(false);
-  const [authModal, setAuthModal] = useState(null); // 'login' | 'register' | null
+  const [authModal, setAuthModal] = useState(null);
 
   // server ids (GET only)
   const [serverIds, setServerIds] = useState(null);
@@ -251,10 +256,10 @@ const WishlistItem = ({ product }) => {
     (async () => {
       if (!userId) { setServerIds(new Set()); setLoadingServer(false); return; }
       setLoadingServer(true);
-      const list = await fetchServerWishlist(userId);
+      const list = await fetchServerWishlist(userId); // expects data.data.products
       if (stop) return;
 
-      const ids = uniqueIds(list);
+      const ids = uniqueIds(list);         // works for [{_id,name}] or ["id"]
       setServerIds(new Set(ids));
 
       // persist to scoped key for other parts of app (no PUT here)
@@ -267,7 +272,7 @@ const WishlistItem = ({ product }) => {
         writeToKey(key, normalized);
       }
       setLoadingServer(false);
-      try { window.dispatchEvent(new CustomEvent('wishlist-synced', { detail: { count: ids.length } })); } catch(err) {console.log("error",err)}
+      try { window.dispatchEvent(new CustomEvent('wishlist-synced', { detail: { count: ids.length } })); } catch {}
     })();
     return () => { stop = true; };
   }, [userId]);
@@ -284,7 +289,8 @@ const WishlistItem = ({ product }) => {
   }, [globalQuery, product, searchableFields]);
 
   // show only if server says item is in wishlist
-  const showByServer = serverIds ? serverIds.has(_id) : true;
+  const serverReady = !loadingServer && serverIds instanceof Set;
+  const showByServer = serverReady ? serverIds.has(_id) : true;
   const hidden = !matchesQuery || !showByServer;
 
   const { rowRef } = useEmptyBanner("wishlist", !hidden, "No product found in wishlist");
