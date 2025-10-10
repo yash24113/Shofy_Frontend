@@ -9,12 +9,11 @@ import ResetButton from './shop-filter/reset-button';
 import EmptyState from '@/components/common/empty-state';
 
 // ====== config ======
-const COLS_PER_ROW = 4;      // grid mode: 4 per row
-const INITIAL_ROWS = 3;      // grid mode: start with 3 rows
-const STEP_GRID = COLS_PER_ROW; // grid mode: +1 row (4 items)
-
-const INITIAL_ROWS_SEARCH = 5;  // search (list) mode: start with 5 rows (5 items)
-const STEP_SEARCH = 5;          // search (list) mode: +5 rows (5 more items)
+const COLS_PER_ROW = 4;           // grid mode: 4 per row
+const INITIAL_ROWS = 3;           // grid mode: start with 3 rows
+const STEP_GRID = COLS_PER_ROW;   // grid mode: +1 row (4 items)
+const INITIAL_ROWS_SEARCH = 5;    // search (list) mode: start with 5 items
+const STEP_SEARCH = 5;            // search (list) mode: +5 items
 
 const ShopContent = ({
   all_products = [],
@@ -35,26 +34,27 @@ const ShopContent = ({
   const { setPriceValue, priceValue } = priceFilterValues || {};
   const [filteredRows, setFilteredRows] = useState(products);
 
-  // --- detect SEARCH (row-wise) mode from query param ?searchText=
+  // detect SEARCH (row-wise) mode from ?searchText=
   const [isSearchMode, setIsSearchMode] = useState(false);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const usp = new URLSearchParams(window.location.search);
-    setIsSearchMode(usp.has('searchText') && String(usp.get('searchText') || '').trim().length > 0);
+    setIsSearchMode(
+      usp.has('searchText') &&
+      String(usp.get('searchText') || '').trim().length > 0
+    );
   }, []);
 
-  // how many visible items
+  // visible count
   const initialVisible = isSearchMode
     ? Math.min(INITIAL_ROWS_SEARCH, products.length || 0)
     : Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0);
-
   const [visibleCount, setVisibleCount] = useState(initialVisible);
 
-  // keep previous count (for “new item” animations if you want)
   const prevCountRef = useRef(0);
   useEffect(() => { prevCountRef.current = visibleCount; }, [visibleCount]);
 
-  // measure header + toolbar to center the empty state
+  // empty state centering
   const [centerOffset, setCenterOffset] = useState(140);
   useEffect(() => {
     const calc = () => {
@@ -71,12 +71,13 @@ const ShopContent = ({
     return () => window.removeEventListener('resize', calc);
   }, []);
 
-  // sync when incoming products or search mode changes
+  // sync on products / mode change
   useEffect(() => {
     setFilteredRows(products);
-    setVisibleCount(isSearchMode
-      ? Math.min(INITIAL_ROWS_SEARCH, products.length || 0)
-      : Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0)
+    setVisibleCount(
+      isSearchMode
+        ? Math.min(INITIAL_ROWS_SEARCH, products.length || 0)
+        : Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0)
     );
     setCurrPage?.(1);
   }, [products, isSearchMode, setCurrPage]);
@@ -86,7 +87,6 @@ const ShopContent = ({
     1000
   );
 
-  // active filters?
   const pv = Array.isArray(priceValue) ? priceValue : [0, maxPrice];
   const priceActive = pv[0] > 0 || pv[1] < maxPrice;
   const facetsActive =
@@ -95,14 +95,13 @@ const ShopContent = ({
     );
   const anyActive = !!(priceActive || facetsActive);
 
-  // reset handler
   const resetAll = () => {
     setPriceValue?.([0, maxPrice]);
     handleFilterChange?.({});
     setCurrPage?.(1);
   };
 
-  // ===== infinite scroll via IntersectionObserver =====
+  // infinite scroll
   const sentinelRef = useRef(null);
   const loadingRef = useRef(false);
 
@@ -111,9 +110,7 @@ const ShopContent = ({
 
     const onIntersect = (entries) => {
       const entry = entries[0];
-      if (!entry.isIntersecting) return;
-      if (loadingRef.current) return;
-
+      if (!entry.isIntersecting || loadingRef.current) return;
       const step = isSearchMode ? STEP_SEARCH : STEP_GRID;
       if (visibleCount < filteredRows.length) {
         loadingRef.current = true;
@@ -134,22 +131,16 @@ const ShopContent = ({
     return () => io.disconnect();
   }, [filteredRows.length, visibleCount, isSearchMode]);
 
-  // ===== “YouTube-like” reveal animation on scroll (stagger per row) =====
+  // reveal on viewport
   const gridRef = useRef(null);
   useEffect(() => {
     const host = gridRef.current;
     if (!host) return;
-
     const els = host.querySelectorAll('.reveal');
     const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((en) => {
-          if (en.isIntersecting) en.target.classList.add('reveal--visible');
-        });
-      },
+      (entries) => entries.forEach((en) => en.isIntersecting && en.target.classList.add('reveal--visible')),
       { root: null, rootMargin: '60px 0px', threshold: 0.1 }
     );
-
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [filteredRows, visibleCount, isSearchMode]);
@@ -173,7 +164,6 @@ const ShopContent = ({
                     aria-label="Reset all filters"
                   />
                 </div>
-
                 <ShopSidebarFilters
                   selected={selectedFilters}
                   onFilterChange={handleFilterChange}
@@ -195,9 +185,7 @@ const ShopContent = ({
                         total={all_products.length}
                       />
                     </div>
-                    {/* <div className="col-xl-6">
-                      <ShopTopRight selectHandleFilter={selectHandleFilter} />
-                    </div> */}
+                    {/* <div className="col-xl-6"><ShopTopRight selectHandleFilter={selectHandleFilter} /></div> */}
                   </div>
                 </div>
               </div>
@@ -217,17 +205,11 @@ const ShopContent = ({
                   <>
                     <div className="tab-content" id="productTabContent">
                       <div className="tab-pane fade show active" id="grid-tab-pane">
-                        {/* Grid (normal) or List (search mode) */}
-                        <div
-                          ref={gridRef}
-                          className={`products-grid ${isSearchMode ? 'is-list' : ''}`}
-                        >
+                        <div ref={gridRef} className={`products-grid ${isSearchMode ? 'is-list' : ''}`}>
                           {filteredRows.slice(0, visibleCount).map((item, idx) => {
-                            // nice stagger: restart every row
                             const perRow = isSearchMode ? 1 : COLS_PER_ROW;
-                            const delayMs = (idx % perRow) * 60; // 0,60,120,180ms per row
+                            const delayMs = (idx % perRow) * 60;
                             const isNew = idx >= prevCountRef.current - (isSearchMode ? STEP_SEARCH : STEP_GRID);
-
                             return (
                               <div
                                 key={item?._id || item?.id || idx}
@@ -235,8 +217,6 @@ const ShopContent = ({
                                 style={{ animationDelay: `${delayMs}ms` }}
                               >
                                 <div className={`product-card ${isSearchMode ? 'row-card' : ''}`}>
-                                  {/* In list (row) mode you may prefer ShopListItem.
-                                      If ProductItem already looks good horizontally, keep it. */}
                                   {isSearchMode ? (
                                     <ShopListItem product={item} />
                                   ) : (
@@ -248,30 +228,8 @@ const ShopContent = ({
                           })}
                         </div>
                       </div>
-
-                      {/* (kept for compatibility, unused when isSearchMode) */}
-                      <div className="tab-pane fade" id="list-tab-pane">
-                        <div className="tp-shop-list-wrapper tp-shop-item-primary mb-70">
-                          {filteredRows.slice(0, visibleCount).map((item, idx) => {
-                            const delayMs = (idx % 1) * 60;
-                            const isNew = idx >= prevCountRef.current - STEP_SEARCH;
-                            return (
-                              <div
-                                key={item?._id || item?.id || idx}
-                                className={`list-cell reveal ${isNew ? 'item-appear' : ''}`}
-                                style={{ animationDelay: `${delayMs}ms` }}
-                              >
-                                <div className="product-card row-card">
-                                  <ShopListItem product={item} />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
                     </div>
 
-                    {/* sentinel for infinite scroll */}
                     <div ref={sentinelRef} className="sentinel" />
                   </>
                 )}
@@ -291,122 +249,136 @@ const ShopContent = ({
           padding: 8px 0;
         }
 
-        /* ===== Grid (default) ===== */
+        /* Grid layout */
         .products-grid {
           display: grid;
           gap: 24px;
           grid-template-columns: repeat(4, minmax(0, 1fr));
           align-items: stretch;
         }
-        @media (max-width: 1199px) {
-          .products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        }
-        @media (max-width: 991px) {
-          .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        }
-        @media (max-width: 575px) {
-          .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-        }
+        @media (max-width: 1199px) { .products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (max-width: 991px)  { .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 575px)  { .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } }
 
-        /* ===== List (row-wise, search mode) ===== */
-        .products-grid.is-list {
-          grid-template-columns: 1fr;
-          gap: 16px;
-        }
+        /* Row-wise list (search mode) */
+        .products-grid.is-list { grid-template-columns: 1fr; gap: 16px; }
 
-        .product-cell, .list-cell { will-change: transform, opacity; }
+        .product-cell { will-change: transform, opacity; min-width: 0; }
         .product-card {
           width: 100%;
           max-width: 100%;
           height: 100%;
           display: flex;
           flex-direction: column;
-        }
-        /* When row-wise, allow horizontal layout inside card if your component supports it */
-        .row-card {
-          display: block; /* your ShopListItem already handles the horizontal layout */
+          min-width: 0;
         }
 
-        /* ===== YouTube-like Reveal Animations ===== */
+        /* Reveal animations */
         .reveal {
           opacity: 0;
           transform: translateY(12px) scale(0.98);
-          transition:
-            opacity .32s ease-out,
-            transform .32s ease-out,
-            box-shadow .2s ease;
+          transition: opacity .32s ease-out, transform .32s ease-out;
         }
-        .reveal--visible {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-        }
-        /* Extra “pop” when newly appended (first frame) */
-        .item-appear {
-          animation: ytp-pop .35s ease-out var(--delay, 0ms) both;
-        }
+        .reveal.reveal--visible { opacity: 1; transform: translateY(0) scale(1); }
+        .item-appear { animation: ytp-pop .35s ease-out both; }
         @keyframes ytp-pop {
-          0%   { opacity: 0; transform: translateY(10px) scale(0.98); }
-          60%  { opacity: 1; transform: translateY(0) scale(1.005); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
+          0% { opacity: 0; transform: translateY(10px) scale(0.98); }
+          60%{ opacity: 1; transform: translateY(0) scale(1.005); }
+          100%{ opacity: 1; transform: translateY(0) scale(1); }
         }
 
-        /* Sentinel to trigger loads (invisible) */
         .sentinel { width: 100%; height: 1px; }
       `}</style>
 
-      {/* Global fixes to avoid “skinny thumbnails” & force consistent media */}
+      {/* ---------- HARD OVERRIDES to fix “tall, skinny pill” thumbnails ---------- */}
       <style jsx global>{`
+        /* Kill nested bootstrap sizing that squeezes cards */
+        .products-grid .product-card .row,
         .products-grid .product-card [class*="col-"] {
           width: 100% !important;
           max-width: 100% !important;
           flex: 1 1 auto !important;
           padding: 0 !important;
-        }
-        .products-grid .product-card img {
-          display: block;
-          width: 100% !important;
-          height: auto;
-          object-fit: cover;
+          margin: 0 !important;
         }
 
-        .products-grid:not(.is-list) .product-card .tp-product-thumb,
-        .products-grid:not(.is-list) .product-card .product-thumb,
-        .products-grid:not(.is-list) .product-card .thumb,
-        .products-grid:not(.is-list) .product-card .image,
-        .products-grid:not(.is-list) .product-card .card-img,
-        .products-grid:not(.is-list) .product-card .card-image {
-          position: relative;
-          width: 100%;
-          aspect-ratio: 1 / 1;      /* square in grid mode */
-          overflow: hidden;
-          border-radius: 12px;
+        /* Any anchor around the media should behave like a block */
+        .products-grid .product-card a {
+          display: block;
+          max-width: 100% !important;
         }
+
+        /* Identify ANY possible media wrapper class used by theme/components */
+        .products-grid .product-card .tp-product-thumb,
+        .products-grid .product-card .product-thumb,
+        .products-grid .product-card .thumb,
+        .products-grid .product-card .image,
+        .products-grid .product-card .card-img,
+        .products-grid .product-card .card-image,
+        .products-grid .product-card .product-media,
+        .products-grid .product-card .media,
+        .products-grid .product-card .thumbnail,
+        .products-grid .product-card .tp-product-img,
+        .products-grid .product-card .tp-product__thumb {
+          position: relative !important;
+          display: block !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+
+          /* CRITICAL: undo any huge round corners that make it look like a pill */
+          border-radius: 12px !important;
+
+          /* CRITICAL: ensure a square box in grid mode */
+          aspect-ratio: 1 / 1 !important;
+        }
+
+        /* In list (search) mode, use a fixed square thumb on the left */
         .products-grid.is-list .product-card .tp-product-thumb,
         .products-grid.is-list .product-card .product-thumb,
         .products-grid.is-list .product-card .thumb,
         .products-grid.is-list .product-card .image,
         .products-grid.is-list .product-card .card-img,
-        .products-grid.is-list .product-card .card-image {
-          position: relative;
-          width: 240px;             /* thumbnail width in row mode */
-          max-width: 40vw;
-          aspect-ratio: 1 / 1;
-          overflow: hidden;
-          border-radius: 12px;
-          margin-right: 16px;
-          float: left;               /* play nice with many list implementations */
+        .products-grid.is-list .product-card .card-image,
+        .products-grid.is-list .product-card .product-media,
+        .products-grid.is-list .product-card .media,
+        .products-grid.is-list .product-card .thumbnail,
+        .products-grid.is-list .product-card .tp-product-img,
+        .products-grid.is-list .product-card .tp-product__thumb {
+          width: 240px !important;
+          max-width: 40vw !important;
+          aspect-ratio: 1 / 1 !important;
+          float: left !important;
+          margin-right: 16px !important;
         }
+
+        /* Ensure the actual <img> fills the wrapper */
         .products-grid .product-card .tp-product-thumb img,
         .products-grid .product-card .product-thumb img,
         .products-grid .product-card .thumb img,
         .products-grid .product-card .image img,
         .products-grid .product-card .card-img img,
-        .products-grid .product-card .card-image img {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
+        .products-grid .product-card .card-image img,
+        .products-grid .product-card .product-media img,
+        .products-grid .product-card .media img,
+        .products-grid .product-card .thumbnail img,
+        .products-grid .product-card .tp-product-img img,
+        .products-grid .product-card .tp-product__thumb img {
+          position: absolute !important;
+          inset: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          max-width: none !important;
+          max-height: none !important;
+        }
+
+        /* Guard against any tiny fixed widths on ancestors */
+        .products-grid .product-card,
+        .products-grid .product-card > * {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
         }
       `}</style>
     </section>
