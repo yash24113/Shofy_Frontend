@@ -96,8 +96,6 @@ const removeById = (arr = [], id) => arr.filter((x) => (x?._id || x?.id) !== id)
 
 /* ---------- server (API) ---------- */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
-
-// Ensure we hit `/shopy/wishlist/:userId` even if base env ends with `/shopy/api`
 const WISHLIST_BASE = (() => {
   if (!API_BASE) return "https://test.amrita-fashions.com/shopy";
   if (/\/api$/i.test(API_BASE)) return API_BASE.replace(/\/api$/i, "");
@@ -134,27 +132,6 @@ async function fetchServerWishlist(userId) {
   } catch (err) {
     console.warn("fetchServerWishlist failed", err);
     return [];
-  }
-}
-
-/** PUT /shopy/wishlist/:userId  Body: { userId, productIds } */
-async function pushServerWishlist(userId, itemsOrIds) {
-  if (!userId) return false;
-  try {
-    const productIds = Array.isArray(itemsOrIds)
-      ? (typeof itemsOrIds[0] === "string" ? itemsOrIds : uniqueIds(itemsOrIds))
-      : [];
-    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
-    const res = await fetch(url, {
-      method: "PUT",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, productIds }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn("pushServerWishlist failed", err);
-    return false;
   }
 }
 
@@ -215,7 +192,7 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
         const b = ensureBannerExists();
         if (!b.isConnected && tbody.isConnected) tbody.appendChild(b);
       } else if (bucket.banner && bucket.banner.isConnected && bucket.vis > 0) {
-        banner.remove();
+        bucket.banner.remove();
       }
     };
   }, [listId, rowVisible, emptyText]);
@@ -223,7 +200,7 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
   return { rowRef };
 }
 
-/* ---------- Component ---------- */
+/* ---------- Component (GET-only) ---------- */
 const WishlistItem = ({ product }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -231,7 +208,7 @@ const WishlistItem = ({ product }) => {
 
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
-  const { wishlist } = useSelector((state) => state.wishlist) || { wishlist: [] };
+  useSelector((state) => state.wishlist); // keep subscription if needed elsewhere
   const userIdFromStore = useSelector(selectUserIdFromStore);
   const userId = userIdFromStore || getUserIdFromLocal();
 
@@ -240,9 +217,8 @@ const WishlistItem = ({ product }) => {
 
   const [moving, setMoving] = useState(false);
   const [authModal, setAuthModal] = useState(null); // 'login' | 'register' | null
-  const [migratedOnce, setMigratedOnce] = useState(false);
 
-  // NEW: state that mirrors server wishlist -> Set of ids
+  // server ids (GET only)
   const [serverIds, setServerIds] = useState(null);
   const [loadingServer, setLoadingServer] = useState(true);
 
@@ -269,31 +245,28 @@ const WishlistItem = ({ product }) => {
     []
   );
 
-  // -------- Fetch server wishlist on page load --------
+  // -------- GET server wishlist on page load --------
   useEffect(() => {
     let stop = false;
     (async () => {
       if (!userId) { setServerIds(new Set()); setLoadingServer(false); return; }
       setLoadingServer(true);
-      const list = await fetchServerWishlist(userId);          // GET /shopy/wishlist/:userId
+      const list = await fetchServerWishlist(userId);
       if (stop) return;
 
-      // normalize to ids + persist to scoped localStorage so other parts of app can read
       const ids = uniqueIds(list);
-      const asSet = new Set(ids);
-      setServerIds(asSet);
+      setServerIds(new Set(ids));
 
+      // persist to scoped key for other parts of app (no PUT here)
       const sid = getSessionId();
       if (sid) {
         const key = userKey(userId, sid);
-        // If you returned only ids, keep as { _id } objects; if full products, keep as-is
         const normalized = Array.isArray(list) && typeof list[0] === "string"
           ? list.map((id) => ({ _id: id }))
           : list;
         writeToKey(key, normalized);
       }
       setLoadingServer(false);
-      // Optionally tell the page something changed
       try { window.dispatchEvent(new CustomEvent('wishlist-synced', { detail: { count: ids.length } })); } catch(err) {console.log("error",err)}
     })();
     return () => { stop = true; };
@@ -310,8 +283,8 @@ const WishlistItem = ({ product }) => {
     return pred(product);
   }, [globalQuery, product, searchableFields]);
 
-  // Only show this row if server says this product is in wishlist.
-  const showByServer = serverIds ? serverIds.has(_id) : true; // while first load, allow showing
+  // show only if server says item is in wishlist
+  const showByServer = serverIds ? serverIds.has(_id) : true;
   const hidden = !matchesQuery || !showByServer;
 
   const { rowRef } = useEmptyBanner("wishlist", !hidden, "No product found in wishlist");
@@ -352,24 +325,7 @@ const WishlistItem = ({ product }) => {
     pushAuthQuery("register");
   }, [pushAuthQuery]);
 
-  /* ---------- Actions ---------- */
-  const mirrorRemoveEverywhere = async (id) => {
-    const sid = getSessionId();
-    const key = sid && userId ? userKey(userId, sid) : GUEST_KEY;
-    const list = readFromKey(key);
-    const next = removeById(list, id);
-    writeToKey(key, next);
-    if (sid && userId) {
-      await pushServerWishlist(userId, next); // PUT back to server
-    }
-    // also update our local serverIds set so UI reacts immediately
-    setServerIds((prev) => {
-      const s = new Set(prev || []);
-      s.delete(id);
-      return s;
-    });
-  };
-
+  /* ---------- Actions (NO PUT here) ---------- */
   const handleAddProduct = async (prd) => {
     const sid = getSessionId();
     if (!sid || !userId) { openLogin(); return; }
@@ -377,7 +333,17 @@ const WishlistItem = ({ product }) => {
       setMoving(true);
       dispatch(add_cart_product(prd));
       dispatch(remove_wishlist_product({ title, id: _id }));
-      await mirrorRemoveEverywhere(_id);
+
+      // update local-only + UI (do not PUT)
+      const key = sid && userId ? userKey(userId, sid) : GUEST_KEY;
+      const list = readFromKey(key);
+      const next = removeById(list, _id);
+      writeToKey(key, next);
+      setServerIds((prev) => {
+        const s = new Set(prev || []);
+        s.delete(_id);
+        return s;
+      });
     } finally {
       setTimeout(() => setMoving(false), 250);
     }
@@ -386,7 +352,16 @@ const WishlistItem = ({ product }) => {
   const handleRemovePrd = async (prd) => {
     dispatch(remove_wishlist_product(prd));
     const id = prd?.id || prd?._id;
-    if (id) await mirrorRemoveEverywhere(id);
+    const sid = getSessionId();
+    const key = sid && userId ? userKey(userId, sid) : GUEST_KEY;
+    const list = readFromKey(key);
+    const next = removeById(list, id);
+    writeToKey(key, next);
+    setServerIds((prev) => {
+      const s = new Set(prev || []);
+      s.delete(id);
+      return s;
+    });
   };
 
   const imageBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
@@ -424,10 +399,7 @@ const WishlistItem = ({ product }) => {
   const left4 = topFourDetails.slice(0, mid4);
   const right4 = topFourDetails.slice(mid4);
 
-  // While server list is loading, keep space or hide row (your choice). Here: hide until confirmed.
-  if (loadingServer && !serverIds) {
-    return null;
-  }
+  if (loadingServer && !serverIds) return null;
 
   return (
     <>
@@ -543,8 +515,6 @@ const WishlistItem = ({ product }) => {
           .wishlist-img { width: 56px; height: 80px; border-radius: 8px; }
           .btn-ghost-invert { min-height: 42px; padding: 9px 16px; }
         }
-
-        /* empty banner row */
         .empty-row td { padding: 18px 12px; }
         .empty-wrap { display:flex; align-items:center; gap:10px; justify-content:center; color:#6b7280; font-weight:600; }
         .empty-ic { opacity:.8; }

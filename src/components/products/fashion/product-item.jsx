@@ -10,14 +10,7 @@ import { formatProductForCart, formatProductForWishlist } from '@/utils/authUtil
 import { add_to_wishlist } from '@/redux/features/wishlist-slice';
 import { add_cart_product } from '@/redux/features/cartSlice';
 
-import {
-  Cart,
-  CartActive,
-  Wishlist,
-  WishlistActive,
-  QuickView,
-  Share,
-} from '@/svg';
+import { Cart, CartActive, Wishlist, WishlistActive, QuickView, Share } from '@/svg';
 
 import { handleProductModal } from '@/redux/features/productModalSlice';
 import { useGetProductsByGroupcodeQuery } from '@/redux/features/productApi';
@@ -54,8 +47,75 @@ const uniq = (arr) => {
     return true;
   });
 };
-
 const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
+
+/* ---- user + storage helpers ---- */
+const getSessionId = () => (typeof window !== 'undefined' && localStorage.getItem('sessionId')) || null;
+const selectUserIdFromStore = (state) =>
+  state?.auth?.user?._id ||
+  state?.auth?.user?.id ||
+  state?.auth?.userInfo?._id ||
+  state?.auth?.userInfo?.id ||
+  state?.user?.user?._id ||
+  null;
+const getUserIdFromLocal = () => {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('userid') || localStorage.getItem('userId') || null;
+};
+
+/* ---- API helpers (PUT here) ---- */
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
+const WISHLIST_BASE = (() => {
+  if (!API_BASE) return 'https://test.amrita-fashions.com/shopy';
+  if (/\/api$/i.test(API_BASE)) return API_BASE.replace(/\/api$/i, '');
+  if (/\/shopy$/i.test(API_BASE)) return API_BASE;
+  return `${API_BASE}/shopy`;
+})();
+
+/** PUT /shopy/wishlist/:userId with { userId, productIds } */
+async function pushServerWishlist(userId, itemsOrIds) {
+  if (!userId) return false;
+  try {
+    const productIds =
+      Array.isArray(itemsOrIds)
+        ? (typeof itemsOrIds[0] === 'string'
+            ? itemsOrIds
+            : itemsOrIds.map((x) => x?._id || x?.id).filter(Boolean))
+        : [];
+    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, productIds }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.warn('pushServerWishlist failed', e);
+    return false;
+  }
+}
+
+/* local wishlist_items read/write (as in your screenshot) */
+const WISHLIST_ITEMS_KEY = 'wishlist_items';
+const readWishlistItemsLocal = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(WISHLIST_ITEMS_KEY);
+    const val = raw ? JSON.parse(raw) : [];
+    return Array.isArray(val) ? val : [];
+  } catch {
+    return [];
+  }
+};
+const writeWishlistItemsLocal = (items) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(WISHLIST_ITEMS_KEY, JSON.stringify(items || []));
+  } catch (e) {
+    console.log('localStorage write error', e);
+  }
+};
 
 const ProductItem = ({ product }) => {
   const router = useRouter();
@@ -74,15 +134,37 @@ const ProductItem = ({ product }) => {
     }
   }, []);
 
+  // userId for PUT
+  const userIdFromStore = useSelector(selectUserIdFromStore);
+  const userId = userIdFromStore || getUserIdFromLocal();
+
   // act immediately
   const handleAddProduct = (prd, e) => {
     e?.stopPropagation?.(); e?.preventDefault?.();
     dispatch(add_cart_product(formatProductForCart(prd)));
   };
-  const handleWishlistProduct = (prd, e) => {
+
+  const handleWishlistProduct = async (prd, e) => {
     e?.stopPropagation?.(); e?.preventDefault?.();
-    dispatch(add_to_wishlist(formatProductForWishlist(prd)));
+
+    // 1) update Redux/UI
+    const formatted = formatProductForWishlist(prd);
+    dispatch(add_to_wishlist(formatted));
+
+    // 2) update localStorage `wishlist_items` (the key shown in your screenshot)
+    const curr = readWishlistItemsLocal();
+    const nextMap = new Map(curr.map((x) => [String(x?._id || x?.id), x]));
+    nextMap.set(String(formatted?._id || formatted?.id), { _id: formatted?._id || formatted?.id, ...formatted });
+    const next = Array.from(nextMap.values());
+    writeWishlistItemsLocal(next);
+
+    // 3) PUSH to server (PUT) using the ids from localStorage wishlist_items
+    const idsForPut = next.map((x) => x?._id || x?.id).filter(Boolean);
+    if (userId && idsForPut.length) {
+      await pushServerWishlist(userId, idsForPut);
+    }
   };
+
   const openQuickView = (prd, e) => {
     e?.preventDefault?.(); e?.stopPropagation?.();
     dispatch(handleProductModal({ ...prd }));
@@ -191,7 +273,7 @@ const ProductItem = ({ product }) => {
       } else {
         prompt('Copy link', url);
       }
-    } catch {/*  */}
+    } catch(err) {console.log("error",err)}
   };
 
   /* select from slices */
@@ -254,7 +336,7 @@ const ProductItem = ({ product }) => {
               </div>
             </Link>
 
-            {/* centered options ribbon (responsive) */}
+            {/* centered options ribbon */}
             {showOptionsBadge && (
               <button
                 type="button"
@@ -350,8 +432,7 @@ const ProductItem = ({ product }) => {
 
         .fashion-product-card{
           --primary:#0f172a; --muted:#6b7280; --accent:#7c3aed;
-          --success:#10b981; --danger:#ef4444;
-          --maroon:#800000;
+          --success:#10b981; --danger:#ef4444; --maroon:#800000;
           --card-bg:#fff; --card-border:rgba(17,24,39,.12); --inner-border:rgba(17,24,39,.08);
           --shadow-sm:0 1px 2px rgba(0,0,0,.04);
           position:relative; width:100%; height:100%;
@@ -391,13 +472,13 @@ const ProductItem = ({ product }) => {
         .action-button.cart-active :global(svg){ color:#10b981; }
         .action-button.wishlist-active{ background:#fef2f2; border-color:rgba(239,68,68,.35); }
         .action-button.wishlist-active :global(svg){ color:#ef4444; }
-        .action-button:focus-visible{ outline:2px solid var(--maroon); outline-offset:2px; }
+        .action-button:focus-visible{ outline:2px solid #800000; outline-offset:2px; }
 
         .product-info{ padding:18px 12px 12px; border-top:1px solid var(--inner-border); background:#fff; }
         .product-category{ font-size:11px; font-weight:600; letter-spacing:.02em; color:#6b7280; margin-bottom:4px; }
         .product-title{ font-family:'Montserrat',system-ui,Arial,sans-serif; font-size:clamp(14px,1.9vw,16px); font-weight:700; line-height:1.22; letter-spacing:.002em; color:#111827; margin:0 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
         .product-title :global(a){ color:inherit; text-decoration:none; }
-        .product-title :global(a:hover){ color:var(--maroon); }
+        .product-title :global(a:hover){ color:#800000; }
 
         .spec-columns{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; margin-top:4px; }
         @media (max-width:340px){ .spec-columns{ grid-template-columns:1fr; } }
