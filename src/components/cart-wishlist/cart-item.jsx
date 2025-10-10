@@ -1,5 +1,5 @@
 'use client';
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useDispatch } from "react-redux";
@@ -15,6 +15,73 @@ import { add_to_wishlist } from "@/redux/features/wishlist-slice";
 /* 🔎 add search */
 import useGlobalSearch from "@/hooks/useGlobalSearch";
 import { buildSearchPredicate } from "@/utils/searchMiddleware";
+
+/* ---------- tiny global empty-banner manager (reused) ---------- */
+function useEmptyBanner(listId: string, rowVisible: boolean, emptyText: string) {
+  const rowRef = useRef<HTMLTableRowElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // @ts-ignore
+    window.__listVis = window.__listVis || {};
+    // @ts-ignore
+    const bucket = (window.__listVis[listId] = window.__listVis[listId] || { vis: 0, banner: null });
+
+    const tbody = rowRef.current?.closest('tbody') as HTMLTableSectionElement | null;
+    if (!tbody) return;
+
+    const ensureBannerExists = () => {
+      if (bucket.banner && bucket.banner.isConnected) return bucket.banner;
+      const tr = document.createElement('tr');
+      tr.className = 'empty-row';
+      const td = document.createElement('td');
+      td.colSpan = 999;
+      td.innerHTML = `
+        <div class="empty-wrap" role="status" aria-live="polite">
+          <svg class="empty-ic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path fill="currentColor" d="M10 18a8 8 0 1 1 5.3-14.03l4.36-4.35 1.41 1.41-4.35 4.36A8 8 0 0 1 10 18zm0-2a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm10.59 6L16.3 17.7a8.96 8.96 0 0 0 1.41-1.41L22 20.59 20.59 22z"/>
+          </svg>
+          <span class="empty-text">${emptyText}</span>
+        </div>
+      `;
+      tr.appendChild(td);
+      bucket.banner = tr;
+      return tr;
+    };
+
+    let prev = (rowRef.current as any).__wasVisible ?? false;
+    if (rowVisible && !prev) bucket.vis += 1;
+    if (!rowVisible && prev) bucket.vis -= 1;
+    (rowRef.current as any).__wasVisible = rowVisible;
+
+    if (prev === undefined) {
+      if (rowVisible) bucket.vis += 1;
+      (rowRef.current as any).__wasVisible = rowVisible;
+    }
+
+    const banner = bucket.banner;
+    if (bucket.vis <= 0) {
+      const b = ensureBannerExists();
+      if (!b.isConnected) tbody.appendChild(b);
+    } else if (banner && banner.isConnected) {
+      banner.remove();
+    }
+
+    return () => {
+      let was = (rowRef.current as any)?.__wasVisible;
+      if (was) bucket.vis = Math.max(0, bucket.vis - 1);
+      (rowRef.current as any).__wasVisible = false;
+      if (bucket.vis <= 0) {
+        const b = ensureBannerExists();
+        if (!b.isConnected && tbody.isConnected) tbody.appendChild(b);
+      } else if (bucket.banner && bucket.banner.isConnected && bucket.vis > 0) {
+        bucket.banner.remove();
+      }
+    };
+  }, [listId, rowVisible, emptyText]);
+
+  return { rowRef };
+}
 
 const CartItem = ({ product }) => {
   const dispatch = useDispatch();
@@ -83,11 +150,12 @@ const CartItem = ({ product }) => {
     return pred(product);
   }, [q, title, slug, product]);
 
-  if (!rowVisible) return null;
+  // EMPTY banner manager (cart)
+  const { rowRef } = useEmptyBanner('cart', !!rowVisible, 'No product found in cart');
 
   return (
     <>
-      <tr className="cart-row">
+      <tr className="cart-row" ref={rowRef} style={!rowVisible ? { display: 'none' } : undefined}>
         {/* image */}
         <td className="col-img">
           <Link href={href} className="thumb-wrap" aria-label={title}>
@@ -182,6 +250,12 @@ const CartItem = ({ product }) => {
           .qty-value{ min-width:24px; font-size:15px; }
           .col-action{ text-align:left; width:auto; }
         }
+
+        /* empty banner row */
+        .empty-row td { padding: 18px 12px; }
+        .empty-wrap { display:flex; align-items:center; gap:10px; justify-content:center; color:#6b7280; font-weight:600; }
+        .empty-ic { opacity:.8; }
+        .empty-text { font-size:14px; }
       `}</style>
     </>
   );

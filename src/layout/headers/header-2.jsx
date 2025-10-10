@@ -6,6 +6,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { usePathname } from 'next/navigation';
 import useSticky from '@/hooks/use-sticky';
 import useCartInfo from '@/hooks/use-cart-info';
+import Cookies from 'js-cookie';
 import {
   openCartMini,
   get_cart_products,
@@ -230,7 +231,7 @@ const HeaderTwo = ({ style_2 = false }) => {
 
   useEffect(() => {
     const check = () =>
-      setHasSession(typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId'));
+       const check = () => setHasSession(!!Cookies.get('sessionId'));
     check();
     const onStorage = (e) => { if (e.key === 'sessionId') check(); };
     window.addEventListener('storage', onStorage);

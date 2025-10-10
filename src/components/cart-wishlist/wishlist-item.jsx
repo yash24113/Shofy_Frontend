@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
@@ -116,6 +116,79 @@ async function pushServerWishlist(userId, items) {
   }
 }
 
+/* ---------- tiny global empty-banner manager ---------- */
+function useEmptyBanner(listId, rowVisible, emptyText) {
+  const rowRef = useRef<HTMLTableRowElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // @ts-ignore
+    window.__listVis = window.__listVis || {};
+    // @ts-ignore
+    const bucket = (window.__listVis[listId] = window.__listVis[listId] || { vis: 0, banner: null });
+
+    // Find this row's tbody
+    const tbody = rowRef.current?.closest('tbody') as HTMLTableSectionElement | null;
+    if (!tbody) return;
+
+    const ensureBannerExists = () => {
+      if (bucket.banner && bucket.banner.isConnected) return bucket.banner;
+      const tr = document.createElement('tr');
+      tr.className = 'empty-row';
+      const td = document.createElement('td');
+      td.colSpan = 999;
+      td.innerHTML = `
+        <div class="empty-wrap" role="status" aria-live="polite">
+          <svg class="empty-ic" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path fill="currentColor" d="M10 18a8 8 0 1 1 5.3-14.03l4.36-4.35 1.41 1.41-4.35 4.36A8 8 0 0 1 10 18zm0-2a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm10.59 6L16.3 17.7a8.96 8.96 0 0 0 1.41-1.41L22 20.59 20.59 22z"/>
+          </svg>
+          <span class="empty-text">${emptyText}</span>
+        </div>
+      `;
+      tr.appendChild(td);
+      bucket.banner = tr;
+      return tr;
+    };
+
+    // Update visible count
+    let prev = (rowRef.current as any).__wasVisible ?? false;
+    if (rowVisible && !prev) bucket.vis += 1;
+    if (!rowVisible && prev) bucket.vis -= 1;
+    (rowRef.current as any).__wasVisible = rowVisible;
+
+    // If this is first run and no prev recorded, bump correctly
+    if (prev === undefined) {
+      if (rowVisible) bucket.vis += 1;
+      (rowRef.current as any).__wasVisible = rowVisible;
+    }
+
+    // Place or remove banner
+    const banner = bucket.banner;
+    if (bucket.vis <= 0) {
+      const b = ensureBannerExists();
+      if (!b.isConnected) tbody.appendChild(b);
+    } else if (banner && banner.isConnected) {
+      banner.remove();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      let was = (rowRef.current as any)?.__wasVisible;
+      if (was) bucket.vis = Math.max(0, bucket.vis - 1);
+      (rowRef.current as any).__wasVisible = false;
+      // If no rows visible after this unmount, re-add banner
+      if (bucket.vis <= 0) {
+        const b = ensureBannerExists();
+        if (!b.isConnected && tbody.isConnected) tbody.appendChild(b);
+      } else if (bucket.banner && bucket.banner.isConnected && bucket.vis > 0) {
+        bucket.banner.remove();
+      }
+    };
+  }, [listId, rowVisible, emptyText]);
+
+  return { rowRef };
+}
+
 /* ---------- Component ---------- */
 const WishlistItem = ({ product }) => {
   const router = useRouter();
@@ -157,6 +230,13 @@ const WishlistItem = ({ product }) => {
     });
     return pred(product);
   }, [globalQuery, product, searchableFields]);
+
+  // EMPTY banner manager (wishlist)
+  const { rowRef } = useEmptyBanner(
+    'wishlist',
+    !!matchesQuery,
+    'No product found in wishlist'
+  );
 
   // current page url (for redirect after auth)
   const currentUrlWithQuery = useMemo(() => {
@@ -257,12 +337,11 @@ const WishlistItem = ({ product }) => {
   };
 
   /* --------- IMPORTANT: do NOT return before all hooks run --------- */
-  if (!matchesQuery) return null;
+  // If row is hidden for this query, we still render a hidden <tr> anchor so the hook can place/remove the empty banner correctly.
+  const hidden = !matchesQuery;
 
   /* ---------- image / slug (can be computed after hooks) ---------- */
-  const imageUrl = img?.startsWith?.("http")
-    ? img
-    : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${img}`;
+  const imageUrl = (product?.img?.startsWith?.("http") ? product.img : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${product?.img || ""}`);
   const slug = product?.slug || _id;
 
   // details for display
@@ -295,11 +374,11 @@ const WishlistItem = ({ product }) => {
 
   return (
     <>
-      <tr className="wishlist-row">
+      <tr className="wishlist-row" ref={rowRef} style={hidden ? { display: 'none' } : undefined}>
         {/* img */}
         <td className="tp-cart-img wishlist-cell">
           <Link href={`/fabric/${slug}`} className="wishlist-img-link">
-            {img && (
+            {product?.img && (
               <Image
                 src={imageUrl}
                 alt={title || "product img"}
@@ -394,7 +473,7 @@ const WishlistItem = ({ product }) => {
         .wishlist-spec-value{ font-size:12.5px; font-weight:500; color:#374151; }
         @media (max-width:640px){ .wishlist-specs{ grid-template-columns:1fr; } }
         .btn-ghost-invert { --navy:#0b1620; display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 18px; border-radius:0; font-weight:600; font-size:15px; line-height:1; cursor:pointer; user-select:none; background:var(--navy); color:#fff; border:1px solid var(--navy); box-shadow:0 6px 18px rgba(0,0,0,0.22); transition: background .18s, color .18s, border-color .18s, box-shadow .18s, transform .12s; }
-        .btn-ghost-invert:hover { background:#fff; color:var(--navy); border-color:var(--navy); box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12); transform: translateY(-1px); }
+        .btn-ghost-invert:hover { background:#fff; color:var(--navy); border-color:var(--navy); box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,.12); transform: translateY(-1px); }
         .btn-ghost-invert:active { transform: translateY(0); background:#f8fafc; color:var(--navy); box-shadow:0 3px 10px rgba(0,0,0,0.15); }
         .btn-ghost-invert:focus-visible { outline:0; box-shadow:0 0 0 3px rgba(11,22,32,0.35); }
         .btn-ghost-invert.is-loading { pointer-events:none; opacity:.9; }
@@ -404,6 +483,12 @@ const WishlistItem = ({ product }) => {
           .wishlist-img { width: 56px; height: 80px; border-radius: 8px; }
           .btn-ghost-invert { min-height: 42px; padding: 9px 16px; }
         }
+
+        /* empty banner row */
+        .empty-row td { padding: 18px 12px; }
+        .empty-wrap { display:flex; align-items:center; gap:10px; justify-content:center; color:#6b7280; font-weight:600; }
+        .empty-ic { opacity:.8; }
+        .empty-text { font-size:14px; }
       `}</style>
     </>
   );
