@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ProductItem from '../products/fashion/product-item';
 import ShopListItem from './shop-list-item';
 import ShopTopLeft from './shop-top-left';
@@ -7,7 +7,10 @@ import ShopTopRight from './shop-top-right';
 import ShopSidebarFilters from './ShopSidebarFilters';
 import ResetButton from './shop-filter/reset-button';
 import EmptyState from '@/components/common/empty-state';
-// Pagination removed for Load More behavior
+
+// ====== config ======
+const INITIAL_VISIBLE = 40; // keep your initial 40
+const BATCH = 20;           // how many to reveal per scroll hit
 
 const ShopContent = ({
   all_products = [],
@@ -27,7 +30,7 @@ const ShopContent = ({
 
   const { setPriceValue, priceValue } = priceFilterValues || {};
   const [filteredRows, setFilteredRows] = useState(products);
-  const [visibleCount, setVisibleCount] = useState(40);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
 
   // measure header + toolbar to center the empty state
   const [centerOffset, setCenterOffset] = useState(140);
@@ -46,9 +49,10 @@ const ShopContent = ({
     return () => window.removeEventListener('resize', calc);
   }, []);
 
+  // sync when products change
   useEffect(() => {
     setFilteredRows(products);
-    setVisibleCount(Math.min(40, products.length || 0));
+    setVisibleCount(Math.min(INITIAL_VISIBLE, products.length || 0));
     setCurrPage(1);
   }, [products, setCurrPage]);
 
@@ -73,7 +77,49 @@ const ShopContent = ({
     setCurrPage?.(1);
   };
 
-  // no pagination; using incremental visibility via Load More
+  // ====== Infinite scroll via IntersectionObserver ======
+  const sentinelRef = useRef(null);
+  const loadingRef = useRef(false);
+
+  const hasMore = visibleCount < filteredRows.length;
+
+  useEffect(() => {
+    if (!hasMore) return; // nothing to load
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry.isIntersecting) return;
+        if (loadingRef.current) return;
+        loadingRef.current = true;
+
+        // reveal next batch
+        setVisibleCount((prev) => {
+          const next = Math.min(prev + BATCH, filteredRows.length);
+          return next;
+        });
+
+        // small timeout to avoid rapid re-trigger
+        setTimeout(() => {
+          loadingRef.current = false;
+        }, 150);
+      },
+      {
+        root: null,
+        rootMargin: '0px 0px 400px 0px', // start loading a bit before reaching the end
+        threshold: 0,
+      }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, filteredRows.length]);
+
+  // ====== Fade-in animation ======
+  // New items added by increasing visibleCount will animate in automatically
+  // using the CSS below. We lightly stagger based on index within the current draw.
 
   return (
     <section className="tp-shop-area pb-120">
@@ -110,15 +156,15 @@ const ShopContent = ({
               <div className="shop-toolbar-sticky">
                 <div className="tp-shop-top mb-45">
                   <div className="row">
-                     <div className="col-xl-6">
+                    <div className="col-xl-6">
                       <ShopTopLeft
                         showing={filteredRows.slice(0, visibleCount).length}
                         total={all_products.length}
                       />
-                    </div> 
+                    </div>
                     <div className="col-xl-6">
                       <ShopTopRight selectHandleFilter={selectHandleFilter} />
-                    </div> 
+                    </div>
                   </div>
                 </div>
               </div>
@@ -140,40 +186,27 @@ const ShopContent = ({
                       <div className="tab-pane fade show active" id="grid-tab-pane">
                         {/* ✅ Use products-grid instead of bootstrap row */}
                         <div className="products-grid">
-                          {filteredRows
-                            .slice(0, visibleCount)
-                            .map((item) => (
-                              <ProductItem key={item._id} product={item} />
-                            ))}
+                          {filteredRows.slice(0, visibleCount).map((item, i) => (
+                            <div key={item._id} className="fade-in-item" style={{ '--i': i % 8 }}>
+                              <ProductItem product={item} />
+                            </div>
+                          ))}
                         </div>
                       </div>
 
                       <div className="tab-pane fade" id="list-tab-pane">
                         <div className="tp-shop-list-wrapper tp-shop-item-primary mb-70">
-                          {filteredRows
-                            .slice(0, visibleCount)
-                            .map((item) => (
-                              <ShopListItem key={item._id} product={item} />
-                            ))}
+                          {filteredRows.slice(0, visibleCount).map((item, i) => (
+                            <div key={item._id} className="fade-in-item" style={{ '--i': i % 8 }}>
+                              <ShopListItem product={item} />
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
 
-                    {visibleCount < filteredRows.length && (
-                      <div className="row">
-                        <div className="col-xl-12">
-                          <div className="load-more-wrapper mt-30">
-                            <button
-                              type="button"
-                              className="load-more-btn"
-                              onClick={() => setVisibleCount(filteredRows.length)}
-                            >
-                              Load more
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    {/* Sentinel replaces Load More (keeps UI unchanged elsewhere) */}
+                    <div ref={sentinelRef} aria-hidden="true" />
                   </>
                 )}
               </div>
@@ -191,19 +224,31 @@ const ShopContent = ({
           place-items: center;
           padding: 8px 0;
         }
-        .load-more-wrapper { display: flex; justify-content: center; }
-        .load-more-btn {
-          background: #000;
-          color: #fff;
-          border: 1px solid #000;
-          padding: 12px 28px;
-          border-radius: 9999px;
-          font-weight: 600;
-          transition: all .2s ease;
+
+        /* ====== Fade-in animation ====== */
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
-        .load-more-btn:hover {
-          background: #fff;
-          color: #000;
+        /* Wrap each item so we can animate the wrapper once it appears */
+        .fade-in-item {
+          opacity: 0;
+          transform: translateY(12px);
+          animation: fadeInUp 420ms ease forwards;
+          /* tiny stagger so items cascade pleasantly; safe default if --i not set */
+          animation-delay: calc(var(--i, 0) * 60ms);
+        }
+
+        /* Optional: keep the sentinel tiny/invisible but present */
+        [aria-hidden="true"] {
+          width: 100%;
+          height: 1px;
         }
       `}</style>
     </section>
