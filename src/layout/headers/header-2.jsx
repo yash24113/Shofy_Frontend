@@ -159,7 +159,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     };
   }, []);
 
-  // ✅ Clear the search box whenever route/path changes
+  // ✅ Clear the search box whenever route/path changes (fallback)
   const pathname = usePathname();
   useEffect(() => {
     if (!pathname) return;
@@ -170,17 +170,32 @@ const HeaderTwo = ({ style_2 = false }) => {
     setLimit(PAGE_SIZE);
   }, [pathname, setQuery]);
 
+  // ---- Immediate reset + navigate (prevents value sticking after redirect) ----
+  const resetSearchUI = () => {
+    setQuery('');
+    setResults([]);
+    setSelIndex(-1);
+    setSearchOpen(false);
+    setLimit(PAGE_SIZE);
+  };
+  const go = (href) => {
+    resetSearchUI();            // clear immediately
+    try { window.scrollTo?.(0, 0); } catch(err) { console.log("Error",err)}
+    window.location.href = href;
+  };
+
   const onSearchSubmit = (e) => {
     e.preventDefault();
     const q = (query || '').trim();
+
     if (selIndex >= 0 && results[selIndex]) {
       const p = results[selIndex];
       const href = p.slug ? `/product-details/${p.slug}` : `/product-details?id=${encodeURIComponent(p.id)}`;
-      window.location.href = href;
+      go(href);
       return;
     }
     if (q.length) {
-      window.location.href = `/search?searchText=${encodeURIComponent(q)}`;
+      go(`/search?searchText=${encodeURIComponent(q)}`);
     } else {
       setSearchOpen(true);
     }
@@ -195,6 +210,9 @@ const HeaderTwo = ({ style_2 = false }) => {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelIndex((i) => Math.max(-1, i - 1));
+    } else if (e.key === 'Enter') {
+      // Enter should submit (and thus clear then redirect)
+      // Let onSubmit handler run.
     }
   };
 
@@ -326,52 +344,11 @@ const HeaderTwo = ({ style_2 = false }) => {
                           <button type="submit" aria-label="Search"><Search /></button>
                         </form>
 
-                        {/* Clean, opt-in dropdown (kept commented intentionally)
-                        {searchOpen && (
-                          <div className="search-drop" ref={dropRef}>
-                            {loading ? (
-                              <div className="search-empty">Searching…</div>
-                            ) : results.length ? (
-                              <>
-                                <ul className="search-list" role="listbox">
-                                  {results.map((p, idx) => {
-                                    const href = p.slug ? `/product-details/${p.slug}` : `/product-details?id=${encodeURIComponent(p.id)}`;
-                                    return (
-                                      <li
-                                        key={p.id || p.slug || idx}
-                                        className={`search-item ${idx === selIndex ? 'is-active' : ''}`}
-                                        role="option"
-                                        aria-selected={idx === selIndex}
-                                        onMouseEnter={() => setSelIndex(idx)}
-                                      >
-                                        <Link href={href} className="search-link" onClick={() => setSearchOpen(false)}>
-                                          <img
-                                            src={p.img}
-                                            alt={p.name}
-                                            width={44}
-                                            height={44}
-                                            loading="lazy"
-                                            onError={(e) => { e.currentTarget.src = '/assets/img/product/default-product-img.jpg'; }}
-                                          />
-                                          <span className="search-meta">
-                                            <span className="search-name" title={p.name}>{p.name}</span>
-                                            {p.price ? <span className="search-price">₹{p.price}</span> : null}
-                                          </span>
-                                        </Link>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                                {loadingMore && <div className="search-more">Loading more…</div>}
-                                {limit >= MAX_LIMIT && <div className="search-cap">Showing top results</div>}
-                              </>
-                            ) : (
-                              <div className="search-empty">
-                                No results. <span className="search-hint">Try a different term.</span>
-                              </div>
-                            )}
-                          </div>
-                        )} */}
+                        {/* If you re-enable the dropdown, ensure links call go(href) to clear instantly */}
+                        {/* Example:
+                        <Link href={href} onClick={(e)=>{ e.preventDefault(); go(href); }} ...>
+                        */}
+                        {/* <div className="search-drop" ref={dropRef}> ... </div> */}
                       </div>
 
                       {/* Actions */}
@@ -401,7 +378,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       role="menuitem"
                                       onClick={() => {
                                         setUserOpen(false);
-                                        window.location.href = '/profile';
+                                        go('/profile');
                                       }}
                                     >
                                       My Profile
