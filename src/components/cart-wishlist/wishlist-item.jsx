@@ -11,6 +11,25 @@ import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
 
+// value helpers (mirrors product card)
+const nonEmpty = (v) => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== "");
+const pick = (...xs) => xs.find(nonEmpty);
+const toText = (v) => {
+  if (v == null) return "";
+  if (typeof v === "string" || typeof v === "number") return String(v);
+  if (Array.isArray(v)) return v.map(toText).filter(Boolean).join(", ");
+  if (typeof v === "object") return toText(v.name ?? v.value ?? v.title ?? v.label ?? "");
+  return "";
+};
+const round = (n, d = 1) => (isFinite(n) ? Number(n).toFixed(d).replace(/\.0+$/, "") : "");
+const gsmToOz = (gsm) => gsm * 0.0294935;
+const cmToInch = (cm) => cm / 2.54;
+const isNoneish = (s) => {
+  if (!s) return true;
+  const t = String(s).trim().toLowerCase().replace(/\s+/g, " ");
+  return ["none", "na", "none/ na", "none / na", "n/a", "-"].includes(t);
+};
+
 /* ---------------- ids, storage keys ---------------- */
 const getSessionId = () =>
   (typeof window !== "undefined" && localStorage.getItem("sessionId")) || null;
@@ -163,6 +182,38 @@ const WishlistItem = ({ product }) => {
       : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${img}`;
   const slug = product?.slug || _id;
 
+  /* ---------- build first four details like product card ---------- */
+  const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
+  const fabricTypeVal =
+    toText(pick(product?.fabricType, product?.fabric_type)) || "Woven Fabrics";
+  const contentVal = toText(pick(product?.content, product?.contentName, product?.content_label));
+  const weightVal = isFinite(gsm) && gsm > 0
+    ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz`
+    : toText(product?.weight);
+  const designVal = toText(pick(product?.design, product?.designName));
+  const colorsVal = toText(pick(product?.colors, product?.color, product?.colorName));
+  const widthCm = Number(pick(product?.widthCm, product?.width_cm, product?.width));
+  const widthVal = isFinite(widthCm) && widthCm > 0
+    ? `${round(widthCm,0)} cm / ${round(cmToInch(widthCm),0)} inch`
+    : toText(product?.widthLabel);
+  const finishVal = toText(pick(product?.finish, product?.subfinish?.name, product?.finishName));
+  const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName));
+
+  const allDetails = [
+    fabricTypeVal,
+    contentVal,
+    weightVal,
+    designVal,
+    colorsVal,
+    widthVal,
+    finishVal,
+    structureVal,
+  ].filter((v) => nonEmpty(v) && !isNoneish(v));
+  const topFourDetails = allDetails.slice(0, 4);
+  const mid4 = Math.ceil(topFourDetails.length / 2);
+  const left4 = topFourDetails.slice(0, mid4);
+  const right4 = topFourDetails.slice(mid4);
+
   /* ---------- STORAGE: ensure guest->user migration once on login ---------- */
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -282,6 +333,24 @@ const WishlistItem = ({ product }) => {
           <Link href={`/fabric/${slug}`} className="wishlist-title">
             {title}
           </Link>
+          {topFourDetails.length ? (
+            <div className="wishlist-specs">
+              <ul className="wishlist-spec-col">
+                {left4.map((v, i) => (
+                  <li key={i} className="wishlist-spec-row" title={v}>
+                    <span className="wishlist-spec-value">{v}</span>
+                  </li>
+                ))}
+              </ul>
+              <ul className="wishlist-spec-col">
+                {right4.map((v, i) => (
+                  <li key={i} className="wishlist-spec-row" title={v}>
+                    <span className="wishlist-spec-value">{v}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </td>
 
         {/* price */}
@@ -343,9 +412,13 @@ const WishlistItem = ({ product }) => {
           padding: 14px 12px;
           vertical-align: middle;
         }
+        /* extra space between image and text */
+        .tp-cart-img.wishlist-cell { padding-right: 20px; }
         .wishlist-cell-center {
           text-align: center;
         }
+        /* keep left edge aligned with specs and add spacing via image cell */
+        .tp-cart-title.wishlist-cell { padding-left: 0; }
 
         /* Image */
         .wishlist-img-link {
@@ -363,7 +436,7 @@ const WishlistItem = ({ product }) => {
 
         /* Text */
         .wishlist-title {
-          display: inline-block;
+          display: block;
           font-weight: 600;
           line-height: 1.3;
           color: #0f172a;
@@ -376,6 +449,14 @@ const WishlistItem = ({ product }) => {
           font-weight: 600;
           color: #0f172a;
         }
+
+        /* Specs under title (simple) */
+        .wishlist-specs{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; margin-top:8px; max-width:620px; margin-left:8px; }
+        .wishlist-spec-col{ list-style:none; margin:0; padding:0; }
+        .wishlist-spec-row{ padding:4px 0; border-bottom:1px dashed rgba(17,24,39,.08); }
+        .wishlist-spec-row:last-child{ border-bottom:0; }
+        .wishlist-spec-value{ font-size:12.5px; font-weight:500; color:#374151; }
+        @media (max-width:640px){ .wishlist-specs{ grid-template-columns:1fr; } }
 
         /* Shared square ghost-invert button */
         .btn-ghost-invert {
@@ -426,6 +507,7 @@ const WishlistItem = ({ product }) => {
           .wishlist-cell {
             padding: 10px 8px;
           }
+          .tp-cart-title.wishlist-cell { padding-left: 0; }
           .wishlist-img {
             width: 56px;
             height: 80px;
