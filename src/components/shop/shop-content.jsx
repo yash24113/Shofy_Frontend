@@ -110,15 +110,15 @@ const ShopContent = ({
               <div className="shop-toolbar-sticky">
                 <div className="tp-shop-top mb-45">
                   <div className="row">
-                    <div className="col-xl-6">
+                    {/* <div className="col-xl-6">
                       <ShopTopLeft
                         showing={filteredRows.slice(0, visibleCount).length}
                         total={all_products.length}
                       />
-                    </div>
-                    <div className="col-xl-6">
+                    </div> */}
+                    {/* <div className="col-xl-6">
                       <ShopTopRight selectHandleFilter={selectHandleFilter} />
-                    </div>
+                    </div> */}
                   </div>
                 </div>
               </div>

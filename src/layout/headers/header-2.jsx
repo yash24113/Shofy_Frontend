@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
+import { usePathname } from 'next/navigation';
 import useSticky from '@/hooks/use-sticky';
 import useCartInfo from '@/hooks/use-cart-info';
 import {
@@ -19,8 +20,8 @@ import { FiMenu } from 'react-icons/fi';
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 
 /* ------------ config for search dropdown ------------ */
-const PAGE_SIZE = 20;       // how many results to fetch per “page”
-const MAX_LIMIT = 200;      // hard cap to avoid runaway fetches
+const PAGE_SIZE = 20;
+const MAX_LIMIT = 200;
 
 /* ------------------ small helpers ------------------ */
 const baseApi = () => {
@@ -61,7 +62,7 @@ async function searchProducts(q, limit = PAGE_SIZE, signal) {
               : Array.isArray(data?.items) ? data.items
                 : [];
       return arr.map(normalizeProduct);
-    } catch (err) {
+    } catch {
       // ignore and try next endpoint
     }
   }
@@ -76,7 +77,7 @@ const HeaderTwo = ({ style_2 = false }) => {
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
   // (compat)
-  useCartInfo(); // quantity not used visibly but keep hook side-effects
+  useCartInfo();
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
 
   useEffect(() => { dispatch(get_cart_products()); }, [dispatch]);
@@ -86,11 +87,11 @@ const HeaderTwo = ({ style_2 = false }) => {
   // ===== GLOBAL SEARCH (shared) =====
   const { query, setQuery, debounced } = useGlobalSearch(150);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [loading, setLoading] = useState(false);          // loading current batch
-  const [loadingMore, setLoadingMore] = useState(false);  // tail spinner for infinite scroll
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [results, setResults] = useState([]);
   const [selIndex, setSelIndex] = useState(-1);
-  const [limit, setLimit] = useState(PAGE_SIZE);          // grows as you scroll
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const searchWrapRef = useRef(null);
   const dropRef = useRef(null);
 
@@ -104,7 +105,10 @@ const HeaderTwo = ({ style_2 = false }) => {
     const controller = new AbortController();
     const q = (debounced || '').trim();
     if (q.length < 2) {
-      setResults([]); setSelIndex(-1); setLoading(false); setLoadingMore(false);
+      setResults([]);
+      setSelIndex(-1);
+      setLoading(false);
+      setLoadingMore(false);
       return;
     }
     setLoading(true);
@@ -125,13 +129,10 @@ const HeaderTwo = ({ style_2 = false }) => {
 
     const onScroll = () => {
       if (loading || loadingMore) return;
-      // near bottom?
       const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
       if (nearBottom && limit < MAX_LIMIT) {
         setLoadingMore(true);
-        // grow limit; fetch handled by the effect above
         setLimit((l) => Math.min(l + PAGE_SIZE, MAX_LIMIT));
-        // small delay just for UX (spinner visible if network is fast)
         setTimeout(() => setLoadingMore(false), 120);
       }
     };
@@ -144,6 +145,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     const onDoc = (e) => {
       const w = searchWrapRef.current;
       if (!w) return;
+      if (!(e.target instanceof Node)) return;
       if (!w.contains(e.target)) setSearchOpen(false);
     };
     const onEsc = (e) => { if (e.key === 'Escape') setSearchOpen(false); };
@@ -157,6 +159,17 @@ const HeaderTwo = ({ style_2 = false }) => {
     };
   }, []);
 
+  // ✅ Clear the search box whenever route/path changes
+  const pathname = usePathname();
+  useEffect(() => {
+    if (!pathname) return;
+    setQuery('');
+    setResults([]);
+    setSelIndex(-1);
+    setSearchOpen(false);
+    setLimit(PAGE_SIZE);
+  }, [pathname, setQuery]);
+
   const onSearchSubmit = (e) => {
     e.preventDefault();
     const q = (query || '').trim();
@@ -167,7 +180,6 @@ const HeaderTwo = ({ style_2 = false }) => {
       return;
     }
     if (q.length) {
-      // Navigate to dedicated search page so it works on all routes
       window.location.href = `/search?searchText=${encodeURIComponent(q)}`;
     } else {
       setSearchOpen(true);
@@ -177,8 +189,13 @@ const HeaderTwo = ({ style_2 = false }) => {
   // Keyboard nav
   const onSearchKeyDown = (e) => {
     if (!searchOpen) return;
-    if (e.key === 'ArrowDown') { e.preventDefault(); setSelIndex((i) => Math.min((results.length || 0) - 1, (i < 0 ? 0 : i + 1))); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIndex((i) => Math.max(-1, i - 1)); }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelIndex((i) => Math.min((results.length || 0) - 1, (i < 0 ? 0 : i + 1)));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelIndex((i) => Math.max(-1, i - 1));
+    }
   };
 
   // ===== Session & user dropdown =====
@@ -206,6 +223,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     const close = () => setUserOpen(false);
     const onPointer = (e) => {
       const btn = userBtnRef.current, menu = userMenuRef.current, t = e.target;
+      if (!t) return;
       if (btn?.contains(t) || menu?.contains(t)) return;
       close();
     };
@@ -285,17 +303,22 @@ const HeaderTwo = ({ style_2 = false }) => {
                   <div className="col-6 col-sm-8 col-md-8 col-lg-9 col-xl-5">
                     <div className="tp-header-bottom-right d-flex align-items-center justify-content-end">
 
-                      {/* ======= SEARCH (inline + global) ======= */}
+                      {/* ======= SEARCH ======= */}
                       <div className="tp-header-search-2 d-none d-sm-block me-3 search-spacer" ref={searchWrapRef}>
                         <form onSubmit={onSearchSubmit}>
                           <input
                             value={query}
-                            onChange={(e) => { setQuery(e.target.value); if (!searchOpen) setSearchOpen(true); }}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setQuery(v);
+                              if (v && !searchOpen) setSearchOpen(true);
+                            }}
                             onKeyDown={onSearchKeyDown}
                             type="text"
                             placeholder="Search for Products..."
                             aria-label="Search products"
                             autoComplete="off"
+                            autoCorrect="off"
                             spellCheck={false}
                             inputMode="search"
                             onFocus={() => { if (nonEmpty(query)) setSearchOpen(true); }}
@@ -303,8 +326,8 @@ const HeaderTwo = ({ style_2 = false }) => {
                           <button type="submit" aria-label="Search"><Search /></button>
                         </form>
 
-                        {/* Results popover */}
-                        {/* {searchOpen && (
+                        {/* Clean, opt-in dropdown (kept commented intentionally)
+                        {searchOpen && (
                           <div className="search-drop" ref={dropRef}>
                             {loading ? (
                               <div className="search-empty">Searching…</div>
@@ -339,11 +362,16 @@ const HeaderTwo = ({ style_2 = false }) => {
                                     );
                                   })}
                                 </ul>
-
-                                {/* tail loader for infinite scroll */}
-                                {/* {loadingMore && <div className="search-more">Loading more…</div>}
-                                {/* soft cap notice */}
-                               
+                                {loadingMore && <div className="search-more">Loading more…</div>}
+                                {limit >= MAX_LIMIT && <div className="search-cap">Showing top results</div>}
+                              </>
+                            ) : (
+                              <div className="search-empty">
+                                No results. <span className="search-hint">Try a different term.</span>
+                              </div>
+                            )}
+                          </div>
+                        )} */}
                       </div>
 
                       {/* Actions */}
