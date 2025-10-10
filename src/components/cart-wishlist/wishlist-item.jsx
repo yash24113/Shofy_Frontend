@@ -34,6 +34,7 @@ const isNoneish = (s) => {
 };
 
 /* ---------- ids / storage ---------- */
+// (kept here in case other files import it, but we don't use sessionId anymore)
 const getSessionId = () =>
   (typeof window !== "undefined" && localStorage.getItem("sessionId")) || null;
 
@@ -52,7 +53,7 @@ const getUserIdFromLocal = () => {
 };
 
 const GUEST_KEY = "wishlist_guest";
-const userKey = (uid, sid) => `wishlist_${uid || "anon"}_${sid || "nosid"}`;
+const userOnlyKey = (uid) => (uid ? `wishlist_${uid}` : GUEST_KEY);
 
 const readFromKey = (key) => {
   if (typeof window === "undefined") return [];
@@ -117,11 +118,10 @@ async function fetchServerWishlist(userId) {
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
 
-    // your current response:
-    // { success, message, data: { products: [ { _id, name } ... ] } }
+    // Current response: { success, message, data: { products: [ {_id,name} ] } }
     if (Array.isArray(data?.data?.products)) return data.data.products;
 
-    // also keep older/other shapes supported just in case
+    // fallback compatibility
     if (Array.isArray(data)) return data;
     if (Array.isArray(data?.items)) return data.items;
     if (Array.isArray(data?.data?.items)) return data.data.items;
@@ -262,17 +262,15 @@ const WishlistItem = ({ product }) => {
       const ids = uniqueIds(list);         // works for [{_id,name}] or ["id"]
       setServerIds(new Set(ids));
 
-      // persist to scoped key for other parts of app (no PUT here)
-      const sid = getSessionId();
-      if (sid) {
-        const key = userKey(userId, sid);
-        const normalized = Array.isArray(list) && typeof list[0] === "string"
-          ? list.map((id) => ({ _id: id }))
-          : list;
-        writeToKey(key, normalized);
-      }
+      // persist to localStorage using ONLY userId (or guest)
+      const key = userOnlyKey(userId);
+      const normalized = Array.isArray(list) && typeof list[0] === "string"
+        ? list.map((id) => ({ _id: id }))
+        : list;
+      writeToKey(key, normalized);
+
       setLoadingServer(false);
-      try { window.dispatchEvent(new CustomEvent('wishlist-synced', { detail: { count: ids.length } })); } catch {}
+      try { window.dispatchEvent(new CustomEvent('wishlist-synced', { detail: { count: ids.length } })); } catch(err) {console.log("error:",err)}
     })();
     return () => { stop = true; };
   }, [userId]);
@@ -333,15 +331,14 @@ const WishlistItem = ({ product }) => {
 
   /* ---------- Actions (NO PUT here) ---------- */
   const handleAddProduct = async (prd) => {
-    const sid = getSessionId();
-    if (!sid || !userId) { openLogin(); return; }
+    if (!userId) { openLogin(); return; } // only check userId now
     try {
       setMoving(true);
       dispatch(add_cart_product(prd));
       dispatch(remove_wishlist_product({ title, id: _id }));
 
-      // update local-only + UI (do not PUT)
-      const key = sid && userId ? userKey(userId, sid) : GUEST_KEY;
+      // update local-only + UI using userId (no sessionId)
+      const key = userOnlyKey(userId);
       const list = readFromKey(key);
       const next = removeById(list, _id);
       writeToKey(key, next);
@@ -358,8 +355,7 @@ const WishlistItem = ({ product }) => {
   const handleRemovePrd = async (prd) => {
     dispatch(remove_wishlist_product(prd));
     const id = prd?.id || prd?._id;
-    const sid = getSessionId();
-    const key = sid && userId ? userKey(userId, sid) : GUEST_KEY;
+    const key = userOnlyKey(userId);
     const list = readFromKey(key);
     const next = removeById(list, id);
     writeToKey(key, next);
