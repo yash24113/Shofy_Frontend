@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import ProductItem from '../products/fashion/product-item';
 import ShopListItem from './shop-list-item';
 import ShopTopLeft from './shop-top-left';
@@ -7,13 +7,7 @@ import ShopTopRight from './shop-top-right';
 import ShopSidebarFilters from './ShopSidebarFilters';
 import ResetButton from './shop-filter/reset-button';
 import EmptyState from '@/components/common/empty-state';
-
-// ====== config ======
-const COLS_PER_ROW = 4;           // grid mode: 4 per row
-const INITIAL_ROWS = 3;           // grid mode: start with 3 rows
-const STEP_GRID = COLS_PER_ROW;   // grid mode: +1 row (4 items)
-const INITIAL_ROWS_SEARCH = 5;    // search (list) mode: start with 5 items
-const STEP_SEARCH = 5;            // search (list) mode: +5 items
+// Pagination removed for Load More behavior
 
 const ShopContent = ({
   all_products = [],
@@ -29,32 +23,13 @@ const ShopContent = ({
     currPage = 1,
     selectedFilters,
     handleFilterChange,
-  } = otherProps || {};
+  } = otherProps;
 
   const { setPriceValue, priceValue } = priceFilterValues || {};
   const [filteredRows, setFilteredRows] = useState(products);
+  const [visibleCount, setVisibleCount] = useState(40);
 
-  // detect SEARCH (row-wise) mode from ?searchText=
-  const [isSearchMode, setIsSearchMode] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const usp = new URLSearchParams(window.location.search);
-    setIsSearchMode(
-      usp.has('searchText') &&
-      String(usp.get('searchText') || '').trim().length > 0
-    );
-  }, []);
-
-  // visible count
-  const initialVisible = isSearchMode
-    ? Math.min(INITIAL_ROWS_SEARCH, products.length || 0)
-    : Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0);
-  const [visibleCount, setVisibleCount] = useState(initialVisible);
-
-  const prevCountRef = useRef(0);
-  useEffect(() => { prevCountRef.current = visibleCount; }, [visibleCount]);
-
-  // empty state centering
+  // measure header + toolbar to center the empty state
   const [centerOffset, setCenterOffset] = useState(140);
   useEffect(() => {
     const calc = () => {
@@ -71,22 +46,18 @@ const ShopContent = ({
     return () => window.removeEventListener('resize', calc);
   }, []);
 
-  // sync on products / mode change
   useEffect(() => {
     setFilteredRows(products);
-    setVisibleCount(
-      isSearchMode
-        ? Math.min(INITIAL_ROWS_SEARCH, products.length || 0)
-        : Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0)
-    );
-    setCurrPage?.(1);
-  }, [products, isSearchMode, setCurrPage]);
+    setVisibleCount(Math.min(40, products.length || 0));
+    setCurrPage(1);
+  }, [products, setCurrPage]);
 
   const maxPrice = all_products.reduce(
-    (m, p) => Math.max(m, +p?.salesPrice || +p?.price || 0),
+    (m, p) => Math.max(m, +p.salesPrice || +p.price || 0),
     1000
   );
 
+  // any active filters?
   const pv = Array.isArray(priceValue) ? priceValue : [0, maxPrice];
   const priceActive = pv[0] > 0 || pv[1] < maxPrice;
   const facetsActive =
@@ -95,55 +66,14 @@ const ShopContent = ({
     );
   const anyActive = !!(priceActive || facetsActive);
 
+  // reset handler
   const resetAll = () => {
     setPriceValue?.([0, maxPrice]);
     handleFilterChange?.({});
     setCurrPage?.(1);
   };
 
-  // infinite scroll
-  const sentinelRef = useRef(null);
-  const loadingRef = useRef(false);
-
-  useEffect(() => {
-    if (!sentinelRef.current) return;
-
-    const onIntersect = (entries) => {
-      const entry = entries[0];
-      if (!entry.isIntersecting || loadingRef.current) return;
-      const step = isSearchMode ? STEP_SEARCH : STEP_GRID;
-      if (visibleCount < filteredRows.length) {
-        loadingRef.current = true;
-        requestAnimationFrame(() => {
-          setVisibleCount((c) => Math.min(c + step, filteredRows.length));
-          setTimeout(() => { loadingRef.current = false; }, 100);
-        });
-      }
-    };
-
-    const io = new IntersectionObserver(onIntersect, {
-      root: null,
-      rootMargin: '240px 0px',
-      threshold: 0.01,
-    });
-
-    io.observe(sentinelRef.current);
-    return () => io.disconnect();
-  }, [filteredRows.length, visibleCount, isSearchMode]);
-
-  // reveal on viewport
-  const gridRef = useRef(null);
-  useEffect(() => {
-    const host = gridRef.current;
-    if (!host) return;
-    const els = host.querySelectorAll('.reveal');
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach((en) => en.isIntersecting && en.target.classList.add('reveal--visible')),
-      { root: null, rootMargin: '60px 0px', threshold: 0.1 }
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, [filteredRows, visibleCount, isSearchMode]);
+  // no pagination; using incremental visibility via Load More
 
   return (
     <section className="tp-shop-area pb-120">
@@ -164,6 +94,7 @@ const ShopContent = ({
                     aria-label="Reset all filters"
                   />
                 </div>
+
                 <ShopSidebarFilters
                   selected={selectedFilters}
                   onFilterChange={handleFilterChange}
@@ -179,13 +110,15 @@ const ShopContent = ({
               <div className="shop-toolbar-sticky">
                 <div className="tp-shop-top mb-45">
                   <div className="row">
-                    <div className="col-xl-6">
+                    {/* <div className="col-xl-6">
                       <ShopTopLeft
                         showing={filteredRows.slice(0, visibleCount).length}
                         total={all_products.length}
                       />
-                    </div>
-                    {/* <div className="col-xl-6"><ShopTopRight selectHandleFilter={selectHandleFilter} /></div> */}
+                    </div> */}
+                    {/* <div className="col-xl-6">
+                      <ShopTopRight selectHandleFilter={selectHandleFilter} />
+                    </div> */}
                   </div>
                 </div>
               </div>
@@ -205,32 +138,42 @@ const ShopContent = ({
                   <>
                     <div className="tab-content" id="productTabContent">
                       <div className="tab-pane fade show active" id="grid-tab-pane">
-                        <div ref={gridRef} className={`products-grid ${isSearchMode ? 'is-list' : ''}`}>
-                          {filteredRows.slice(0, visibleCount).map((item, idx) => {
-                            const perRow = isSearchMode ? 1 : COLS_PER_ROW;
-                            const delayMs = (idx % perRow) * 60;
-                            const isNew = idx >= prevCountRef.current - (isSearchMode ? STEP_SEARCH : STEP_GRID);
-                            return (
-                              <div
-                                key={item?._id || item?.id || idx}
-                                className={`product-cell reveal ${isNew ? 'item-appear' : ''}`}
-                                style={{ animationDelay: `${delayMs}ms` }}
-                              >
-                                <div className={`product-card ${isSearchMode ? 'row-card' : ''}`}>
-                                  {isSearchMode ? (
-                                    <ShopListItem product={item} />
-                                  ) : (
-                                    <ProductItem product={item} />
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
+                        {/* ✅ Use products-grid instead of bootstrap row */}
+                        <div className="products-grid">
+                          {filteredRows
+                            .slice(0, visibleCount)
+                            .map((item) => (
+                              <ProductItem key={item._id} product={item} />
+                            ))}
+                        </div>
+                      </div>
+
+                      <div className="tab-pane fade" id="list-tab-pane">
+                        <div className="tp-shop-list-wrapper tp-shop-item-primary mb-70">
+                          {filteredRows
+                            .slice(0, visibleCount)
+                            .map((item) => (
+                              <ShopListItem key={item._id} product={item} />
+                            ))}
                         </div>
                       </div>
                     </div>
 
-                    <div ref={sentinelRef} className="sentinel" />
+                    {visibleCount < filteredRows.length && (
+                      <div className="row">
+                        <div className="col-xl-12">
+                          <div className="load-more-wrapper mt-30">
+                            <button
+                              type="button"
+                              className="load-more-btn"
+                              onClick={() => setVisibleCount(filteredRows.length)}
+                            >
+                              Load more
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -248,137 +191,19 @@ const ShopContent = ({
           place-items: center;
           padding: 8px 0;
         }
-
-        /* Grid layout */
-        .products-grid {
-          display: grid;
-          gap: 24px;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          align-items: stretch;
+        .load-more-wrapper { display: flex; justify-content: center; }
+        .load-more-btn {
+          background: #000;
+          color: #fff;
+          border: 1px solid #000;
+          padding: 12px 28px;
+          border-radius: 9999px;
+          font-weight: 600;
+          transition: all .2s ease;
         }
-        @media (max-width: 1199px) { .products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-        @media (max-width: 991px)  { .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (max-width: 575px)  { .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } }
-
-        /* Row-wise list (search mode) */
-        .products-grid.is-list { grid-template-columns: 1fr; gap: 16px; }
-
-        .product-cell { will-change: transform, opacity; min-width: 0; }
-        .product-card {
-          width: 100%;
-          max-width: 100%;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-          min-width: 0;
-        }
-
-        /* Reveal animations */
-        .reveal {
-          opacity: 0;
-          transform: translateY(12px) scale(0.98);
-          transition: opacity .32s ease-out, transform .32s ease-out;
-        }
-        .reveal.reveal--visible { opacity: 1; transform: translateY(0) scale(1); }
-        .item-appear { animation: ytp-pop .35s ease-out both; }
-        @keyframes ytp-pop {
-          0% { opacity: 0; transform: translateY(10px) scale(0.98); }
-          60%{ opacity: 1; transform: translateY(0) scale(1.005); }
-          100%{ opacity: 1; transform: translateY(0) scale(1); }
-        }
-
-        .sentinel { width: 100%; height: 1px; }
-      `}</style>
-
-      {/* ---------- HARD OVERRIDES to fix “tall, skinny pill” thumbnails ---------- */}
-      <style jsx global>{`
-        /* Kill nested bootstrap sizing that squeezes cards */
-        .products-grid .product-card .row,
-        .products-grid .product-card [class*="col-"] {
-          width: 100% !important;
-          max-width: 100% !important;
-          flex: 1 1 auto !important;
-          padding: 0 !important;
-          margin: 0 !important;
-        }
-
-        /* Any anchor around the media should behave like a block */
-        .products-grid .product-card a {
-          display: block;
-          max-width: 100% !important;
-        }
-
-        /* Identify ANY possible media wrapper class used by theme/components */
-        .products-grid .product-card .tp-product-thumb,
-        .products-grid .product-card .product-thumb,
-        .products-grid .product-card .thumb,
-        .products-grid .product-card .image,
-        .products-grid .product-card .card-img,
-        .products-grid .product-card .card-image,
-        .products-grid .product-card .product-media,
-        .products-grid .product-card .media,
-        .products-grid .product-card .thumbnail,
-        .products-grid .product-card .tp-product-img,
-        .products-grid .product-card .tp-product__thumb {
-          position: relative !important;
-          display: block !important;
-          width: 100% !important;
-          max-width: 100% !important;
-          overflow: hidden !important;
-
-          /* CRITICAL: undo any huge round corners that make it look like a pill */
-          border-radius: 12px !important;
-
-          /* CRITICAL: ensure a square box in grid mode */
-          aspect-ratio: 1 / 1 !important;
-        }
-
-        /* In list (search) mode, use a fixed square thumb on the left */
-        .products-grid.is-list .product-card .tp-product-thumb,
-        .products-grid.is-list .product-card .product-thumb,
-        .products-grid.is-list .product-card .thumb,
-        .products-grid.is-list .product-card .image,
-        .products-grid.is-list .product-card .card-img,
-        .products-grid.is-list .product-card .card-image,
-        .products-grid.is-list .product-card .product-media,
-        .products-grid.is-list .product-card .media,
-        .products-grid.is-list .product-card .thumbnail,
-        .products-grid.is-list .product-card .tp-product-img,
-        .products-grid.is-list .product-card .tp-product__thumb {
-          width: 240px !important;
-          max-width: 40vw !important;
-          aspect-ratio: 1 / 1 !important;
-          float: left !important;
-          margin-right: 16px !important;
-        }
-
-        /* Ensure the actual <img> fills the wrapper */
-        .products-grid .product-card .tp-product-thumb img,
-        .products-grid .product-card .product-thumb img,
-        .products-grid .product-card .thumb img,
-        .products-grid .product-card .image img,
-        .products-grid .product-card .card-img img,
-        .products-grid .product-card .card-image img,
-        .products-grid .product-card .product-media img,
-        .products-grid .product-card .media img,
-        .products-grid .product-card .thumbnail img,
-        .products-grid .product-card .tp-product-img img,
-        .products-grid .product-card .tp-product__thumb img {
-          position: absolute !important;
-          inset: 0 !important;
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: cover !important;
-          max-width: none !important;
-          max-height: none !important;
-        }
-
-        /* Guard against any tiny fixed widths on ancestors */
-        .products-grid .product-card,
-        .products-grid .product-card > * {
-          width: 100% !important;
-          max-width: 100% !important;
-          min-width: 0 !important;
+        .load-more-btn:hover {
+          background: #fff;
+          color: #000;
         }
       `}</style>
     </section>
