@@ -7,7 +7,7 @@ import ShopTopRight from './shop-top-right';
 import ShopSidebarFilters from './ShopSidebarFilters';
 import ResetButton from './shop-filter/reset-button';
 import EmptyState from '@/components/common/empty-state';
-import Pagination from '@/ui/Pagination';   // ✅ use your inbuilt Pagination
+// Pagination removed for Load More behavior
 
 const ShopContent = ({
   all_products = [],
@@ -27,8 +27,7 @@ const ShopContent = ({
 
   const { setPriceValue, priceValue } = priceFilterValues || {};
   const [filteredRows, setFilteredRows] = useState(products);
-  const [pageStart, setPageStart] = useState(0);
-  const [countOfPage, setCountOfPage] = useState(12); // make dynamic
+  const [visibleCount, setVisibleCount] = useState(40);
 
   // measure header + toolbar to center the empty state
   const [centerOffset, setCenterOffset] = useState(140);
@@ -49,7 +48,7 @@ const ShopContent = ({
 
   useEffect(() => {
     setFilteredRows(products);
-    setPageStart(0);
+    setVisibleCount(Math.min(40, products.length || 0));
     setCurrPage(1);
   }, [products, setCurrPage]);
 
@@ -74,12 +73,7 @@ const ShopContent = ({
     setCurrPage?.(1);
   };
 
-  // hook pagination
-  const paginatedData = (items, startPage, pageCount) => {
-    setFilteredRows(items);
-    setPageStart(startPage);
-    setCountOfPage(pageCount);
-  };
+  // no pagination; using incremental visibility via Load More
 
   return (
     <section className="tp-shop-area pb-120">
@@ -118,7 +112,7 @@ const ShopContent = ({
                   <div className="row">
                     <div className="col-xl-6">
                       <ShopTopLeft
-                        showing={filteredRows.slice(pageStart, pageStart + countOfPage).length}
+                        showing={filteredRows.slice(0, visibleCount).length}
                         total={all_products.length}
                       />
                     </div>
@@ -147,7 +141,7 @@ const ShopContent = ({
                         {/* ✅ Use products-grid instead of bootstrap row */}
                         <div className="products-grid">
                           {filteredRows
-                            .slice(pageStart, pageStart + countOfPage)
+                            .slice(0, visibleCount)
                             .map((item) => (
                               <ProductItem key={item._id} product={item} />
                             ))}
@@ -157,7 +151,7 @@ const ShopContent = ({
                       <div className="tab-pane fade" id="list-tab-pane">
                         <div className="tp-shop-list-wrapper tp-shop-item-primary mb-70">
                           {filteredRows
-                            .slice(pageStart, pageStart + countOfPage)
+                            .slice(0, visibleCount)
                             .map((item) => (
                               <ShopListItem key={item._id} product={item} />
                             ))}
@@ -165,22 +159,21 @@ const ShopContent = ({
                       </div>
                     </div>
 
-                    {/* ✅ Pagination same as blog */}
-                    <div className="row">
-                      <div className="col-xl-12">
-                        <div className="tp-blog-pagination mt-30">
-                          <div className="tp-pagination">
-                            <Pagination
-                              items={all_products}
-                              countOfPage={12}
-                              paginatedData={paginatedData}
-                              currPage={otherProps.currPage}
-                              setCurrPage={setCurrPage}
-                            />
+                    {visibleCount < filteredRows.length && (
+                      <div className="row">
+                        <div className="col-xl-12">
+                          <div className="load-more-wrapper mt-30">
+                            <button
+                              type="button"
+                              className="load-more-btn"
+                              onClick={() => setVisibleCount(filteredRows.length)}
+                            >
+                              Load more
+                            </button>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
               </div>
@@ -197,6 +190,20 @@ const ShopContent = ({
           display: grid;
           place-items: center;
           padding: 8px 0;
+        }
+        .load-more-wrapper { display: flex; justify-content: center; }
+        .load-more-btn {
+          background: #000;
+          color: #fff;
+          border: 1px solid #000;
+          padding: 12px 28px;
+          border-radius: 9999px;
+          font-weight: 600;
+          transition: all .2s ease;
+        }
+        .load-more-btn:hover {
+          background: #fff;
+          color: #000;
         }
       `}</style>
     </section>

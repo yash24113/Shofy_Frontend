@@ -84,7 +84,7 @@ const HeaderTwo = ({ style_2 = false }) => {
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
 
   // ===== GLOBAL SEARCH (shared) =====
-  const { query, setQuery, debounced } = useGlobalSearch(250);
+  const { query, setQuery, debounced } = useGlobalSearch(150);
   const [searchOpen, setSearchOpen] = useState(false);
   const [loading, setLoading] = useState(false);          // loading current batch
   const [loadingMore, setLoadingMore] = useState(false);  // tail spinner for infinite scroll
@@ -159,10 +159,16 @@ const HeaderTwo = ({ style_2 = false }) => {
 
   const onSearchSubmit = (e) => {
     e.preventDefault();
+    const q = (query || '').trim();
     if (selIndex >= 0 && results[selIndex]) {
       const p = results[selIndex];
       const href = p.slug ? `/product-details/${p.slug}` : `/product-details?id=${encodeURIComponent(p.id)}`;
       window.location.href = href;
+      return;
+    }
+    if (q.length) {
+      // Navigate to dedicated search page so it works on all routes
+      window.location.href = `/search?searchText=${encodeURIComponent(q)}`;
     } else {
       setSearchOpen(true);
     }
@@ -289,6 +295,9 @@ const HeaderTwo = ({ style_2 = false }) => {
                             type="text"
                             placeholder="Search for Products..."
                             aria-label="Search products"
+                            autoComplete="off"
+                            spellCheck={false}
+                            inputMode="search"
                             onFocus={() => { if (nonEmpty(query)) setSearchOpen(true); }}
                           />
                           <button type="submit" aria-label="Search"><Search /></button>
