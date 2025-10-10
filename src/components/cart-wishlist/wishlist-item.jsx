@@ -69,6 +69,14 @@ const writeToKey = (key, list) => {
   }
 };
 
+const uniqueIds = (arr = []) => {
+  const seen = new Set();
+  return arr
+    .map((x) => x?._id || x?.id)
+    .filter(Boolean)
+    .filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
+};
+
 const mergeUniqueById = (a = [], b = []) => {
   const map = new Map();
   [...a, ...b].forEach((item) => {
@@ -83,31 +91,57 @@ const removeById = (arr = [], id) => arr.filter((x) => (x?._id || x?.id) !== id)
 /* ---------- server (API) ---------- */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
+/** GET /api/wishlist/:userId
+ *  Response can be:
+ *  { success, data: { productIds: [ {_id, name?} ... ] } } OR an array of full products.
+ */
 async function fetchServerWishlist(userId) {
   if (!userId || !API_BASE) return [];
   try {
-    const res = await fetch(
-      `${API_BASE}/api/wishlist?userId=${encodeURIComponent(userId)}`,
-      { method: "GET", credentials: "include", headers: { Accept: "application/json" }, cache: "no-store" }
-    );
+    const res = await fetch(`${API_BASE}/wishlist/${encodeURIComponent(userId)}`, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
-    const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-    return items;
+
+    // try to normalize: return an array of objects with _id or id
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.items)) return data.items;
+    if (Array.isArray(data?.data?.items)) return data.data.items;
+
+    // the Postman screenshot shows productIds as an array of objects:
+    // data: { productIds: [ { _id: "..." , name? } ] }
+    if (Array.isArray(data?.data?.productIds)) {
+      return data.data.productIds.map((x) => ({ _id: x?._id || x?.id || x }));
+    }
+    if (Array.isArray(data?.productIds)) {
+      return data.productIds.map((x) => ({ _id: x?._id || x?.id || x }));
+    }
+
+    return [];
   } catch (err) {
     console.warn("fetchServerWishlist failed", err);
     return [];
   }
 }
 
-async function pushServerWishlist(userId, items) {
+/** PUT /api/wishlist/:userId
+ *  Body: { userId, productIds: string[] }
+ */
+async function pushServerWishlist(userId, itemsOrIds) {
   if (!userId || !API_BASE) return false;
   try {
-    const res = await fetch(`${API_BASE}/api/wishlist`, {
+    const productIds = Array.isArray(itemsOrIds)
+      ? (typeof itemsOrIds[0] === "string" ? itemsOrIds : uniqueIds(itemsOrIds))
+      : [];
+    const res = await fetch(`${API_BASE}/wishlist/${encodeURIComponent(userId)}`, {
       method: "PUT",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, items }),
+      body: JSON.stringify({ userId, productIds }),
     });
     return res.ok;
   } catch (err) {
@@ -261,7 +295,34 @@ const WishlistItem = ({ product }) => {
   const openLogin = useCallback(() => { setAuthModal("login"); pushAuthQuery("login"); }, [pushAuthQuery]);
   const openRegister = useCallback(() => { setAuthModal("register"); pushAuthQuery("register"); }, [pushAuthQuery]);
 
-  // ensure guest->user migration once on login
+  /* ---------- Sync helpers ---------- */
+  const getActiveKey = () => {
+    const sid = getSessionId();
+    if (sid && userId) return userKey(userId, sid);
+    return GUEST_KEY;
+  };
+
+  const pushServerFromLocal = async () => {
+    const sid = getSessionId();
+    if (!sid || !userId) return;
+    const key = userKey(userId, sid);
+    const list = readFromKey(key);
+    const ok = await pushServerWishlist(userId, list);
+    if (!ok) console.warn("pushServerFromLocal: server sync failed");
+  };
+
+  const mirrorRemoveEverywhere = async (id) => {
+    const key = getActiveKey();
+    const list = readFromKey(key);
+    const next = removeById(list, id);
+    writeToKey(key, next);
+    const sid = getSessionId();
+    if (sid && userId) {
+      await pushServerWishlist(userId, next); // push productIds to server
+    }
+  };
+
+  /* ---------- Login migration & initial sync ---------- */
   useEffect(() => {
     if (typeof window === "undefined") return;
     const sid = getSessionId();
@@ -276,7 +337,7 @@ const WishlistItem = ({ product }) => {
         const merged = mergeUniqueById(mergeUniqueById(userScoped, guestList), serverItems);
         writeToKey(uKey, merged);
         try { localStorage.removeItem(GUEST_KEY); } catch(e) { console.log("error", e); }
-        await pushServerWishlist(userId, merged);
+        await pushServerWishlist(userId, merged); // push productIds
         setMigratedOnce(true);
       })();
     } else {
@@ -286,13 +347,13 @@ const WishlistItem = ({ product }) => {
         const serverItems = await fetchServerWishlist(userId);
         const merged = mergeUniqueById(userScoped, serverItems);
         writeToKey(uKey, merged);
-        await pushServerWishlist(userId, merged);
+        await pushServerWishlist(userId, merged); // ensure server has latest
         setMigratedOnce(true);
       })();
     }
   }, [userId, migratedOnce]);
 
-  // deep-link auth modal (?auth=login|register)
+  // Deep-link auth modal (?auth=login|register)
   useEffect(() => {
     const auth = searchParams.get("auth");
     if (auth === "login" || auth === "register") {
@@ -300,21 +361,7 @@ const WishlistItem = ({ product }) => {
     }
   }, [searchParams]);
 
-  // helpers for storage/server sync
-  const getActiveKey = () => {
-    const sid = getSessionId();
-    if (sid && userId) return userKey(userId, sid);
-    return GUEST_KEY;
-  };
-
-  const mirrorRemoveEverywhere = async (id) => {
-    const key = getActiveKey();
-    const list = readFromKey(key);
-    const next = removeById(list, id);
-    writeToKey(key, next);
-    if (userId) await pushServerWishlist(userId, next);
-  };
-
+  /* ---------- Actions ---------- */
   const handleAddProduct = async (prd) => {
     const sid = getSessionId();
     if (!sid) { openLogin(); return; }
@@ -469,7 +516,7 @@ const WishlistItem = ({ product }) => {
         .wishlist-spec-value{ font-size:12.5px; font-weight:500; color:#374151; }
         @media (max-width:640px){ .wishlist-specs{ grid-template-columns:1fr; } }
         .btn-ghost-invert { --navy:#0b1620; display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 18px; border-radius:0; font-weight:600; font-size:15px; line-height:1; cursor:pointer; user-select:none; background:var(--navy); color:#fff; border:1px solid var(--navy); box-shadow:0 6px 18px rgba(0,0,0,0.22); transition: background .18s, color .18s, border-color .18s, box-shadow .18s, transform .12s; }
-        .btn-ghost-invert:hover { background:#fff; color:var(--navy); border-color:var(--navy); box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,.12); transform: translateY(-1px); }
+        .btn-ghost-invert:hover { background:#fff; color:var(--navy); border-color:var(--navy); box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12); transform: translateY(-1px); }
         .btn-ghost-invert:active { transform: translateY(0); background:#f8fafc; color:var(--navy); box-shadow:0 3px 10px rgba(0,0,0,0.15); }
         .btn-ghost-invert:focus-visible { outline:0; box-shadow:0 0 0 3px rgba(11,22,32,0.35); }
         .btn-ghost-invert.is-loading { pointer-events:none; opacity:.9; }
