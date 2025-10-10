@@ -1,6 +1,5 @@
 'use client';
-
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import ProductItem from '../products/fashion/product-item';
 import ShopListItem from './shop-list-item';
 import ShopTopLeft from './shop-top-left';
@@ -8,9 +7,7 @@ import ShopTopRight from './shop-top-right';
 import ShopSidebarFilters from './ShopSidebarFilters';
 import ResetButton from './shop-filter/reset-button';
 import EmptyState from '@/components/common/empty-state';
-import AnimatedItemWrapper from './AnimatedItemWrapper'; // Adjust path if needed
-
-const ITEMS_PER_PAGE = 40; // Define how many items to load at a time
+// Pagination removed for Load More behavior
 
 const ShopContent = ({
   all_products = [],
@@ -30,34 +27,7 @@ const ShopContent = ({
 
   const { setPriceValue, priceValue } = priceFilterValues || {};
   const [filteredRows, setFilteredRows] = useState(products);
-  // This state now controls how many items are rendered from the filtered list
-  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
-
-  // --- Infinite Scroll Logic ---
-  const observer = useRef();
-  const lastProductElementRef = useCallback(
-    (node) => {
-      // If a previous observer is set, disconnect it
-      if (observer.current) observer.current.disconnect();
-
-      // Create a new Intersection Observer
-      observer.current = new IntersectionObserver((entries) => {
-        // If the observed element is intersecting (visible) and there are more products to show...
-        if (entries[0].isIntersecting && visibleCount < filteredRows.length) {
-          // ...increment the visible count to show the next batch of products.
-          setVisibleCount(
-            (prevCount) => prevCount + ITEMS_PER_PAGE
-          );
-        }
-      });
-
-      // If the node (the last element) exists, start observing it
-      if (node) observer.current.observe(node);
-    },
-    [visibleCount, filteredRows.length] // Dependencies for the callback
-  );
-  // --- End Infinite Scroll Logic ---
-
+  const [visibleCount, setVisibleCount] = useState(40);
 
   // measure header + toolbar to center the empty state
   const [centerOffset, setCenterOffset] = useState(140);
@@ -76,11 +46,9 @@ const ShopContent = ({
     return () => window.removeEventListener('resize', calc);
   }, []);
 
-  // Reset visible items when filters change
   useEffect(() => {
     setFilteredRows(products);
-    // Reset to the initial page size
-    setVisibleCount(Math.min(ITEMS_PER_PAGE, products.length || 0));
+    setVisibleCount(Math.min(40, products.length || 0));
     setCurrPage(1);
   }, [products, setCurrPage]);
 
@@ -93,8 +61,7 @@ const ShopContent = ({
   const pv = Array.isArray(priceValue) ? priceValue : [0, maxPrice];
   const priceActive = pv[0] > 0 || pv[1] < maxPrice;
   const facetsActive =
-    selectedFilters &&
-    Object.values(selectedFilters).some((v) =>
+    selectedFilters && Object.values(selectedFilters).some((v) =>
       Array.isArray(v) ? v.length > 0 : !!v
     );
   const anyActive = !!(priceActive || facetsActive);
@@ -105,6 +72,8 @@ const ShopContent = ({
     handleFilterChange?.({});
     setCurrPage?.(1);
   };
+
+  // no pagination; using incremental visibility via Load More
 
   return (
     <section className="tp-shop-area pb-120">
@@ -125,6 +94,7 @@ const ShopContent = ({
                     aria-label="Reset all filters"
                   />
                 </div>
+
                 <ShopSidebarFilters
                   selected={selectedFilters}
                   onFilterChange={handleFilterChange}
@@ -140,15 +110,15 @@ const ShopContent = ({
               <div className="shop-toolbar-sticky">
                 <div className="tp-shop-top mb-45">
                   <div className="row">
-                    <div className="col-xl-6">
+                     <div className="col-xl-6">
                       <ShopTopLeft
-                        showing={Math.min(visibleCount, filteredRows.length)}
-                        total={filteredRows.length} // Show total of filtered products
+                        showing={filteredRows.slice(0, visibleCount).length}
+                        total={all_products.length}
                       />
-                    </div>
+                    </div> 
                     <div className="col-xl-6">
                       <ShopTopRight selectHandleFilter={selectHandleFilter} />
-                    </div>
+                    </div> 
                   </div>
                 </div>
               </div>
@@ -159,7 +129,7 @@ const ShopContent = ({
                     <EmptyState
                       title="No products match your filters"
                       subtitle="Try adjusting your filters or explore more categories."
-                      tips={['Clear some filters','Try a different category','Widen the price range']}
+                      tips={['Clear some filters', 'Try a different category', 'Widen the price range']}
                       primaryAction={{ label: 'Reset all filters', onClick: resetAll }}
                       secondaryAction={{ label: 'Browse all products', href: '/fabric' }}
                     />
@@ -168,26 +138,13 @@ const ShopContent = ({
                   <>
                     <div className="tab-content" id="productTabContent">
                       <div className="tab-pane fade show active" id="grid-tab-pane">
+                        {/* ✅ Use products-grid instead of bootstrap row */}
                         <div className="products-grid">
                           {filteredRows
                             .slice(0, visibleCount)
-                            .map((item, index) => {
-                              // If this is the last item in the current visible list, attach the ref to it
-                              if (index === visibleCount - 1) {
-                                return (
-                                  <div ref={lastProductElementRef} key={item._id}>
-                                    <AnimatedItemWrapper index={index}>
-                                      <ProductItem product={item} />
-                                    </AnimatedItemWrapper>
-                                  </div>
-                                );
-                              }
-                              return (
-                                <AnimatedItemWrapper key={item._id} index={index}>
-                                  <ProductItem product={item} />
-                                </AnimatedItemWrapper>
-                              );
-                            })}
+                            .map((item) => (
+                              <ProductItem key={item._id} product={item} />
+                            ))}
                         </div>
                       </div>
 
@@ -195,31 +152,27 @@ const ShopContent = ({
                         <div className="tp-shop-list-wrapper tp-shop-item-primary mb-70">
                           {filteredRows
                             .slice(0, visibleCount)
-                            .map((item, index) => {
-                               if (index === visibleCount - 1) {
-                                return (
-                                  <div ref={lastProductElementRef} key={item._id}>
-                                    <AnimatedItemWrapper index={index}>
-                                      <ShopListItem product={item} />
-                                    </AnimatedItemWrapper>
-                                  </div>
-                                );
-                              }
-                              return (
-                                <AnimatedItemWrapper key={item._id} index={index}>
-                                  <ShopListItem product={item} />
-                                </AnimatedItemWrapper>
-                              );
-                            })}
+                            .map((item) => (
+                              <ShopListItem key={item._id} product={item} />
+                            ))}
                         </div>
                       </div>
                     </div>
-                    
-                    {/* Optional: You can add a subtle loader here that shows while fetching */}
+
                     {visibleCount < filteredRows.length && (
-                        <div className="load-more-wrapper mt-30">
-                           <div className="loader"></div> {/* Simple CSS loader */}
+                      <div className="row">
+                        <div className="col-xl-12">
+                          <div className="load-more-wrapper mt-30">
+                            <button
+                              type="button"
+                              className="load-more-btn"
+                              onClick={() => setVisibleCount(filteredRows.length)}
+                            >
+                              Load more
+                            </button>
+                          </div>
                         </div>
+                      </div>
                     )}
                   </>
                 )}
@@ -238,24 +191,19 @@ const ShopContent = ({
           place-items: center;
           padding: 8px 0;
         }
-        .load-more-wrapper { 
-            display: flex; 
-            justify-content: center;
-            height: 60px;
-            align-items: center;
+        .load-more-wrapper { display: flex; justify-content: center; }
+        .load-more-btn {
+          background: #000;
+          color: #fff;
+          border: 1px solid #000;
+          padding: 12px 28px;
+          border-radius: 9999px;
+          font-weight: 600;
+          transition: all .2s ease;
         }
-        /* Simple CSS spinner for loading state */
-        .loader {
-          border: 4px solid #f3f3f3;
-          border-radius: 50%;
-          border-top: 4px solid #3498db;
-          width: 30px;
-          height: 30px;
-          animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+        .load-more-btn:hover {
+          background: #fff;
+          color: #000;
         }
       `}</style>
     </section>
