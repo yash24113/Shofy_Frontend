@@ -13,7 +13,7 @@ import RegisterArea from "@/components/login-register/register-area";
 import useGlobalSearch from "@/hooks/useGlobalSearch";
 import { buildSearchPredicate } from "@/utils/searchMiddleware";
 
-/* ---------- helpers (JS only) ---------- */
+/* ---------- helpers ---------- */
 const nonEmpty = (v) =>
   Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== "";
 const pick = (...xs) => xs.find(nonEmpty);
@@ -33,12 +33,7 @@ const isNoneish = (s) => {
   return ["none", "na", "none/ na", "none / na", "n/a", "-"].includes(t);
 };
 
-/* ---------- ids / storage ---------- */
-// (kept here in case other files import it, but we don't use sessionId anymore)
-const getSessionId = () =>
-  (typeof window !== "undefined" && localStorage.getItem("sessionId")) || null;
-
-// Prefer Redux, but fall back to localStorage key `userid` / `userId`
+/* ---------- user id helpers ---------- */
 const selectUserIdFromStore = (state) =>
   state?.auth?.user?._id ||
   state?.auth?.user?.id ||
@@ -47,53 +42,10 @@ const selectUserIdFromStore = (state) =>
   state?.user?.user?._id ||
   null;
 
-const getUserIdFromLocal = () => {
+const readUserIdFromLocal = () => {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("userid") || localStorage.getItem("userId") || null;
 };
-
-const GUEST_KEY = "wishlist_guest";
-const userOnlyKey = (uid) => (uid ? `wishlist_${uid}` : GUEST_KEY);
-
-const readFromKey = (key) => {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-};
-
-const writeToKey = (key, list) => {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(key, JSON.stringify(list || []));
-  } catch (e) {
-    console.log("localStorage write error", e);
-  }
-};
-
-const uniqueIds = (arr = []) => {
-  const seen = new Set();
-  return arr
-    .map((x) => x?._id || x?.id || x)
-    .filter(Boolean)
-    .filter((id) => (seen.has(String(id)) ? false : (seen.add(String(id)), true)));
-};
-
-const mergeUniqueById = (a = [], b = []) => {
-  const map = new Map();
-  [...a, ...b].forEach((item) => {
-    const id = item?._id || item?.id;
-    if (id) map.set(id, item);
-  });
-  return Array.from(map.values());
-};
-
-const removeById = (arr = [], id) => arr.filter((x) => (x?._id || x?.id) !== id);
 
 /* ---------- server (API) ---------- */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
@@ -104,7 +56,7 @@ const WISHLIST_BASE = (() => {
   return `${API_BASE}/shopy`;
 })();
 
-/** GET /shopy/wishlist/:userId  → normalize to array of {_id} or full products */
+/** GET /shopy/wishlist/:userId  → returns array of {_id,...} */
 async function fetchServerWishlist(userId) {
   if (!userId) return [];
   try {
@@ -118,20 +70,19 @@ async function fetchServerWishlist(userId) {
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
 
-    // Current response: { success, message, data: { products: [ {_id,name} ] } }
+    // Your response shape:
+    // { success, message, data: { products: [ { _id, name } ] } }
     if (Array.isArray(data?.data?.products)) return data.data.products;
 
-    // fallback compatibility
+    // fallbacks for older shapes
     if (Array.isArray(data)) return data;
     if (Array.isArray(data?.items)) return data.items;
     if (Array.isArray(data?.data?.items)) return data.data.items;
 
     const idsA = data?.data?.productIds;
     const idsB = data?.productIds;
-    if (Array.isArray(idsA))
-      return idsA.map((x) => (typeof x === "string" ? { _id: x } : { _id: x?._id || x?.id || x }));
-    if (Array.isArray(idsB))
-      return idsB.map((x) => (typeof x === "string" ? { _id: x } : { _id: x?._id || x?.id || x }));
+    if (Array.isArray(idsA)) return idsA.map((x) => ({ _id: x?._id || x?.id || x }));
+    if (Array.isArray(idsB)) return idsB.map((x) => ({ _id: x?._id || x?.id || x }));
 
     return [];
   } catch (err) {
@@ -140,7 +91,7 @@ async function fetchServerWishlist(userId) {
   }
 }
 
-/* ---------- tiny global empty-banner manager (JS only) ---------- */
+/* ---------- empty-banner manager (DOM only) ---------- */
 function useEmptyBanner(listId, rowVisible, emptyText) {
   const rowRef = useRef(null);
 
@@ -205,7 +156,7 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
   return { rowRef };
 }
 
-/* ---------- Component (GET-only) ---------- */
+/* ---------- Component (GET-only; server is source of truth) ---------- */
 const WishlistItem = ({ product }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -213,9 +164,38 @@ const WishlistItem = ({ product }) => {
 
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
-  useSelector((state) => state.wishlist);
+  useSelector((state) => state.wishlist); // keep subscription
   const userIdFromStore = useSelector(selectUserIdFromStore);
-  const userId = userIdFromStore || getUserIdFromLocal();
+
+  // current user id (Redux → localStorage)
+  const [userId, setUserId] = useState(() => userIdFromStore || readUserIdFromLocal());
+
+  // update userId when Redux changes or localStorage updates (other tab/system)
+  useEffect(() => {
+    setUserId(userIdFromStore || readUserIdFromLocal());
+  }, [userIdFromStore]);
+
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === "userid" || e.key === "userId") {
+        setUserId(e.newValue || null);
+      }
+    };
+    const onFocus = () => setUserId(userIdFromStore || readUserIdFromLocal());
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setUserId(userIdFromStore || readUserIdFromLocal());
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [userIdFromStore]);
 
   const { _id, title, salesPrice } = product || {};
   const isInCart = cart_products?.find?.((item) => item?._id === _id);
@@ -223,11 +203,12 @@ const WishlistItem = ({ product }) => {
   const [moving, setMoving] = useState(false);
   const [authModal, setAuthModal] = useState(null);
 
-  // server ids (GET only)
+  // server ids
   const [serverIds, setServerIds] = useState(null);
   const [loadingServer, setLoadingServer] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
 
-  // 🔎 subscribe to global search
+  // 🔎 global search
   const { debounced: globalQuery } = useGlobalSearch(150);
 
   const searchableFields = useMemo(
@@ -250,30 +231,44 @@ const WishlistItem = ({ product }) => {
     []
   );
 
-  // -------- GET server wishlist on page load --------
+  // GET server wishlist when userId changes or we trigger a refresh
   useEffect(() => {
     let stop = false;
     (async () => {
       if (!userId) { setServerIds(new Set()); setLoadingServer(false); return; }
       setLoadingServer(true);
-      const list = await fetchServerWishlist(userId); // expects data.data.products
+      const list = await fetchServerWishlist(userId);
       if (stop) return;
 
-      const ids = uniqueIds(list);         // works for [{_id,name}] or ["id"]
-      setServerIds(new Set(ids));
+      const ids = new Set(
+        (Array.isArray(list) ? list : [])
+          .map((x) => x?._id || x?.id || x)
+          .filter(Boolean)
+          .map(String)
+      );
 
-      // persist to localStorage using ONLY userId (or guest)
-      const key = userOnlyKey(userId);
-      const normalized = Array.isArray(list) && typeof list[0] === "string"
-        ? list.map((id) => ({ _id: id }))
-        : list;
-      writeToKey(key, normalized);
-
+      setServerIds(ids);
       setLoadingServer(false);
-      try { window.dispatchEvent(new CustomEvent('wishlist-synced', { detail: { count: ids.length } })); } catch(err) {console.log("error:",err)}
+
+      try {
+        window.dispatchEvent(new CustomEvent("wishlist-synced", { detail: { count: ids.size } }));
+      } catch(err) {console.log("error",err)}
     })();
     return () => { stop = true; };
-  }, [userId]);
+  }, [userId, refreshTick]);
+
+  // Re-fetch when window regains focus/visibility
+  useEffect(() => {
+    const refetch = () => setRefreshTick((n) => n + 1);
+    const onFocus = () => refetch();
+    const onVisible = () => document.visibilityState === "visible" && refetch();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
 
   const matchesQuery = useMemo(() => {
     const q = (globalQuery || "").trim();
@@ -286,9 +281,9 @@ const WishlistItem = ({ product }) => {
     return pred(product);
   }, [globalQuery, product, searchableFields]);
 
-  // show only if server says item is in wishlist
+  // Only show if server says this product is in wishlist
   const serverReady = !loadingServer && serverIds instanceof Set;
-  const showByServer = serverReady ? serverIds.has(_id) : true;
+  const showByServer = serverReady ? serverIds.has(String(_id)) : true;
   const hidden = !matchesQuery || !showByServer;
 
   const { rowRef } = useEmptyBanner("wishlist", !hidden, "No product found in wishlist");
@@ -329,22 +324,18 @@ const WishlistItem = ({ product }) => {
     pushAuthQuery("register");
   }, [pushAuthQuery]);
 
-  /* ---------- Actions (NO PUT here) ---------- */
+  /* ---------- Actions (NO PUT here; UI-only changes) ---------- */
   const handleAddProduct = async (prd) => {
-    if (!userId) { openLogin(); return; } // only check userId now
+    if (!userId) { openLogin(); return; }
     try {
       setMoving(true);
       dispatch(add_cart_product(prd));
       dispatch(remove_wishlist_product({ title, id: _id }));
 
-      // update local-only + UI using userId (no sessionId)
-      const key = userOnlyKey(userId);
-      const list = readFromKey(key);
-      const next = removeById(list, _id);
-      writeToKey(key, next);
+      // Update UI immediately; server remains source of truth on next refetch
       setServerIds((prev) => {
         const s = new Set(prev || []);
-        s.delete(_id);
+        s.delete(String(_id));
         return s;
       });
     } finally {
@@ -354,11 +345,7 @@ const WishlistItem = ({ product }) => {
 
   const handleRemovePrd = async (prd) => {
     dispatch(remove_wishlist_product(prd));
-    const id = prd?.id || prd?._id;
-    const key = userOnlyKey(userId);
-    const list = readFromKey(key);
-    const next = removeById(list, id);
-    writeToKey(key, next);
+    const id = String(prd?.id || prd?._id);
     setServerIds((prev) => {
       const s = new Set(prev || []);
       s.delete(id);
@@ -366,6 +353,7 @@ const WishlistItem = ({ product }) => {
     });
   };
 
+  /* ---------- presentation ---------- */
   const imageBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
   const imageUrl =
     product?.img?.startsWith?.("http") ? product.img : `${imageBase}/uploads/${product?.img || ""}`;
