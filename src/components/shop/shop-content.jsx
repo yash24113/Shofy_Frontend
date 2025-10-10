@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ProductItem from '../products/fashion/product-item';
 import ShopListItem from './shop-list-item';
 import ShopTopLeft from './shop-top-left';
@@ -7,7 +7,11 @@ import ShopTopRight from './shop-top-right';
 import ShopSidebarFilters from './ShopSidebarFilters';
 import ResetButton from './shop-filter/reset-button';
 import EmptyState from '@/components/common/empty-state';
-// Pagination removed for Load More behavior
+
+// ====== config ======
+const COLS_PER_ROW = 4;     // exactly 4 per load step
+const INITIAL_ROWS = 3;     // show 3 rows initially (12 items)
+const STEP = COLS_PER_ROW;  // load 1 row (4 items) each time the sentinel appears
 
 const ShopContent = ({
   all_products = [],
@@ -23,11 +27,19 @@ const ShopContent = ({
     currPage = 1,
     selectedFilters,
     handleFilterChange,
-  } = otherProps;
+  } = otherProps || {};
 
   const { setPriceValue, priceValue } = priceFilterValues || {};
   const [filteredRows, setFilteredRows] = useState(products);
-  const [visibleCount, setVisibleCount] = useState(40);
+
+  // how many products visible
+  const [visibleCount, setVisibleCount] = useState(
+    Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0)
+  );
+
+  // keep the previous count to add appear-anim only on fresh items
+  const prevCountRef = useRef(0);
+  useEffect(() => { prevCountRef.current = visibleCount; }, [visibleCount]);
 
   // measure header + toolbar to center the empty state
   const [centerOffset, setCenterOffset] = useState(140);
@@ -46,18 +58,19 @@ const ShopContent = ({
     return () => window.removeEventListener('resize', calc);
   }, []);
 
+  // sync when incoming products change
   useEffect(() => {
     setFilteredRows(products);
-    setVisibleCount(Math.min(40, products.length || 0));
-    setCurrPage(1);
+    setVisibleCount(Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0));
+    setCurrPage?.(1);
   }, [products, setCurrPage]);
 
   const maxPrice = all_products.reduce(
-    (m, p) => Math.max(m, +p.salesPrice || +p.price || 0),
+    (m, p) => Math.max(m, +p?.salesPrice || +p?.price || 0),
     1000
   );
 
-  // any active filters?
+  // active filters?
   const pv = Array.isArray(priceValue) ? priceValue : [0, maxPrice];
   const priceActive = pv[0] > 0 || pv[1] < maxPrice;
   const facetsActive =
@@ -73,7 +86,39 @@ const ShopContent = ({
     setCurrPage?.(1);
   };
 
-  // no pagination; using incremental visibility via Load More
+  // ===== infinite scroll via IntersectionObserver =====
+  const sentinelRef = useRef(null);
+  const loadingRef = useRef(false);
+
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+
+    const onIntersect = (entries) => {
+      const entry = entries[0];
+      if (!entry.isIntersecting) return;
+      if (loadingRef.current) return;
+
+      // if we still have items to reveal, reveal exactly one row (4 items)
+      if (visibleCount < filteredRows.length) {
+        loadingRef.current = true;
+        // small rAF to keep UI super smooth
+        requestAnimationFrame(() => {
+          setVisibleCount((c) => Math.min(c + STEP, filteredRows.length));
+          // small timeout to avoid rapid multi-fires when layout shifts
+          setTimeout(() => { loadingRef.current = false; }, 120);
+        });
+      }
+    };
+
+    const io = new IntersectionObserver(onIntersect, {
+      root: null,
+      rootMargin: '200px 0px', // pre-load a bit earlier
+      threshold: 0.01,
+    });
+
+    io.observe(sentinelRef.current);
+    return () => io.disconnect();
+  }, [filteredRows.length, visibleCount]);
 
   return (
     <section className="tp-shop-area pb-120">
@@ -110,13 +155,15 @@ const ShopContent = ({
               <div className="shop-toolbar-sticky">
                 <div className="tp-shop-top mb-45">
                   <div className="row">
-                    {/* <div className="col-xl-6">
+                 
+                    <div className="col-xl-6">
                       <ShopTopLeft
                         showing={filteredRows.slice(0, visibleCount).length}
                         total={all_products.length}
                       />
-                    </div> */}
-                    {/* <div className="col-xl-6">
+                    </div>
+                       {/* optional toolbar blocks kept commented
+                    <div className="col-xl-6">
                       <ShopTopRight selectHandleFilter={selectHandleFilter} />
                     </div> */}
                   </div>
@@ -138,42 +185,41 @@ const ShopContent = ({
                   <>
                     <div className="tab-content" id="productTabContent">
                       <div className="tab-pane fade show active" id="grid-tab-pane">
-                        {/* ✅ Use products-grid instead of bootstrap row */}
+                        {/* Grid with 4 columns on lg+, responsive below */}
                         <div className="products-grid">
-                          {filteredRows
-                            .slice(0, visibleCount)
-                            .map((item) => (
-                              <ProductItem key={item._id} product={item} />
-                            ))}
+                          {filteredRows.slice(0, visibleCount).map((item, idx) => {
+                            const isNew = idx >= prevCountRef.current - STEP; // last revealed chunk
+                            return (
+                              <div
+                                key={item?._id || item?.id || idx}
+                                className={`product-cell ${isNew ? 'item-appear' : ''}`}
+                              >
+                                <ProductItem product={item} />
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
 
                       <div className="tab-pane fade" id="list-tab-pane">
                         <div className="tp-shop-list-wrapper tp-shop-item-primary mb-70">
-                          {filteredRows
-                            .slice(0, visibleCount)
-                            .map((item) => (
-                              <ShopListItem key={item._id} product={item} />
-                            ))}
+                          {filteredRows.slice(0, visibleCount).map((item, idx) => {
+                            const isNew = idx >= prevCountRef.current - STEP;
+                            return (
+                              <div
+                                key={item?._id || item?.id || idx}
+                                className={`list-cell ${isNew ? 'item-appear' : ''}`}
+                              >
+                                <ShopListItem product={item} />
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
 
-                    {visibleCount < filteredRows.length && (
-                      <div className="row">
-                        <div className="col-xl-12">
-                          <div className="load-more-wrapper mt-30">
-                            <button
-                              type="button"
-                              className="load-more-btn"
-                              onClick={() => setVisibleCount(filteredRows.length)}
-                            >
-                              Load more
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    {/* sentinel for infinite scroll */}
+                    <div ref={sentinelRef} className="sentinel" />
                   </>
                 )}
               </div>
@@ -191,19 +237,39 @@ const ShopContent = ({
           place-items: center;
           padding: 8px 0;
         }
-        .load-more-wrapper { display: flex; justify-content: center; }
-        .load-more-btn {
-          background: #000;
-          color: #fff;
-          border: 1px solid #000;
-          padding: 12px 28px;
-          border-radius: 9999px;
-          font-weight: 600;
-          transition: all .2s ease;
+
+        /* Grid: 4 columns on large, responsive down */
+        .products-grid {
+          display: grid;
+          gap: 24px;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
         }
-        .load-more-btn:hover {
-          background: #fff;
-          color: #000;
+        @media (max-width: 1199px) {
+          .products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (max-width: 991px) {
+          .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 575px) {
+          .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        }
+
+        .product-cell, .list-cell { will-change: transform, opacity; }
+
+        /* appear animation for newly revealed items */
+        .item-appear {
+          opacity: 0;
+          transform: translateY(10px);
+          animation: fadeUp .35s ease-out forwards;
+        }
+        @keyframes fadeUp {
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Sentinel to trigger loads (invisible) */
+        .sentinel {
+          width: 100%;
+          height: 1px;
         }
       `}</style>
     </section>
