@@ -9,9 +9,12 @@ import ResetButton from './shop-filter/reset-button';
 import EmptyState from '@/components/common/empty-state';
 
 // ====== config ======
-const COLS_PER_ROW = 4;     // exactly 4 per load step
-const INITIAL_ROWS = 3;     // show 3 rows initially (12 items)
-const STEP = COLS_PER_ROW;  // load 1 row (4 items) each time the sentinel appears
+const COLS_PER_ROW = 4;      // grid mode: 4 per row
+const INITIAL_ROWS = 3;      // grid mode: start with 3 rows
+const STEP_GRID = COLS_PER_ROW; // grid mode: +1 row (4 items)
+
+const INITIAL_ROWS_SEARCH = 5;  // search (list) mode: start with 5 rows (5 items)
+const STEP_SEARCH = 5;          // search (list) mode: +5 rows (5 more items)
 
 const ShopContent = ({
   all_products = [],
@@ -32,12 +35,22 @@ const ShopContent = ({
   const { setPriceValue, priceValue } = priceFilterValues || {};
   const [filteredRows, setFilteredRows] = useState(products);
 
-  // how many products visible
-  const [visibleCount, setVisibleCount] = useState(
-    Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0)
-  );
+  // --- detect SEARCH (row-wise) mode from query param ?searchText=
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const usp = new URLSearchParams(window.location.search);
+    setIsSearchMode(usp.has('searchText') && String(usp.get('searchText') || '').trim().length > 0);
+  }, []);
 
-  // keep the previous count to add appear-anim only on fresh items
+  // how many visible items
+  const initialVisible = isSearchMode
+    ? Math.min(INITIAL_ROWS_SEARCH, products.length || 0)
+    : Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0);
+
+  const [visibleCount, setVisibleCount] = useState(initialVisible);
+
+  // keep previous count (for “new item” animations if you want)
   const prevCountRef = useRef(0);
   useEffect(() => { prevCountRef.current = visibleCount; }, [visibleCount]);
 
@@ -58,12 +71,15 @@ const ShopContent = ({
     return () => window.removeEventListener('resize', calc);
   }, []);
 
-  // sync when incoming products change
+  // sync when incoming products or search mode changes
   useEffect(() => {
     setFilteredRows(products);
-    setVisibleCount(Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0));
+    setVisibleCount(isSearchMode
+      ? Math.min(INITIAL_ROWS_SEARCH, products.length || 0)
+      : Math.min(INITIAL_ROWS * COLS_PER_ROW, products.length || 0)
+    );
     setCurrPage?.(1);
-  }, [products, setCurrPage]);
+  }, [products, isSearchMode, setCurrPage]);
 
   const maxPrice = all_products.reduce(
     (m, p) => Math.max(m, +p?.salesPrice || +p?.price || 0),
@@ -98,24 +114,45 @@ const ShopContent = ({
       if (!entry.isIntersecting) return;
       if (loadingRef.current) return;
 
+      const step = isSearchMode ? STEP_SEARCH : STEP_GRID;
       if (visibleCount < filteredRows.length) {
         loadingRef.current = true;
         requestAnimationFrame(() => {
-          setVisibleCount((c) => Math.min(c + STEP, filteredRows.length));
-          setTimeout(() => { loadingRef.current = false; }, 120);
+          setVisibleCount((c) => Math.min(c + step, filteredRows.length));
+          setTimeout(() => { loadingRef.current = false; }, 100);
         });
       }
     };
 
     const io = new IntersectionObserver(onIntersect, {
       root: null,
-      rootMargin: '200px 0px',
+      rootMargin: '240px 0px',
       threshold: 0.01,
     });
 
     io.observe(sentinelRef.current);
     return () => io.disconnect();
-  }, [filteredRows.length, visibleCount]);
+  }, [filteredRows.length, visibleCount, isSearchMode]);
+
+  // ===== “YouTube-like” reveal animation on scroll (stagger per row) =====
+  const gridRef = useRef(null);
+  useEffect(() => {
+    const host = gridRef.current;
+    if (!host) return;
+
+    const els = host.querySelectorAll('.reveal');
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((en) => {
+          if (en.isIntersecting) en.target.classList.add('reveal--visible');
+        });
+      },
+      { root: null, rootMargin: '60px 0px', threshold: 0.1 }
+    );
+
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [filteredRows, visibleCount, isSearchMode]);
 
   return (
     <section className="tp-shop-area pb-120">
@@ -180,17 +217,31 @@ const ShopContent = ({
                   <>
                     <div className="tab-content" id="productTabContent">
                       <div className="tab-pane fade show active" id="grid-tab-pane">
-                        {/* Grid with 4 columns on lg+, responsive below */}
-                        <div className="products-grid">
+                        {/* Grid (normal) or List (search mode) */}
+                        <div
+                          ref={gridRef}
+                          className={`products-grid ${isSearchMode ? 'is-list' : ''}`}
+                        >
                           {filteredRows.slice(0, visibleCount).map((item, idx) => {
-                            const isNew = idx >= prevCountRef.current - STEP; // last revealed chunk
+                            // nice stagger: restart every row
+                            const perRow = isSearchMode ? 1 : COLS_PER_ROW;
+                            const delayMs = (idx % perRow) * 60; // 0,60,120,180ms per row
+                            const isNew = idx >= prevCountRef.current - (isSearchMode ? STEP_SEARCH : STEP_GRID);
+
                             return (
                               <div
                                 key={item?._id || item?.id || idx}
-                                className={`product-cell ${isNew ? 'item-appear' : ''}`}
+                                className={`product-cell reveal ${isNew ? 'item-appear' : ''}`}
+                                style={{ animationDelay: `${delayMs}ms` }}
                               >
-                                <div className="product-card">
-                                  <ProductItem product={item} />
+                                <div className={`product-card ${isSearchMode ? 'row-card' : ''}`}>
+                                  {/* In list (row) mode you may prefer ShopListItem.
+                                      If ProductItem already looks good horizontally, keep it. */}
+                                  {isSearchMode ? (
+                                    <ShopListItem product={item} />
+                                  ) : (
+                                    <ProductItem product={item} />
+                                  )}
                                 </div>
                               </div>
                             );
@@ -198,16 +249,19 @@ const ShopContent = ({
                         </div>
                       </div>
 
+                      {/* (kept for compatibility, unused when isSearchMode) */}
                       <div className="tab-pane fade" id="list-tab-pane">
                         <div className="tp-shop-list-wrapper tp-shop-item-primary mb-70">
                           {filteredRows.slice(0, visibleCount).map((item, idx) => {
-                            const isNew = idx >= prevCountRef.current - STEP;
+                            const delayMs = (idx % 1) * 60;
+                            const isNew = idx >= prevCountRef.current - STEP_SEARCH;
                             return (
                               <div
                                 key={item?._id || item?.id || idx}
-                                className={`list-cell ${isNew ? 'item-appear' : ''}`}
+                                className={`list-cell reveal ${isNew ? 'item-appear' : ''}`}
+                                style={{ animationDelay: `${delayMs}ms` }}
                               >
-                                <div className="product-card">
+                                <div className="product-card row-card">
                                   <ShopListItem product={item} />
                                 </div>
                               </div>
@@ -237,7 +291,7 @@ const ShopContent = ({
           padding: 8px 0;
         }
 
-        /* Grid: 4 columns on large, responsive down */
+        /* ===== Grid (default) ===== */
         .products-grid {
           display: grid;
           gap: 24px;
@@ -254,6 +308,12 @@ const ShopContent = ({
           .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
         }
 
+        /* ===== List (row-wise, search mode) ===== */
+        .products-grid.is-list {
+          grid-template-columns: 1fr;
+          gap: 16px;
+        }
+
         .product-cell, .list-cell { will-change: transform, opacity; }
         .product-card {
           width: 100%;
@@ -262,33 +322,46 @@ const ShopContent = ({
           display: flex;
           flex-direction: column;
         }
-
-        /* appear animation for newly revealed items */
-        .item-appear {
-          opacity: 0;
-          transform: translateY(10px);
-          animation: fadeUp .35s ease-out forwards;
+        /* When row-wise, allow horizontal layout inside card if your component supports it */
+        .row-card {
+          display: block; /* your ShopListItem already handles the horizontal layout */
         }
-        @keyframes fadeUp {
-          to { opacity: 1; transform: translateY(0); }
+
+        /* ===== YouTube-like Reveal Animations ===== */
+        .reveal {
+          opacity: 0;
+          transform: translateY(12px) scale(0.98);
+          transition:
+            opacity .32s ease-out,
+            transform .32s ease-out,
+            box-shadow .2s ease;
+        }
+        .reveal--visible {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+        /* Extra “pop” when newly appended (first frame) */
+        .item-appear {
+          animation: ytp-pop .35s ease-out var(--delay, 0ms) both;
+        }
+        @keyframes ytp-pop {
+          0%   { opacity: 0; transform: translateY(10px) scale(0.98); }
+          60%  { opacity: 1; transform: translateY(0) scale(1.005); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
         }
 
         /* Sentinel to trigger loads (invisible) */
         .sentinel { width: 100%; height: 1px; }
       `}</style>
 
-      {/* Global overrides to neutralize conflicting theme/Bootstrap rules
-          and fix “skinny image” issue inside unknown ProductItem markup */}
+      {/* Global fixes to avoid “skinny thumbnails” & force consistent media */}
       <style jsx global>{`
-        /* Force any nested bootstrap-like cols inside grid items to fill the cell */
         .products-grid .product-card [class*="col-"] {
           width: 100% !important;
           max-width: 100% !important;
           flex: 1 1 auto !important;
           padding: 0 !important;
         }
-
-        /* Make top product media square & cover */
         .products-grid .product-card img {
           display: block;
           width: 100% !important;
@@ -296,18 +369,32 @@ const ShopContent = ({
           object-fit: cover;
         }
 
-        /* If your ProductItem uses a dedicated thumb wrapper, normalize it */
-        .products-grid .product-card .tp-product-thumb,
-        .products-grid .product-card .product-thumb,
-        .products-grid .product-card .thumb,
-        .products-grid .product-card .image,
-        .products-grid .product-card .card-img,
-        .products-grid .product-card .card-image {
+        .products-grid:not(.is-list) .product-card .tp-product-thumb,
+        .products-grid:not(.is-list) .product-card .product-thumb,
+        .products-grid:not(.is-list) .product-card .thumb,
+        .products-grid:not(.is-list) .product-card .image,
+        .products-grid:not(.is-list) .product-card .card-img,
+        .products-grid:not(.is-list) .product-card .card-image {
           position: relative;
           width: 100%;
-          aspect-ratio: 1 / 1;     /* <-- prevents tall pill images */
+          aspect-ratio: 1 / 1;      /* square in grid mode */
           overflow: hidden;
           border-radius: 12px;
+        }
+        .products-grid.is-list .product-card .tp-product-thumb,
+        .products-grid.is-list .product-card .product-thumb,
+        .products-grid.is-list .product-card .thumb,
+        .products-grid.is-list .product-card .image,
+        .products-grid.is-list .product-card .card-img,
+        .products-grid.is-list .product-card .card-image {
+          position: relative;
+          width: 240px;             /* thumbnail width in row mode */
+          max-width: 40vw;
+          aspect-ratio: 1 / 1;
+          overflow: hidden;
+          border-radius: 12px;
+          margin-right: 16px;
+          float: left;               /* play nice with many list implementations */
         }
         .products-grid .product-card .tp-product-thumb img,
         .products-grid .product-card .product-thumb img,
@@ -320,12 +407,6 @@ const ShopContent = ({
           width: 100%;
           height: 100%;
           object-fit: cover;
-        }
-
-        /* Ensure the whole card isn’t constrained to a tiny width by any external rule */
-        .products-grid .product-card,
-        .products-grid .product-card > * {
-          max-width: 100% !important;
         }
       `}</style>
     </section>
