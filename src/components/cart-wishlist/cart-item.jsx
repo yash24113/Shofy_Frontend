@@ -16,18 +16,16 @@ import { add_to_wishlist } from "@/redux/features/wishlist-slice";
 import useGlobalSearch from "@/hooks/useGlobalSearch";
 import { buildSearchPredicate } from "@/utils/searchMiddleware";
 
-/* ---------- tiny global empty-banner manager (reused) ---------- */
-function useEmptyBanner(listId: string, rowVisible: boolean, emptyText: string) {
-  const rowRef = useRef<HTMLTableRowElement | null>(null);
+/* ---------- tiny global empty-banner manager (JS only) ---------- */
+function useEmptyBanner(listId, rowVisible, emptyText) {
+  const rowRef = useRef(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // @ts-ignore
     window.__listVis = window.__listVis || {};
-    // @ts-ignore
     const bucket = (window.__listVis[listId] = window.__listVis[listId] || { vis: 0, banner: null });
 
-    const tbody = rowRef.current?.closest('tbody') as HTMLTableSectionElement | null;
+    const tbody = rowRef.current?.closest('tbody');
     if (!tbody) return;
 
     const ensureBannerExists = () => {
@@ -49,15 +47,15 @@ function useEmptyBanner(listId: string, rowVisible: boolean, emptyText: string) 
       return tr;
     };
 
-    let prev = (rowRef.current as any).__wasVisible ?? false;
-    if (rowVisible && !prev) bucket.vis += 1;
-    if (!rowVisible && prev) bucket.vis -= 1;
-    (rowRef.current as any).__wasVisible = rowVisible;
+    let prev = rowRef.current ? rowRef.current.__wasVisible : undefined;
 
     if (prev === undefined) {
       if (rowVisible) bucket.vis += 1;
-      (rowRef.current as any).__wasVisible = rowVisible;
+    } else {
+      if (rowVisible && !prev) bucket.vis += 1;
+      if (!rowVisible && prev) bucket.vis -= 1;
     }
+    if (rowRef.current) rowRef.current.__wasVisible = rowVisible;
 
     const banner = bucket.banner;
     if (bucket.vis <= 0) {
@@ -68,9 +66,10 @@ function useEmptyBanner(listId: string, rowVisible: boolean, emptyText: string) 
     }
 
     return () => {
-      let was = (rowRef.current as any)?.__wasVisible;
+      const was = rowRef.current ? rowRef.current.__wasVisible : undefined;
       if (was) bucket.vis = Math.max(0, bucket.vis - 1);
-      (rowRef.current as any).__wasVisible = false;
+      if (rowRef.current) rowRef.current.__wasVisible = false;
+
       if (bucket.vis <= 0) {
         const b = ensureBannerExists();
         if (!b.isConnected && tbody.isConnected) tbody.appendChild(b);

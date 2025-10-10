@@ -116,19 +116,17 @@ async function pushServerWishlist(userId, items) {
   }
 }
 
-/* ---------- tiny global empty-banner manager ---------- */
+/* ---------- tiny global empty-banner manager (JS only) ---------- */
 function useEmptyBanner(listId, rowVisible, emptyText) {
-  const rowRef = useRef<HTMLTableRowElement | null>(null);
+  const rowRef = useRef(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // @ts-ignore
     window.__listVis = window.__listVis || {};
-    // @ts-ignore
     const bucket = (window.__listVis[listId] = window.__listVis[listId] || { vis: 0, banner: null });
 
     // Find this row's tbody
-    const tbody = rowRef.current?.closest('tbody') as HTMLTableSectionElement | null;
+    const tbody = rowRef.current?.closest('tbody');
     if (!tbody) return;
 
     const ensureBannerExists = () => {
@@ -150,17 +148,17 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
       return tr;
     };
 
-    // Update visible count
-    let prev = (rowRef.current as any).__wasVisible ?? false;
-    if (rowVisible && !prev) bucket.vis += 1;
-    if (!rowVisible && prev) bucket.vis -= 1;
-    (rowRef.current as any).__wasVisible = rowVisible;
+    // Track previous visibility on the element (JS allows adding props)
+    let prev = rowRef.current ? rowRef.current.__wasVisible : undefined;
 
-    // If this is first run and no prev recorded, bump correctly
     if (prev === undefined) {
+      // first run: initialize counter based on current visibility
       if (rowVisible) bucket.vis += 1;
-      (rowRef.current as any).__wasVisible = rowVisible;
+    } else {
+      if (rowVisible && !prev) bucket.vis += 1;
+      if (!rowVisible && prev) bucket.vis -= 1;
     }
+    if (rowRef.current) rowRef.current.__wasVisible = rowVisible;
 
     // Place or remove banner
     const banner = bucket.banner;
@@ -173,10 +171,10 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
 
     // Cleanup on unmount
     return () => {
-      let was = (rowRef.current as any)?.__wasVisible;
+      const was = rowRef.current ? rowRef.current.__wasVisible : undefined;
       if (was) bucket.vis = Math.max(0, bucket.vis - 1);
-      (rowRef.current as any).__wasVisible = false;
-      // If no rows visible after this unmount, re-add banner
+      if (rowRef.current) rowRef.current.__wasVisible = false;
+
       if (bucket.vis <= 0) {
         const b = ensureBannerExists();
         if (!b.isConnected && tbody.isConnected) tbody.appendChild(b);
@@ -336,11 +334,9 @@ const WishlistItem = ({ product }) => {
     if (id) await mirrorRemoveEverywhere(id);
   };
 
-  /* --------- IMPORTANT: do NOT return before all hooks run --------- */
-  // If row is hidden for this query, we still render a hidden <tr> anchor so the hook can place/remove the empty banner correctly.
+  // If row is hidden for this query, keep a hidden <tr> so the banner logic can compute properly.
   const hidden = !matchesQuery;
 
-  /* ---------- image / slug (can be computed after hooks) ---------- */
   const imageUrl = (product?.img?.startsWith?.("http") ? product.img : `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${product?.img || ""}`);
   const slug = product?.slug || _id;
 
