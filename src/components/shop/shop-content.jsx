@@ -9,11 +9,11 @@ import ResetButton from './shop-filter/reset-button';
 import EmptyState from '@/components/common/empty-state';
 
 // ====== config ======
-const COLS_PER_ROW = 4;
-const INITIAL_ROWS = 3;
-const STEP_GRID = COLS_PER_ROW;
-const INITIAL_ROWS_SEARCH = 5;
-const STEP_SEARCH = 5;
+const COLS_PER_ROW = 4;           // grid mode: 4 per row
+const INITIAL_ROWS = 3;           // grid mode: start with 3 rows
+const STEP_GRID = COLS_PER_ROW;   // grid mode: +1 row (4 items)
+const INITIAL_ROWS_SEARCH = 5;    // search (list) mode: start with 5 items
+const STEP_SEARCH = 5;            // search (list) mode: +5 items
 
 const ShopContent = ({
   all_products = [],
@@ -290,9 +290,9 @@ const ShopContent = ({
         .sentinel { width: 100%; height: 1px; }
       `}</style>
 
-      {/* ---------- HARD OVERRIDES (with Next/Image fallbacks) ---------- */}
+      {/* ---------- HARD OVERRIDES to fix “tall, skinny pill” thumbnails ---------- */}
       <style jsx global>{`
-        /* Stop nested rows/cols from constraining cards */
+        /* Kill nested bootstrap sizing that squeezes cards */
         .products-grid .product-card .row,
         .products-grid .product-card [class*="col-"] {
           width: 100% !important;
@@ -302,9 +302,13 @@ const ShopContent = ({
           margin: 0 !important;
         }
 
-        .products-grid .product-card a { display: block; max-width: 100% !important; }
+        /* Any anchor around the media should behave like a block */
+        .products-grid .product-card a {
+          display: block;
+          max-width: 100% !important;
+        }
 
-        /* Theme thumb wrappers */
+        /* Identify ANY possible media wrapper class used by theme/components */
         .products-grid .product-card .tp-product-thumb,
         .products-grid .product-card .product-thumb,
         .products-grid .product-card .thumb,
@@ -321,22 +325,15 @@ const ShopContent = ({
           width: 100% !important;
           max-width: 100% !important;
           overflow: hidden !important;
+
+          /* CRITICAL: undo any huge round corners that make it look like a pill */
           border-radius: 12px !important;
-          aspect-ratio: 1 / 1 !important; /* square in grid */
+
+          /* CRITICAL: ensure a square box in grid mode */
+          aspect-ratio: 1 / 1 !important;
         }
 
-        /* ★★★★★ Next/Image fallback: span that directly contains an <img> */
-        .products-grid .product-card span:has(> img) {
-          position: relative !important;
-          display: block !important;
-          width: 100% !important;
-          max-width: 100% !important;
-          overflow: hidden !important;
-          border-radius: 12px !important;
-          aspect-ratio: 1 / 1 !important; /* square in grid */
-        }
-
-        /* In list (search) mode, use a fixed square thumbnail */
+        /* In list (search) mode, use a fixed square thumb on the left */
         .products-grid.is-list .product-card .tp-product-thumb,
         .products-grid.is-list .product-card .product-thumb,
         .products-grid.is-list .product-card .thumb,
@@ -347,8 +344,7 @@ const ShopContent = ({
         .products-grid.is-list .product-card .media,
         .products-grid.is-list .product-card .thumbnail,
         .products-grid.is-list .product-card .tp-product-img,
-        .products-grid.is-list .product-card .tp-product__thumb,
-        .products-grid.is-list .product-card span:has(> img) {
+        .products-grid.is-list .product-card .tp-product__thumb {
           width: 240px !important;
           max-width: 40vw !important;
           aspect-ratio: 1 / 1 !important;
@@ -356,7 +352,7 @@ const ShopContent = ({
           margin-right: 16px !important;
         }
 
-        /* Make image fill its wrapper (theme or Next/Image) */
+        /* Ensure the actual <img> fills the wrapper */
         .products-grid .product-card .tp-product-thumb img,
         .products-grid .product-card .product-thumb img,
         .products-grid .product-card .thumb img,
@@ -367,8 +363,7 @@ const ShopContent = ({
         .products-grid .product-card .media img,
         .products-grid .product-card .thumbnail img,
         .products-grid .product-card .tp-product-img img,
-        .products-grid .product-card .tp-product__thumb img,
-        .products-grid .product-card span:has(> img) > img {
+        .products-grid .product-card .tp-product__thumb img {
           position: absolute !important;
           inset: 0 !important;
           width: 100% !important;
@@ -378,7 +373,7 @@ const ShopContent = ({
           max-height: none !important;
         }
 
-        /* Guard against tiny fixed widths */
+        /* Guard against any tiny fixed widths on ancestors */
         .products-grid .product-card,
         .products-grid .product-card > * {
           width: 100% !important;
