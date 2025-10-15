@@ -33,16 +33,34 @@ const isNoneish = (s) => {
   return ["none", "na", "none/ na", "none / na", "n/a", "-"].includes(t);
 };
 
-/* ---------- server (API) ---------- */
+/* ---------- server & storage ---------- */
 const WISHLIST_BASE = "https://test.amrita-fashions.com/shopy";
+const WISHLIST_ITEMS_KEY = "wishlist_items";
 
-/** Read userId from localStorage (userid → userId fallback) */
 const readUserIdFromLocal = () => {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("userid") || localStorage.getItem("userId") || null;
 };
 
-/** GET /wishlist/:userId  → returns array of {_id,...} */
+const readWishlistLocal = () => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(WISHLIST_ITEMS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+};
+const writeWishlistLocal = (items) => {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(WISHLIST_ITEMS_KEY, JSON.stringify(items || []));
+    window.dispatchEvent(new CustomEvent("wishlist-local-changed", { detail: { count: items?.length || 0 } }));
+  } catch {}
+};
+
+/** GET server wishlist */
 async function fetchServerWishlist(userId) {
   if (!userId) return [];
   try {
@@ -56,11 +74,7 @@ async function fetchServerWishlist(userId) {
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
 
-    // Expected main shape:
-    // { success, message, data: { products: [ { _id, ... } ] } }
     if (Array.isArray(data?.data?.products)) return data.data.products;
-
-    // Fallbacks:
     if (Array.isArray(data)) return data;
     if (Array.isArray(data?.items)) return data.items;
     if (Array.isArray(data?.data?.items)) return data.data.items;
@@ -75,6 +89,42 @@ async function fetchServerWishlist(userId) {
     console.warn("fetchServerWishlist failed", err);
     return [];
   }
+}
+
+/** PUT union to server */
+async function putServerWishlist(userId, ids) {
+  if (!userId) return false;
+  try {
+    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
+    const res = await fetch(url, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, productIds: ids }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.warn("putServerWishlist failed", e);
+    return false;
+  }
+}
+
+/** One-shot bootstrap: merge local + server on login/return */
+async function syncWishlistTwoWay(userId) {
+  if (!userId) return { ok: false, ids: new Set() };
+
+  const local = readWishlistLocal();
+  const localIds = new Set(local.map((x) => String(x?._id || x?.id)).filter(Boolean));
+
+  const serverList = await fetchServerWishlist(userId);
+  const serverIds = new Set((serverList || []).map((x) => String(x?._id || x?.id || x)).filter(Boolean));
+
+  const union = new Set([...localIds, ...serverIds]);
+  const ok = await putServerWishlist(userId, Array.from(union));
+  if (ok) {
+    writeWishlistLocal(Array.from(union).map((id) => ({ _id: id })));
+  }
+  return { ok, ids: union };
 }
 
 /* ---------- empty-banner manager (DOM only) ---------- */
@@ -142,7 +192,7 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
   return { rowRef };
 }
 
-/* ---------- Component (GET-only; server is source of truth) ---------- */
+/* ---------- Component (GET server is source of truth; with bootstrapped sync) ---------- */
 const WishlistItem = ({ product }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -152,16 +202,13 @@ const WishlistItem = ({ product }) => {
   const { cart_products } = useSelector((state) => state.cart);
   useSelector((state) => state.wishlist); // keep subscription
 
-  // CURRENT USER ID strictly from localStorage
   const [userId, setUserId] = useState(() => readUserIdFromLocal());
   const [authModal, setAuthModal] = useState(null);
 
-  // Keep userId in sync when tab regains focus or storage changes
+  // Keep userId in sync
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === "userid" || e.key === "userId") {
-        setUserId(e.newValue || null);
-      }
+      if (e.key === "userid" || e.key === "userId") setUserId(e.newValue || null);
     };
     const onFocus = () => setUserId(readUserIdFromLocal());
     const onVisible = () => { if (document.visibilityState === "visible") setUserId(readUserIdFromLocal()); };
@@ -206,13 +253,16 @@ const WishlistItem = ({ product }) => {
     []
   );
 
-  // GET server wishlist when userId changes or we trigger a refresh
+  // Bootstrap sync when userId becomes available / changes
   useEffect(() => {
     let stop = false;
     (async () => {
       if (!userId) { setServerIds(new Set()); setLoadingServer(false); return; }
 
       setLoadingServer(true);
+      await syncWishlistTwoWay(userId); // merge local + server
+
+      if (stop) return;
       const list = await fetchServerWishlist(userId);
       if (stop) return;
 
@@ -226,14 +276,12 @@ const WishlistItem = ({ product }) => {
       setServerIds(ids);
       setLoadingServer(false);
 
-      try {
-        window.dispatchEvent(new CustomEvent("wishlist-synced", { detail: { count: ids.size } }));
-      } catch(err) {console.log("error : ",err)}
+      try { window.dispatchEvent(new CustomEvent("wishlist-synced", { detail: { count: ids.size } })); } catch {}
     })();
     return () => { stop = true; };
   }, [userId, refreshTick]);
 
-  // Re-fetch when window regains focus/visibility
+  // Re-fetch on focus/visible
   useEffect(() => {
     const refetch = () => setRefreshTick((n) => n + 1);
     const onFocus = () => refetch();
@@ -257,7 +305,7 @@ const WishlistItem = ({ product }) => {
     return pred(product);
   }, [globalQuery, product, searchableFields]);
 
-  // Only show if server says this product is in wishlist
+  // show row only if server contains it
   const serverReady = !loadingServer && serverIds instanceof Set;
   const showByServer = serverReady ? serverIds.has(String(_id)) : true;
   const hidden = !matchesQuery || !showByServer;
@@ -287,20 +335,11 @@ const WishlistItem = ({ product }) => {
     [currentUrlWithQuery, router]
   );
 
-  const closeAuth = useCallback(() => {
-    setAuthModal(null);
-    pushAuthQuery(null);
-  }, [pushAuthQuery]);
-  const openLogin = useCallback(() => {
-    setAuthModal("login");
-    pushAuthQuery("login");
-  }, [pushAuthQuery]);
-  const openRegister = useCallback(() => {
-    setAuthModal("register");
-    pushAuthQuery("register");
-  }, [pushAuthQuery]);
+  const closeAuth = useCallback(() => { setAuthModal(null); pushAuthQuery(null); }, [pushAuthQuery]);
+  const openLogin = useCallback(() => { setAuthModal("login"); pushAuthQuery("login"); }, [pushAuthQuery]);
+  const openRegister = useCallback(() => { setAuthModal("register"); pushAuthQuery("register"); }, [pushAuthQuery]);
 
-  /* ---------- Actions (UI-only; server remains source of truth) ---------- */
+  /* ---------- Actions (UI-only; server is source of truth here) ---------- */
   const handleAddProduct = async (prd) => {
     if (!userId) { openLogin(); return; }
     try {
@@ -312,9 +351,8 @@ const WishlistItem = ({ product }) => {
         s.delete(String(_id));
         return s;
       });
-    } finally {
-      // you can optionally trigger a refetch: setRefreshTick(n => n + 1)
-    }
+      // Note: you can call PUT here to actually remove from server if desired
+    } finally {}
   };
 
   const handleRemovePrd = async (prd) => {
@@ -325,6 +363,12 @@ const WishlistItem = ({ product }) => {
       s.delete(id);
       return s;
     });
+    // Optional: PUT with remaining ids after removal
+    if (userId) {
+      const remaining = Array.from(serverIds || []).filter((x) => x !== id);
+      await putServerWishlist(userId, remaining);
+      writeWishlistLocal(remaining.map((x) => ({ _id: x })));
+    }
   };
 
   /* ---------- presentation ---------- */
@@ -363,7 +407,6 @@ const WishlistItem = ({ product }) => {
   const left4 = topFourDetails.slice(0, mid4);
   const right4 = topFourDetails.slice(mid4);
 
-  // If user isn't logged in (no local userId), we still render the row but actions will open login
   if (loadingServer && !serverIds) return null;
 
   return (
@@ -457,7 +500,7 @@ const WishlistItem = ({ product }) => {
         .wishlist-cell-center { text-align: center; }
         .tp-cart-title.wishlist-cell { padding-left: 0; }
         .wishlist-img-link { display: inline-block; line-height: 0; }
-        .wishlist-img { width: 70px; height: 100px; object-fit: cover; border-radius: 10px; background: #f3f5f8; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+        .wishlist-img { width: 70px; height: 100px; object-fit: cover; border-radius: 10px; background: #f3f58; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
         .wishlist-title { display:block; font-weight:600; line-height:1.3; color:#0f172a; text-decoration:none; }
         .wishlist-title:hover { text-decoration: underline; }
         .wishlist-price { font-weight:600; color:#0f172a; }
