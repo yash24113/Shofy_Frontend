@@ -47,23 +47,33 @@ const normalizeUserId = (raw) => {
 
 /* ---------- server (API) ---------- */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
-const WISHLIST_BASE = (() => {
-  if (!API_BASE) return 'https://test.amrita-fashions.com/shopy';
-  if (/\/api$/i.test(API_BASE)) return API_BASE.replace(/\/api$/i, '');
-  if (/\/shopy$/i.test(API_BASE)) return API_BASE;
-  return `${API_BASE}/shopy`;
-})();
+const WISHLIST_BASE =`https://test.amrita-fashions.com/shopy`;
 
-/** GET /wishlist/:userId → normalize to { ids:Set, items:[] } */
+/** GET /wishlist/:userId → normalize to { ids:Set, ownerId:string|null } */
 async function fetchServerWishlist(userIdRaw) {
   const userId = normalizeUserId(userIdRaw);
-  if (!userId) return { ids: new Set(), items: [] };
+  if (!userId) return { ids: new Set(), ownerId: null };
   try {
     const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
-    const res = await fetch(url, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' }, cache: 'no-store' });
+    const res = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store'
+    });
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
 
+    // Try to read owner userId from various shapes
+    const owner =
+      normalizeUserId(
+        data?.data?.userId ??
+        data?.userId ??
+        data?.data?._id?.userId ??
+        data?.ownerId
+      ) || userId; // default to requested id
+
+    // Normalize product list
     const arr = Array.isArray(data?.data?.products)
       ? data.data.products
       : Array.isArray(data?.items)
@@ -77,10 +87,10 @@ async function fetchServerWishlist(userIdRaw) {
               : [];
 
     const ids = new Set(arr.map((x) => String(x?._id || x?.id || x)).filter(Boolean));
-    return { ids, items: arr };
+    return { ids, ownerId: owner };
   } catch (err) {
     console.warn('fetchServerWishlist failed', err);
-    return { ids: new Set(), items: [] };
+    return { ids: new Set(), ownerId: null };
   }
 }
 
@@ -90,13 +100,13 @@ async function removeOneFromWishlist(userIdRaw, productId) {
   if (!userId) return false;
 
   try {
-    // try DELETE /wishlist/:userId/product/:productId
+    // DELETE /wishlist/:userId/product/:productId
     const del = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}/product/${encodeURIComponent(productId)}`, {
       method: 'DELETE',
       credentials: 'include'
     });
     if (del.ok) return true;
-  } catch {return [];}
+  } catch { return []; }
 
   // fallback: GET -> filter -> PUT
   try {
@@ -117,7 +127,8 @@ async function removeOneFromWishlist(userIdRaw, productId) {
 /** Read userId from localStorage (userid → userId fallback) */
 const readUserIdFromLocal = () => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('userid') || localStorage.getItem('userId') || null;
+  // explicitly prefer 'userId' as you asked, but keep a fallback to 'userid'
+  return localStorage.getItem('userId') || localStorage.getItem('userid') || null;
 };
 
 /* ---------- empty-banner manager (DOM only) ---------- */
@@ -189,13 +200,15 @@ const WishlistItem = ({ product }) => {
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
 
+  // 1) read userId from localStorage.userId (fallback to userid)
   const [rawUserId, setRawUserId] = useState(() => readUserIdFromLocal());
-  const apiUserId = normalizeUserId(rawUserId);
+  const localUserId = normalizeUserId(rawUserId); // normalized local id for comparison
+  const hasLocalUser = !!localUserId;
 
-  // keep userId in sync
+  // keep userId in sync with storage/focus
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === 'userid' || e.key === 'userId') setRawUserId(e.newValue || null);
+      if (e.key === 'userId' || e.key === 'userid') setRawUserId(e.newValue || null);
     };
     const onFocus = () => setRawUserId(readUserIdFromLocal());
     const onVisible = () => { if (document.visibilityState === 'visible') setRawUserId(readUserIdFromLocal()); };
@@ -211,7 +224,7 @@ const WishlistItem = ({ product }) => {
 
   const { _id, title, salesPrice } = product || {};
 
-  // server state
+  // 2) server state (we fetch using localUserId and verify owner === localUserId)
   const [serverIds, setServerIds] = useState(null);
   const [loadingServer, setLoadingServer] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -235,19 +248,26 @@ const WishlistItem = ({ product }) => {
     (p) => p?.sku,
   ], []);
 
-  // GET server wishlist when userId changes or refresh triggered
+  // GET server wishlist when local user changes or refresh triggered
   useEffect(() => {
     let stop = false;
     (async () => {
-      if (!apiUserId) { setServerIds(new Set()); setLoadingServer(false); return; }
+      if (!hasLocalUser) { setServerIds(new Set()); setLoadingServer(false); return; }
       setLoadingServer(true);
-      const list = await fetchServerWishlist(apiUserId);
+      const { ids, ownerId } = await fetchServerWishlist(localUserId);
       if (stop) return;
-      setServerIds(list.ids);
+
+      // 3) only accept server data if ownerId exactly matches localStorage.userId
+      if (normalizeUserId(ownerId) && normalizeUserId(ownerId) === localUserId) {
+        setServerIds(ids);
+      } else {
+        // owner mismatch or missing → treat as empty (prevents showing someone else’s data)
+        setServerIds(new Set());
+      }
       setLoadingServer(false);
     })();
     return () => { stop = true; };
-  }, [apiUserId, refreshTick]);
+  }, [hasLocalUser, localUserId, refreshTick]);
 
   // refetch on focus/visible
   useEffect(() => {
@@ -269,9 +289,9 @@ const WishlistItem = ({ product }) => {
     return pred(product);
   }, [globalQuery, product, searchableFields]);
 
-  // Only show if server says this product is in wishlist
+  // Only show if server says this product is in wishlist for THIS local user
   const serverReady = !loadingServer && serverIds instanceof Set;
-  const showByServer = serverReady ? serverIds.has(String(_id)) : false; // strict: show only if server says yes
+  const showByServer = serverReady ? serverIds.has(String(_id)) : false;
   const hidden = !matchesQuery || !showByServer;
 
   const { rowRef } = useEmptyBanner('wishlist', !hidden, 'No product found in wishlist');
@@ -299,9 +319,9 @@ const WishlistItem = ({ product }) => {
 
   /* ---------- Actions ---------- */
   const handleAddProduct = async (prd) => {
-    if (!apiUserId) { openLogin(); return; }
+    if (!hasLocalUser) { openLogin(); return; }
     dispatch(add_cart_product(prd));
-    await removeOneFromWishlist(apiUserId, prd?._id || prd?.id);
+    await removeOneFromWishlist(localUserId, prd?._id || prd?.id);
     setServerIds((prev) => {
       const s = new Set(prev || []);
       s.delete(String(prd?._id || prd?.id));
@@ -311,9 +331,9 @@ const WishlistItem = ({ product }) => {
   };
 
   const handleRemovePrd = async (prd) => {
-    if (!apiUserId) { openLogin(); return; }
+    if (!hasLocalUser) { openLogin(); return; }
     const id = String(prd?.id || prd?._id);
-    const ok = await removeOneFromWishlist(apiUserId, id);
+    const ok = await removeOneFromWishlist(localUserId, id);
     if (ok) {
       setServerIds((prev) => {
         const s = new Set(prev || []);
@@ -337,7 +357,7 @@ const WishlistItem = ({ product }) => {
   const designVal = toText(pick(product?.design, product?.designName));
   const colorsVal = toText(pick(product?.colors, product?.color, product?.colorName));
   const widthCm = Number(pick(product?.widthCm, product?.width_cm, product?.width));
-  const widthVal = isFinite(widthCm) && gsm >= 0 ? `${round(widthCm, 0)} cm / ${round(cmToInch(widthCm), 0)} inch` : toText(product?.widthLabel);
+  const widthVal = isFinite(widthCm) ? `${round(widthCm, 0)} cm / ${round(cmToInch(widthCm), 0)} inch` : toText(product?.widthLabel);
   const finishVal = toText(pick(product?.finish, product?.subfinish?.name, product?.finishName));
   const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName));
 
@@ -348,6 +368,7 @@ const WishlistItem = ({ product }) => {
   const left4 = topFourDetails.slice(0, mid4);
   const right4 = topFourDetails.slice(mid4);
 
+  // If we haven't confirmed server-list yet, don't render row
   if (loadingServer && !serverIds) return null;
 
   return (
@@ -402,22 +423,22 @@ const WishlistItem = ({ product }) => {
         {/* add to cart */}
         <td className="tp-cart-add-to-cart wishlist-cell wishlist-cell-center">
           <button
-            onClick={() => (apiUserId ? handleAddProduct(product) : openLogin())}
+            onClick={() => (hasLocalUser ? handleAddProduct(product) : openLogin())}
             type="button"
             className="btn-ghost-invert square"
-            title={apiUserId ? 'Move to Cart' : 'Login to move'}
+            title={hasLocalUser ? 'Move to Cart' : 'Login to move'}
           >
-            {apiUserId ? 'Move to Cart' : 'Login to continue'}
+            {hasLocalUser ? 'Move to Cart' : 'Login to continue'}
           </button>
         </td>
 
         {/* remove */}
         <td className="tp-cart-action wishlist-cell">
           <button
-            onClick={() => (apiUserId ? handleRemovePrd({ title, id: _id }) : openLogin())}
+            onClick={() => (hasLocalUser ? handleRemovePrd({ title, id: _id }) : openLogin())}
             className="btn-ghost-invert square"
             type="button"
-            title={apiUserId ? 'Remove from wishlist' : 'Login to remove'}
+            title={hasLocalUser ? 'Remove from wishlist' : 'Login to remove'}
           >
             <Close />
             <span> Remove</span>
