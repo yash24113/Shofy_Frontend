@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { formatProductForCart, formatProductForWishlist } from '@/utils/authUtils';
+import { formatProductForCart } from '@/utils/authUtils';
 import { add_cart_product } from '@/redux/features/cartSlice';
 import { toggleWishlistItem } from '@/redux/features/wishlist-slice';
 
@@ -61,6 +61,15 @@ const getUserIdFromLocal = () => {
   return localStorage.getItem('userId') || localStorage.getItem('userid') || null;
 };
 
+/* normalize product id from all shapes */
+const getCanonicalProductId = (p) =>
+  p?._id ||
+  p?.id ||
+  p?.product?._id ||
+  p?.product?.id ||
+  (typeof p?.product === 'string' ? p.product : null) ||
+  null;
+
 const ProductItem = ({ product }) => {
   const router = useRouter();
   const rainbowId = useId();
@@ -77,13 +86,10 @@ const ProductItem = ({ product }) => {
     }
   }, []);
 
-  // 1) Read Redux userId
+  // 1) Redux userId
   const reduxUserId = useSelector(selectUserIdFromStore);
-
   // 2) Fallback to localStorage while Redux hydrates
   const [localUserId, setLocalUserId] = useState(() => getUserIdFromLocal());
-
-  // Keep local fallback in sync if user logs in/out in another tab or later in the session
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === 'userId' || e.key === 'userid') {
@@ -98,30 +104,34 @@ const ProductItem = ({ product }) => {
       window.removeEventListener('focus', onFocus);
     };
   }, []);
-
-  // 3) Effective userId
+  // 3) Effective user id
   const userId = reduxUserId || localUserId;
 
-  // act immediately
+  /* actions */
   const handleAddProduct = (prd, e) => {
     e?.stopPropagation?.(); e?.preventDefault?.();
     dispatch(add_cart_product(formatProductForCart(prd)));
   };
 
-  // server-backed toggle (PUT)
+  // SERVER TOGGLE
   const handleWishlistProduct = async (prd, e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
 
-    // If we still don't have a userId, go to login
+    const productId = getCanonicalProductId(prd);
+    if (!productId) {
+      console.warn('No productId found for wishlist toggle:', prd);
+      return;
+    }
     if (!userId) {
+      // still no id → go login
       router.push('/login');
       return;
     }
 
-    const formatted = formatProductForWishlist(prd);
     try {
-      await dispatch(toggleWishlistItem({ userId, product: formatted })).unwrap();
+      // IMPORTANT: most thunks expect productId, not the whole product
+      await dispatch(toggleWishlistItem({ userId, productId })).unwrap();
     } catch (err) {
       console.error('Wishlist toggle failed:', err);
     }
@@ -155,7 +165,7 @@ const ProductItem = ({ product }) => {
   }, [product]);
 
   /* title, slug, category */
-  const productId = product?._id || product?.product?._id || product?.product;
+  const productId = getCanonicalProductId(product);
   const { data: seoResp } = useGetSeoByProductQuery(productId, { skip: !productId });
   const seoDoc = Array.isArray(seoResp?.data) ? seoResp?.data?.[0] : seoResp?.data;
 
@@ -221,13 +231,14 @@ const ProductItem = ({ product }) => {
   const cartItems = useSelector((s) => s.cart?.cart_products || []);
   const wishlistItems = useSelector((s) => s.wishlist?.wishlist || []);
 
-  const inCart = cartItems.some((it) => String(it?._id) === String(productId));
-  const inWishlist = wishlistItems.some((it) => String(it?._id) === String(productId));
+  const inCart = cartItems.some((it) => String(getCanonicalProductId(it)) === String(productId));
+  const inWishlist = wishlistItems.some((it) => String(getCanonicalProductId(it)) === String(productId));
 
   /* 🔎 decide visibility for this item */
+  const { debounced: searchQ } = useGlobalSearch();
   const isVisible = useMemo(() => {
-    const query = (q || '').trim();
-    if (query.length < 2) return true; // no filtering until 2+ chars
+    const query = (searchQ || '').trim();
+    if (query.length < 2) return true;
     const fields = [
       () => titleText,
       () => slug || '',
@@ -239,7 +250,7 @@ const ProductItem = ({ product }) => {
     ];
     const pred = buildSearchPredicate(query, fields, { mode: 'AND', normalize: true });
     return pred(product);
-  }, [q, titleText, slug, categoryLabel, details, fabricTypeVal, designVal, colorsVal, product]);
+  }, [searchQ, titleText, slug, categoryLabel, details, fabricTypeVal, designVal, colorsVal, product]);
 
   if (!isVisible) return null;
 
@@ -341,7 +352,7 @@ const ProductItem = ({ product }) => {
                       } else {
                         prompt('Copy link', url);
                       }
-                    } catch {return [];}
+                    } catch { return [];} 
                   })();
                 }}
                 className="action-button"
