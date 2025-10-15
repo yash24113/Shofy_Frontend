@@ -9,6 +9,7 @@ import { add_cart_product } from "@/redux/features/cartSlice";
 import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
+
 import useGlobalSearch from "@/hooks/useGlobalSearch";
 import { buildSearchPredicate } from "@/utils/searchMiddleware";
 
@@ -32,71 +33,16 @@ const isNoneish = (s) => {
   return ["none", "na", "none/ na", "none / na", "n/a", "-"].includes(t);
 };
 
-/* ---------- user id helpers (Redux fallback only) ---------- */
-const selectUserIdFromStore = (state) =>
-  state?.auth?.user?._id ||
-  state?.auth?.user?.id ||
-  state?.auth?.userInfo?._id ||
-  state?.auth?.userInfo?.id ||
-  state?.user?.user?._id ||
-  null;
-
 /* ---------- server (API) ---------- */
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
-const WISHLIST_BASE = (() => {
-  if (!API_BASE) return "https://test.amrita-fashions.com/shopy";
-  if (/\/api$/i.test(API_BASE)) return API_BASE.replace(/\/api$/i, "");
-  if (/\/shopy$/i.test(API_BASE)) return API_BASE;
-  return `${API_BASE}/shopy`;
-})();
+const WISHLIST_BASE = "https://test.amrita-fashions.com/shopy";
 
-/** Try to discover the current user's id from wishlist API (cookie/session based) */
-async function discoverUserIdFromWishlistAPI() {
-  const candidates = [
-    `${WISHLIST_BASE}/wishlist/me`,
-    `${WISHLIST_BASE}/wishlist/user`,
-    `${WISHLIST_BASE}/wishlist`, // some APIs return the current user's wishlist when id is omitted
-  ];
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url, {
-        method: "GET",
-        credentials: "include",
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      });
-      if (!res.ok) continue;
-      const data = await res.json();
+/** Read userId from localStorage (userid → userId fallback) */
+const readUserIdFromLocal = () => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("userid") || localStorage.getItem("userId") || null;
+};
 
-      // Try common shapes
-      const uid =
-        data?.userId ||
-        data?.data?.userId ||
-        data?.user?._id ||
-        data?.data?.user?._id ||
-        data?.data?.userId?._id ||
-        data?.data?.user?.id ||
-        data?.user?.id;
-
-      if (uid) return String(uid);
-
-      // Some APIs return the wishlist with { user, products: [...] }
-      const maybeUser =
-        data?.user ||
-        data?.data?.user ||
-        (Array.isArray(data?.data?.products) && data?.data?.user);
-      if (maybeUser?._id || maybeUser?.id) return String(maybeUser._id || maybeUser.id);
-
-      // Some return an object like { data: { userId, products } } or even { data: { products }, userId }
-      // Already covered above.
-    } catch (_) {
-      // try next candidate
-    }
-  }
-  return null;
-}
-
-/** GET /shopy/wishlist/:userId  → returns array of {_id,...} */
+/** GET /wishlist/:userId  → returns array of {_id,...} */
 async function fetchServerWishlist(userId) {
   if (!userId) return [];
   try {
@@ -110,11 +56,11 @@ async function fetchServerWishlist(userId) {
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
 
-    // Your response shape:
-    // { success, message, data: { products: [ { _id, name } ] } }
+    // Expected main shape:
+    // { success, message, data: { products: [ { _id, ... } ] } }
     if (Array.isArray(data?.data?.products)) return data.data.products;
 
-    // fallbacks for older shapes
+    // Fallbacks:
     if (Array.isArray(data)) return data;
     if (Array.isArray(data?.items)) return data.items;
     if (Array.isArray(data?.data?.items)) return data.data.items;
@@ -205,37 +151,32 @@ const WishlistItem = ({ product }) => {
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
   useSelector((state) => state.wishlist); // keep subscription
-  const userIdFromStore = useSelector(selectUserIdFromStore);
 
-  // CURRENT USER ID comes from API discovery (cookie/session). Redux is just a fallback
-  const [userId, setUserId] = useState(userIdFromStore || null);
-  const [userProbeDone, setUserProbeDone] = useState(false);
+  // CURRENT USER ID strictly from localStorage
+  const [userId, setUserId] = useState(() => readUserIdFromLocal());
+  const [authModal, setAuthModal] = useState(null);
 
-  // discover userId via API once (and also when Redux updates)
+  // Keep userId in sync when tab regains focus or storage changes
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      // If Redux already has a user id, prefer it; else probe the API
-      const storeUid = userIdFromStore ? String(userIdFromStore) : null;
-      if (storeUid && !cancelled) {
-        setUserId(storeUid);
-        setUserProbeDone(true);
-        return;
+    const onStorage = (e) => {
+      if (e.key === "userid" || e.key === "userId") {
+        setUserId(e.newValue || null);
       }
-      const discovered = await discoverUserIdFromWishlistAPI();
-      if (!cancelled) {
-        setUserId(discovered || null);
-        setUserProbeDone(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [userIdFromStore]);
+    };
+    const onFocus = () => setUserId(readUserIdFromLocal());
+    const onVisible = () => { if (document.visibilityState === "visible") setUserId(readUserIdFromLocal()); };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
 
   const { _id, title, salesPrice } = product || {};
   const isInCart = cart_products?.find?.((item) => item?._id === _id);
-
-  const [moving, setMoving] = useState(false);
-  const [authModal, setAuthModal] = useState(null);
 
   // server ids
   const [serverIds, setServerIds] = useState(null);
@@ -269,8 +210,6 @@ const WishlistItem = ({ product }) => {
   useEffect(() => {
     let stop = false;
     (async () => {
-      // Wait until we are done probing for userId (so we don't flash)
-      if (!userProbeDone) return;
       if (!userId) { setServerIds(new Set()); setLoadingServer(false); return; }
 
       setLoadingServer(true);
@@ -289,10 +228,10 @@ const WishlistItem = ({ product }) => {
 
       try {
         window.dispatchEvent(new CustomEvent("wishlist-synced", { detail: { count: ids.size } }));
-      } catch(err) { /* no-op */ }
+      } catch(err) {console.log("error : ",err)}
     })();
     return () => { stop = true; };
-  }, [userId, refreshTick, userProbeDone]);
+  }, [userId, refreshTick]);
 
   // Re-fetch when window regains focus/visibility
   useEffect(() => {
@@ -319,7 +258,7 @@ const WishlistItem = ({ product }) => {
   }, [globalQuery, product, searchableFields]);
 
   // Only show if server says this product is in wishlist
-  const serverReady = userProbeDone && !loadingServer && serverIds instanceof Set;
+  const serverReady = !loadingServer && serverIds instanceof Set;
   const showByServer = serverReady ? serverIds.has(String(_id)) : true;
   const hidden = !matchesQuery || !showByServer;
 
@@ -361,22 +300,20 @@ const WishlistItem = ({ product }) => {
     pushAuthQuery("register");
   }, [pushAuthQuery]);
 
-  /* ---------- Actions (NO PUT here; UI-only changes) ---------- */
+  /* ---------- Actions (UI-only; server remains source of truth) ---------- */
   const handleAddProduct = async (prd) => {
     if (!userId) { openLogin(); return; }
     try {
-      setMoving(true);
+      // optimistic UI
       dispatch(add_cart_product(prd));
       dispatch(remove_wishlist_product({ title, id: _id }));
-
-      // Update UI immediately; server remains source of truth on next refetch
       setServerIds((prev) => {
         const s = new Set(prev || []);
         s.delete(String(_id));
         return s;
       });
     } finally {
-      setTimeout(() => setMoving(false), 250);
+      // you can optionally trigger a refetch: setRefreshTick(n => n + 1)
     }
   };
 
@@ -426,7 +363,7 @@ const WishlistItem = ({ product }) => {
   const left4 = topFourDetails.slice(0, mid4);
   const right4 = topFourDetails.slice(mid4);
 
-  if (!userProbeDone) return null; // wait for user discovery to avoid flicker
+  // If user isn't logged in (no local userId), we still render the row but actions will open login
   if (loadingServer && !serverIds) return null;
 
   return (
@@ -481,24 +418,22 @@ const WishlistItem = ({ product }) => {
         {/* add to cart */}
         <td className="tp-cart-add-to-cart wishlist-cell wishlist-cell-center">
           <button
-            onClick={() => handleAddProduct(product)}
+            onClick={() => (userId ? handleAddProduct(product) : openLogin())}
             type="button"
-            className={`btn-ghost-invert square ${moving ? "is-loading" : ""}`}
-            aria-busy={moving ? "true" : "false"}
-            title="Move to Cart"
-            disabled={!!isInCart && !moving}
+            className="btn-ghost-invert square"
+            title={userId ? "Move to Cart" : "Login to move"}
           >
-            {moving ? "Moving…" : "Move to Cart"}
+            {userId ? "Move to Cart" : "Login to continue"}
           </button>
         </td>
 
         {/* remove */}
         <td className="tp-cart-action wishlist-cell">
           <button
-            onClick={() => handleRemovePrd({ title, id: _id })}
+            onClick={() => (userId ? handleRemovePrd({ title, id: _id }) : openLogin())}
             className="btn-ghost-invert square"
             type="button"
-            title="Remove from wishlist"
+            title={userId ? "Remove from wishlist" : "Login to remove"}
           >
             <Close />
             <span> Remove</span>
@@ -522,7 +457,7 @@ const WishlistItem = ({ product }) => {
         .wishlist-cell-center { text-align: center; }
         .tp-cart-title.wishlist-cell { padding-left: 0; }
         .wishlist-img-link { display: inline-block; line-height: 0; }
-        .wishlist-img { width: 70px; height: 100px; object-fit: cover; border-radius: 10px; background: #f3f58; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+        .wishlist-img { width: 70px; height: 100px; object-fit: cover; border-radius: 10px; background: #f3f5f8; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
         .wishlist-title { display:block; font-weight:600; line-height:1.3; color:#0f172a; text-decoration:none; }
         .wishlist-title:hover { text-decoration: underline; }
         .wishlist-price { font-weight:600; color:#0f172a; }
@@ -536,7 +471,6 @@ const WishlistItem = ({ product }) => {
         .btn-ghost-invert:hover { background:#fff; color:var(--navy); border-color:var(--navy); box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12); transform: translateY(-1px); }
         .btn-ghost-invert:active { transform: translateY(0); background:#f8fafc; color:var(--navy); box-shadow:0 3px 10px rgba(0,0,0,0.15); }
         .btn-ghost-invert:focus-visible { outline:0; box-shadow:0 0 0 3px rgba(11,22,32,0.35); }
-        .btn-ghost-invert.is-loading { pointer-events:none; opacity:.9; }
         @media (max-width: 640px) {
           .wishlist-cell { padding: 10px 8px; }
           .tp-cart-title.wishlist-cell { padding-left: 0; }
