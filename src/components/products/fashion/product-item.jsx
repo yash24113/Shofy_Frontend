@@ -18,7 +18,7 @@ import { useGetSeoByProductQuery } from '@/redux/features/seoApi';
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 import { buildSearchPredicate } from '@/utils/searchMiddleware';
 
-/* helpers */
+/* ---------- helpers ---------- */
 const nonEmpty = (v) => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== '');
 const pick = (...xs) => xs.find(nonEmpty);
 const toText = (v) => {
@@ -38,7 +38,7 @@ const gsmToOz = (gsm) => gsm * 0.0294935;
 const cmToInch = (cm) => cm / 2.54;
 const uniq = (arr) => {
   const seen = new Set();
-  return arr.filter((x) => {
+  return (arr || []).filter((x) => {
     const k = String(x).trim().toLowerCase();
     if (seen.has(k)) return false;
     seen.add(k);
@@ -47,7 +47,7 @@ const uniq = (arr) => {
 };
 const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
 
-/* ---- user helpers ---- */
+/* ---------- user helpers ---------- */
 const selectUserIdFromStore = (state) =>
   state?.auth?.user?._id ||
   state?.auth?.user?.id ||
@@ -61,7 +61,7 @@ const getUserIdFromLocal = () => {
   return localStorage.getItem('userId') || localStorage.getItem('userid') || null;
 };
 
-/* normalize product id from all shapes */
+/* normalize id from many shapes */
 const getCanonicalProductId = (p) =>
   p?._id ||
   p?.id ||
@@ -72,7 +72,7 @@ const getCanonicalProductId = (p) =>
 
 const ProductItem = ({ product }) => {
   const router = useRouter();
-  const rainbowId = useId();
+  const rainbowId = useId(); // kept if you use it elsewhere
   const dispatch = useDispatch();
 
   const { debounced: q } = useGlobalSearch();
@@ -86,15 +86,15 @@ const ProductItem = ({ product }) => {
     }
   }, []);
 
-  // 1) Redux userId
+  // Redux user id
   const reduxUserId = useSelector(selectUserIdFromStore);
-  // 2) Fallback to localStorage while Redux hydrates
+  // LocalStorage fallback while Redux hydrates
   const [localUserId, setLocalUserId] = useState(() => getUserIdFromLocal());
+
+  // Keep fallback in sync (multi-tab, late login)
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === 'userId' || e.key === 'userid') {
-        setLocalUserId(getUserIdFromLocal());
-      }
+      if (e.key === 'userId' || e.key === 'userid') setLocalUserId(getUserIdFromLocal());
     };
     const onFocus = () => setLocalUserId(getUserIdFromLocal());
     window.addEventListener('storage', onStorage);
@@ -104,7 +104,7 @@ const ProductItem = ({ product }) => {
       window.removeEventListener('focus', onFocus);
     };
   }, []);
-  // 3) Effective user id
+
   const userId = reduxUserId || localUserId;
 
   /* actions */
@@ -113,24 +113,20 @@ const ProductItem = ({ product }) => {
     dispatch(add_cart_product(formatProductForCart(prd)));
   };
 
-  // SERVER TOGGLE
   const handleWishlistProduct = async (prd, e) => {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
+    e?.preventDefault?.(); e?.stopPropagation?.();
 
     const productId = getCanonicalProductId(prd);
     if (!productId) {
-      console.warn('No productId found for wishlist toggle:', prd);
+      console.warn('Wishlist: missing productId', prd);
       return;
     }
     if (!userId) {
-      // still no id → go login
       router.push('/login');
       return;
     }
 
     try {
-      // IMPORTANT: most thunks expect productId, not the whole product
       await dispatch(toggleWishlistItem({ userId, productId })).unwrap();
     } catch (err) {
       console.error('Wishlist toggle failed:', err);
@@ -234,7 +230,7 @@ const ProductItem = ({ product }) => {
   const inCart = cartItems.some((it) => String(getCanonicalProductId(it)) === String(productId));
   const inWishlist = wishlistItems.some((it) => String(getCanonicalProductId(it)) === String(productId));
 
-  /* 🔎 decide visibility for this item */
+  /* visibility vs global search */
   const { debounced: searchQ } = useGlobalSearch();
   const isVisible = useMemo(() => {
     const query = (searchQ || '').trim();
@@ -352,7 +348,7 @@ const ProductItem = ({ product }) => {
                       } else {
                         prompt('Copy link', url);
                       }
-                    } catch { return [];} 
+                    } catch  { return [];}
                   })();
                 }}
                 className="action-button"
@@ -460,6 +456,9 @@ const ProductItem = ({ product }) => {
         .product-title{ font-family:'Montserrat',system-ui,Arial,sans-serif; font-size:clamp(14px,1.9vw,16px); font-weight:700; line-height:1.22; letter-spacing:.002em; color:#111827; margin:0 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
         .product-title :global(a){ color:inherit; text-decoration:none; }
         .product-title :global(a:hover){ color:#800000; }
+
+        
+
 
         .spec-columns{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; margin-top:4px; }
         @media (max-width:340px){ .spec-columns{ grid-template-columns:1fr; } }
