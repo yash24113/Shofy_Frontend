@@ -6,8 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { formatProductForCart, formatProductForWishlist } from '@/utils/authUtils';
-import { add_to_wishlist } from '@/redux/features/wishlist-slice';
+import { formatProductForCart } from '@/utils/authUtils';
 import { add_cart_product } from '@/redux/features/cartSlice';
 
 import { Cart, CartActive, Wishlist, WishlistActive, QuickView, Share } from '@/svg';
@@ -58,14 +57,14 @@ const selectUserIdFromStore = (state) =>
 
 const getUserIdFromLocal = () => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('userid') || localStorage.getItem('userId') || null;
+  // prefer userId, fallback to legacy userid
+  return localStorage.getItem('userId') || localStorage.getItem('userid') || null;
 };
 
 /* --- normalize any form of userId to a 24-hex string for API --- */
 const normalizeUserId = (raw) => {
   if (!raw) return null;
   if (typeof raw === 'object') {
-    // handle { $oid: "..." } or {_id: "..."}
     const maybe = raw.$oid || raw._id || raw.id;
     return normalizeUserId(maybe);
   }
@@ -73,7 +72,7 @@ const normalizeUserId = (raw) => {
   const wrapped = s.match(/ObjectId\(['"]?([0-9a-fA-F]{24})['"]?\)/);
   if (wrapped) return wrapped[1];
   const hex = s.match(/^[0-9a-fA-F]{24}$/);
-  return hex ? hex[0] : s; // last resort: send as-is; server may accept
+  return hex ? hex[0] : s;
 };
 
 /* ---- API helpers ---- */
@@ -85,51 +84,53 @@ const WISHLIST_BASE = (() => {
   return `${API_BASE}/shopy`;
 })();
 
-/** Prefer POST add-one if your API supports it; otherwise falls back to GET+PUT merge */
-async function addOneToWishlist(userIdRaw, productId) {
-  const userId = normalizeUserId(userIdRaw);
-  if (!userId) return false;
-
+/** GET current wishlist ids for user (array of string ids) */
+async function getWishlistIds(userId) {
   try {
-    // try POST (idempotent single add)
-    const post = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ productId }),
-    });
-    if (post.ok) return true;
-  } catch { return [];} // ignore and fall back
-
-  // fallback: GET -> merge -> PUT
-  try {
-    const getRes = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
+    const res = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
       cache: 'no-store',
     });
-    const getJson = getRes.ok ? await getRes.json() : {};
-    const fromApi =
-      Array.isArray(getJson?.data?.products)
-        ? getJson.data.products.map((x) => x?._id || x?.id || x)
-        : Array.isArray(getJson?.productIds)
-          ? getJson.productIds
-          : Array.isArray(getJson?.data)
-            ? getJson.data
+    if (!res.ok) return [];
+    const json = await res.json();
+    const arr = Array.isArray(json?.data?.products)
+      ? json.data.products.map((x) => x?._id || x?.id || x)
+      : Array.isArray(json?.data?.productIds)
+        ? json.data.productIds
+        : Array.isArray(json?.productIds)
+          ? json.productIds
+          : Array.isArray(json)
+            ? json
             : [];
-    const set = new Set(fromApi.map(String));
-    set.add(String(productId));
-    const merged = Array.from(set);
+    return arr.map(String).filter(Boolean);
+  } catch (err) {
+    console.error('getWishlistIds error:', err);
+    return [];
+  }
+}
 
-    const putRes = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
+/** PUT wishlist with merged ids (append productId) */
+async function putAppendWishlist(userIdRaw, productId) {
+  const userId = normalizeUserId(userIdRaw);
+  if (!userId) return false;
+
+  try {
+    const current = await getWishlistIds(userId);
+    const set = new Set(current.map(String));
+    set.add(String(productId));
+    const nextIds = Array.from(set);
+
+    const res = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, productIds: merged }),
+      body: JSON.stringify({ userId, productIds: nextIds }),
     });
-    return putRes.ok;
-  } catch {
+    return res.ok;
+  } catch (err) {
+    console.error('putAppendWishlist error:', err);
     return false;
   }
 }
@@ -143,6 +144,9 @@ const ProductItem = ({ product }) => {
   const { debounced: q } = useGlobalSearch();
   const [showActions, setShowActions] = useState(false);
   const [supportsHover, setSupportsHover] = useState(true);
+  const [wishOn, setWishOn] = useState(false); // optimistic UI after server success
+  const [adding, setAdding] = useState(false);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setSupportsHover(window.matchMedia('(hover: hover) and (pointer: fine)').matches);
@@ -156,12 +160,10 @@ const ProductItem = ({ product }) => {
 
   // slices
   const cartItems = useSelector((s) => s.cart?.cart_products || []);
-  const wishlistItems = useSelector((s) => s.wishlist?.wishlist || []);
 
   const productId = product?._id || product?.product?._id || product?.product;
 
   const inCart = cartItems.some((it) => String(it?._id) === String(productId));
-  const inWishlist = wishlistItems.some((it) => String(it?._id) === String(productId));
 
   // ----- actions -----
   const handleAddProduct = (prd, e) => {
@@ -178,17 +180,28 @@ const ProductItem = ({ product }) => {
         const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
         const redirect = url ? url.pathname + url.search : `/fabric/${prd?.slug || productId}`;
         router.push(`/login?redirect=${encodeURIComponent(redirect)}`);
-      } catch {
+      } catch (err) {
+        console.error('login redirect error:', err);
         router.push('/login');
       }
       return;
     }
 
-    const ok = await addOneToWishlist(apiUserId, productId);
+    if (adding) return;
+    setAdding(true);
+    const ok = await putAppendWishlist(apiUserId, productId);
+    setAdding(false);
+
     if (ok) {
-      dispatch(add_to_wishlist(formatProductForWishlist({ _id: productId, id: productId, ...prd })));
+      setWishOn(true); // optimistic badge on this card
+      try {
+        // broadcast so other parts of the app can refetch if they listen
+        window.dispatchEvent(new CustomEvent('wishlist-updated', { detail: { added: productId } }));
+      } catch (err) {
+        console.error('wishlist-updated event error:', err);
+      }
     } else {
-      console.warn('Failed to add to wishlist');
+      alert('Failed to add to wishlist. Please try again.');
     }
   };
 
@@ -297,6 +310,8 @@ const ProductItem = ({ product }) => {
 
   if (!isVisible) return null;
 
+  const wishlistActive = wishOn; // server-backed optimistic
+
   return (
     <div className="product-col">
       <div
@@ -369,12 +384,13 @@ const ProductItem = ({ product }) => {
               <button
                 type="button"
                 onClick={(e) => handleWishlistProduct(product, e)}
-                className={`action-button ${inWishlist ? 'active wishlist-active' : ''}`}
-                aria-label={inWishlist ? 'In wishlist' : 'Add to wishlist'}
-                aria-pressed={inWishlist}
-                title={inWishlist ? 'Added to wishlist' : 'Add to wishlist'}
+                className={`action-button ${wishlistActive ? 'active wishlist-active' : ''}`}
+                aria-label={wishlistActive ? 'In wishlist' : 'Add to wishlist'}
+                aria-pressed={wishlistActive}
+                title={wishlistActive ? 'Added to wishlist' : 'Add to wishlist'}
+                disabled={adding}
               >
-                {inWishlist ? <WishlistActive /> : <Wishlist />}
+                {wishlistActive ? <WishlistActive /> : <Wishlist />}
               </button>
 
               <button type="button" onClick={(e) => openQuickView(product, e)} className="action-button" aria-label="Quick view" title="Quick view">
@@ -391,7 +407,9 @@ const ProductItem = ({ product }) => {
                     if (typeof navigator !== 'undefined' && navigator.share) navigator.share({ title: ttl, text, url });
                     else if (navigator?.clipboard) { navigator.clipboard.writeText(url); alert('Link copied!'); }
                     else { prompt('Copy link', url); }
-                  } catch { return; }
+                  } catch (err) {
+                    console.error('share error:', err);
+                  }
                 }}
                 className="action-button"
                 aria-label="Share product"
@@ -403,7 +421,7 @@ const ProductItem = ({ product }) => {
           </div>
 
           <div className="product-info">
-            {categoryLabel && String(categoryLabel).trim().toLowerCase() !== String(toText(pick(product?.fabricType, product?.fabric_type, seoDoc?.fabricType)) || 'Woven Fabrics').trim().toLowerCase()
+            {categoryLabel && String(categoryLabel).trim().toLowerCase() !== String(fabricTypeVal).trim().toLowerCase()
               ? <div className="product-category">{categoryLabel}</div>
               : null}
 
@@ -413,38 +431,24 @@ const ProductItem = ({ product }) => {
               </Link>
             </h3>
 
-            {(() => {
-              const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type, seoDoc?.fabricType)) || 'Woven Fabrics';
-              const contentVal = toText(pick(product?.content, product?.contentName, product?.content_label, seoDoc?.content));
-              const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
-              const weightVal = isFinite(gsm) && gsm > 0 ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz` : toText(product?.weight);
-              const designVal = toText(pick(product?.design, product?.designName, seoDoc?.design));
-              const colorsVal = toText(pick(product?.colors, product?.color, product?.colorName, seoDoc?.colors));
-              const widthCm = Number(pick(product?.widthCm, product?.width_cm, product?.width));
-              const widthVal = isFinite(widthCm) && widthCm > 0 ? `${round(widthCm,0)} cm / ${round(cmToInch(widthCm),0)} inch` : toText(product?.widthLabel);
-              const finishVal = toText(pick(product?.finish, product?.subfinish?.name, product?.finishName, seoDoc?.finish));
-              const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName, seoDoc?.structure));
-              const motifVal = toText(pick(product?.motif, product?.motifName, seoDoc?.motif));
-              const leadTimeVal = toText(pick(product?.leadTime, product?.lead_time, seoDoc?.leadTime));
-              const details = uniq([fabricTypeVal, contentVal, weightVal, designVal, colorsVal, widthVal, finishVal, structureVal, motifVal, leadTimeVal]
-                .filter((v) => nonEmpty(v) && !isNoneish(v)));
-              if (!details.length) return null;
-              const mid = Math.ceil(details.length / 2);
-              return (
-                <div className="spec-columns">
-                  <ul className="spec-col">
-                    {details.slice(0, mid).map((v, i) => (
-                      <li key={i} className="spec-row" title={v}><span className="spec-value">{v}</span></li>
-                    ))}
-                  </ul>
-                  <ul className="spec-col">
-                    {details.slice(mid).map((v, i) => (
-                      <li key={i} className="spec-row" title={v}><span className="spec-value">{v}</span></li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })()}
+            {details.length ? (
+              <div className="spec-columns">
+                <ul className="spec-col">
+                  {leftDetails.map((v, i) => (
+                    <li key={i} className="spec-row" title={v}>
+                      <span className="spec-value">{v}</span>
+                    </li>
+                  ))}
+                </ul>
+                <ul className="spec-col">
+                  {rightDetails.map((v, i) => (
+                    <li key={i} className="spec-row" title={v}>
+                      <span className="spec-value">{v}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -455,7 +459,11 @@ const ProductItem = ({ product }) => {
         @media (max-width:991px){ :global(.products-grid .product-col){ flex:1 1 calc(50% - 24px); max-width:calc(50% - 24px); } }
         @media (max-width:575px){ :global(.products-grid .product-col){ flex:1 1 100%; max-width:100%; } }
 
-        .fashion-product-card{ --primary:#0f172a; --maroon:#800000; position:relative; width:100%; height:100%; transition:transform .3s ease-out, box-shadow .3s ease-out; }
+        .fashion-product-card{
+          --primary:#0f172a; --maroon:#800000;
+          position:relative; width:100%; height:100%;
+          transition:transform .3s ease-out, box-shadow .3s ease-out;
+        }
         .fashion-product-card:hover{ transform:translateY(-2px); }
         .card-wrapper{ background:#fff; border:2px solid rgba(17,24,39,.12); border-radius:14px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.04); }
 

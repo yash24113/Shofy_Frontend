@@ -46,8 +46,7 @@ const normalizeUserId = (raw) => {
 };
 
 /* ---------- server (API) ---------- */
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
-const WISHLIST_BASE =`https://test.amrita-fashions.com/shopy`;
+const WISHLIST_BASE = 'https://test.amrita-fashions.com/shopy';
 
 /** GET /wishlist/:userId → normalize to { ids:Set, ownerId:string|null } */
 async function fetchServerWishlist(userIdRaw) {
@@ -64,16 +63,14 @@ async function fetchServerWishlist(userIdRaw) {
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
 
-    // Try to read owner userId from various shapes
     const owner =
       normalizeUserId(
         data?.data?.userId ??
         data?.userId ??
         data?.data?._id?.userId ??
         data?.ownerId
-      ) || userId; // default to requested id
+      ) || userId;
 
-    // Normalize product list
     const arr = Array.isArray(data?.data?.products)
       ? data.data.products
       : Array.isArray(data?.items)
@@ -89,26 +86,26 @@ async function fetchServerWishlist(userIdRaw) {
     const ids = new Set(arr.map((x) => String(x?._id || x?.id || x)).filter(Boolean));
     return { ids, ownerId: owner };
   } catch (err) {
-    console.warn('fetchServerWishlist failed', err);
+    console.error('fetchServerWishlist failed:', err);
     return { ids: new Set(), ownerId: null };
   }
 }
 
-/** Prefer DELETE one if supported; else PUT with merged list */
+/** DELETE one if supported; else PUT with filtered list */
 async function removeOneFromWishlist(userIdRaw, productId) {
   const userId = normalizeUserId(userIdRaw);
   if (!userId) return false;
 
   try {
-    // DELETE /wishlist/:userId/product/:productId
     const del = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}/product/${encodeURIComponent(productId)}`, {
       method: 'DELETE',
       credentials: 'include'
     });
     if (del.ok) return true;
-  } catch { return []; }
+  } catch (err) {
+    console.warn('DELETE wishlist failed (will fallback):', err);
+  }
 
-  // fallback: GET -> filter -> PUT
   try {
     const current = await fetchServerWishlist(userId);
     const nextIds = Array.from(current.ids).filter((id) => id !== String(productId));
@@ -119,15 +116,15 @@ async function removeOneFromWishlist(userIdRaw, productId) {
       body: JSON.stringify({ userId, productIds: nextIds })
     });
     return putRes.ok;
-  } catch {
+  } catch (err) {
+    console.error('PUT remove fallback failed:', err);
     return false;
   }
 }
 
-/** Read userId from localStorage (userid → userId fallback) */
+/** Read userId from localStorage (prefer 'userId') */
 const readUserIdFromLocal = () => {
   if (typeof window === 'undefined') return null;
-  // explicitly prefer 'userId' as you asked, but keep a fallback to 'userid'
   return localStorage.getItem('userId') || localStorage.getItem('userid') || null;
 };
 
@@ -200,9 +197,9 @@ const WishlistItem = ({ product }) => {
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
 
-  // 1) read userId from localStorage.userId (fallback to userid)
+  // local userId (must match server owner to show)
   const [rawUserId, setRawUserId] = useState(() => readUserIdFromLocal());
-  const localUserId = normalizeUserId(rawUserId); // normalized local id for comparison
+  const localUserId = normalizeUserId(rawUserId);
   const hasLocalUser = !!localUserId;
 
   // keep userId in sync with storage/focus
@@ -224,10 +221,17 @@ const WishlistItem = ({ product }) => {
 
   const { _id, title, salesPrice } = product || {};
 
-  // 2) server state (we fetch using localUserId and verify owner === localUserId)
+  // server ids (strict source of truth)
   const [serverIds, setServerIds] = useState(null);
   const [loadingServer, setLoadingServer] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
+
+  // refetch when other tabs/pages add/remove
+  useEffect(() => {
+    const onUpdated = () => setRefreshTick((n) => n + 1);
+    window.addEventListener('wishlist-updated', onUpdated);
+    return () => window.removeEventListener('wishlist-updated', onUpdated);
+  }, []);
 
   const { debounced: globalQuery } = useGlobalSearch(150);
 
@@ -248,7 +252,7 @@ const WishlistItem = ({ product }) => {
     (p) => p?.sku,
   ], []);
 
-  // GET server wishlist when local user changes or refresh triggered
+  // fetch server wishlist (only if local user present)
   useEffect(() => {
     let stop = false;
     (async () => {
@@ -257,19 +261,17 @@ const WishlistItem = ({ product }) => {
       const { ids, ownerId } = await fetchServerWishlist(localUserId);
       if (stop) return;
 
-      // 3) only accept server data if ownerId exactly matches localStorage.userId
       if (normalizeUserId(ownerId) && normalizeUserId(ownerId) === localUserId) {
         setServerIds(ids);
       } else {
-        // owner mismatch or missing → treat as empty (prevents showing someone else’s data)
-        setServerIds(new Set());
+        setServerIds(new Set()); // security: don't show someone else's data
       }
       setLoadingServer(false);
     })();
     return () => { stop = true; };
   }, [hasLocalUser, localUserId, refreshTick]);
 
-  // refetch on focus/visible
+  // revalidate on focus/visibility
   useEffect(() => {
     const refetch = () => setRefreshTick((n) => n + 1);
     const onFocus = () => refetch();
@@ -289,7 +291,7 @@ const WishlistItem = ({ product }) => {
     return pred(product);
   }, [globalQuery, product, searchableFields]);
 
-  // Only show if server says this product is in wishlist for THIS local user
+  // Only show if server says this product is in wishlist for THIS user
   const serverReady = !loadingServer && serverIds instanceof Set;
   const showByServer = serverReady ? serverIds.has(String(_id)) : false;
   const hidden = !matchesQuery || !showByServer;
@@ -321,13 +323,19 @@ const WishlistItem = ({ product }) => {
   const handleAddProduct = async (prd) => {
     if (!hasLocalUser) { openLogin(); return; }
     dispatch(add_cart_product(prd));
-    await removeOneFromWishlist(localUserId, prd?._id || prd?.id);
-    setServerIds((prev) => {
-      const s = new Set(prev || []);
-      s.delete(String(prd?._id || prd?.id));
-      return s;
-    });
-    dispatch(remove_wishlist_product({ title: prd?.title, id: prd?._id || prd?.id }));
+    const ok = await removeOneFromWishlist(localUserId, prd?._id || prd?.id);
+    if (ok) {
+      setServerIds((prev) => {
+        const s = new Set(prev || []);
+        s.delete(String(prd?._id || prd?.id));
+        return s;
+      });
+      dispatch(remove_wishlist_product({ title: prd?.title, id: prd?._id || prd?.id }));
+      try { window.dispatchEvent(new CustomEvent('wishlist-updated', { detail: { removed: prd?._id || prd?.id } })); }
+      catch (err) { console.error('wishlist-updated event error:', err); }
+    } else {
+      alert('Failed to move item. Please try again.');
+    }
   };
 
   const handleRemovePrd = async (prd) => {
@@ -341,6 +349,10 @@ const WishlistItem = ({ product }) => {
         return s;
       });
       dispatch(remove_wishlist_product(prd));
+      try { window.dispatchEvent(new CustomEvent('wishlist-updated', { detail: { removed: id } })); }
+      catch (err) { console.error('wishlist-updated event error:', err); }
+    } else {
+      alert('Failed to remove from wishlist.');
     }
   };
 
@@ -368,7 +380,6 @@ const WishlistItem = ({ product }) => {
   const left4 = topFourDetails.slice(0, mid4);
   const right4 = topFourDetails.slice(mid4);
 
-  // If we haven't confirmed server-list yet, don't render row
   if (loadingServer && !serverIds) return null;
 
   return (
