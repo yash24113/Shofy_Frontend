@@ -1,137 +1,113 @@
 'use client';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import Image from "next/image";
+import { useDispatch, useSelector } from "react-redux";
+import Link from "next/link";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Close } from "@/svg";
+import { add_cart_product } from "@/redux/features/cartSlice";
+import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
+import LoginArea from "@/components/login-register/login-area";
+import RegisterArea from "@/components/login-register/register-area";
 
-import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import Image from 'next/image';
-import { useDispatch, useSelector } from 'react-redux';
-import Link from 'next/link';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { Close } from '@/svg';
-import { add_cart_product } from '@/redux/features/cartSlice';
-import { remove_wishlist_product } from '@/redux/features/wishlist-slice';
-
-import useGlobalSearch from '@/hooks/useGlobalSearch';
-import { buildSearchPredicate } from '@/utils/searchMiddleware';
+import useGlobalSearch from "@/hooks/useGlobalSearch";
+import { buildSearchPredicate } from "@/utils/searchMiddleware";
 
 /* ---------- helpers ---------- */
-const nonEmpty = (v) => Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== '';
+const nonEmpty = (v) =>
+  Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== "";
 const pick = (...xs) => xs.find(nonEmpty);
-const toText = (v) => (v == null ? '' : typeof v === 'object' ? toText(v.name ?? v.value ?? v.title ?? v.label ?? '') : String(v));
-const round = (n, d = 1) => (isFinite(n) ? Number(n).toFixed(d).replace(/\.0+$/, '') : '');
+const toText = (v) => {
+  if (v == null) return "";
+  if (typeof v === "string" || typeof v === "number") return String(v);
+  if (Array.isArray(v)) return v.map(toText).filter(Boolean).join(", ");
+  if (typeof v === "object") return toText(v.name ?? v.value ?? v.title ?? v.label ?? "");
+  return "";
+};
+const round = (n, d = 1) => (isFinite(n) ? Number(n).toFixed(d).replace(/\.0+$/, "") : "");
 const gsmToOz = (gsm) => gsm * 0.0294935;
 const cmToInch = (cm) => cm / 2.54;
-const isNoneish = (s) => !s || ['none','na','none/ na','none / na','n/a','-'].includes(String(s).trim().toLowerCase().replace(/\s+/g,' '));
+const isNoneish = (s) => {
+  if (!s) return true;
+  const t = String(s).trim().toLowerCase().replace(/\s+/g, " ");
+  return ["none", "na", "none/ na", "none / na", "n/a", "-"].includes(t);
+};
 
-/* ---------- userId normalize ---------- */
-const normalizeUserId = (raw) => {
-  if (!raw) return null;
-  if (typeof raw === 'object') {
-    const maybe = raw.$oid || raw._id || raw.id;
-    return normalizeUserId(maybe);
-  }
-  const s = String(raw).trim();
-  const wrapped = s.match(/ObjectId\(['"]?([0-9a-fA-F]{24})['"]?\)/);
-  if (wrapped) return wrapped[1];
-  const hex = s.match(/^[0-9a-fA-F]{24}$/);
-  return hex ? hex[0] : s;
+/* ---------- user id helpers ---------- */
+const selectUserIdFromStore = (state) =>
+  state?.auth?.user?._id ||
+  state?.auth?.user?.id ||
+  state?.auth?.userInfo?._id ||
+  state?.auth?.userInfo?.id ||
+  state?.user?.user?._id ||
+  null;
+
+const readUserIdFromLocal = () => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("userid") || localStorage.getItem("userId") || null;
 };
 
 /* ---------- server (API) ---------- */
-const WISHLIST_BASE = 'https://test.amrita-fashions.com/shopy';
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
+const WISHLIST_BASE = (() => {
+  if (!API_BASE) return "https://test.amrita-fashions.com/shopy";
+  if (/\/api$/i.test(API_BASE)) return API_BASE.replace(/\/api$/i, "");
+  if (/\/shopy$/i.test(API_BASE)) return API_BASE;
+  return `${API_BASE}/shopy`;
+})();
 
-/** GET /wishlist/:userId → normalize to { ids:Set, ownerId:string|null } */
-async function fetchServerWishlist(userIdRaw) {
-  const userId = normalizeUserId(userIdRaw);
-  if (!userId) return { ids: new Set(), ownerId: null };
+/** GET /shopy/wishlist/:userId  → returns array of {_id,...} */
+async function fetchServerWishlist(userId) {
+  if (!userId) return [];
   try {
-    const res = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store'
+    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
+    const res = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
     });
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
 
-    const owner =
-      normalizeUserId(
-        data?.data?.userId ??
-        data?.userId ??
-        data?.ownerId ??
-        data?.data?._id?.userId
-      ) || userId;
+    // Your response shape:
+    // { success, message, data: { products: [ { _id, name } ] } }
+    if (Array.isArray(data?.data?.products)) return data.data.products;
 
-    const arr = Array.isArray(data?.data?.products)
-      ? data.data.products
-      : Array.isArray(data?.items)
-        ? data.items
-        : Array.isArray(data?.data?.productIds)
-          ? data.data.productIds.map((x) => ({ _id: x?._id || x?.id || x }))
-          : Array.isArray(data?.productIds)
-            ? data.productIds.map((x) => ({ _id: x?._id || x?.id || x }))
-            : Array.isArray(data)
-              ? data
-              : [];
+    // fallbacks for older shapes
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.items)) return data.items;
+    if (Array.isArray(data?.data?.items)) return data.data.items;
 
-    const ids = new Set(arr.map((x) => String(x?._id || x?.id || x)).filter(Boolean));
-    return { ids, ownerId: owner };
+    const idsA = data?.data?.productIds;
+    const idsB = data?.productIds;
+    if (Array.isArray(idsA)) return idsA.map((x) => ({ _id: x?._id || x?.id || x }));
+    if (Array.isArray(idsB)) return idsB.map((x) => ({ _id: x?._id || x?.id || x }));
+
+    return [];
   } catch (err) {
-    console.error('fetchServerWishlist failed', err);
-    return { ids: new Set(), ownerId: null };
+    console.warn("fetchServerWishlist failed", err);
+    return [];
   }
 }
-
-/** DELETE one; fallback to PUT merge without that id */
-async function removeOneFromWishlist(userIdRaw, productId) {
-  const userId = normalizeUserId(userIdRaw);
-  if (!userId) return false;
-
-  try {
-    const del = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}/product/${encodeURIComponent(productId)}`, {
-      method: 'DELETE',
-      credentials: 'include'
-    });
-    if (del.ok) return true;
-  } catch (err) {
-    console.warn('DELETE failed, fallback to PUT:', err);
-  }
-
-  try {
-    const current = await fetchServerWishlist(userId);
-    const nextIds = Array.from(current.ids).filter((id) => id !== String(productId));
-    const putRes = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, productIds: nextIds })
-    });
-    return putRes.ok;
-  } catch (err) {
-    console.error('PUT remove fallback failed', err);
-    return false;
-  }
-}
-
-/** Read userId from localStorage (prefer userId, fallback userid) */
-const readUserIdFromLocal = () => {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('userId') || localStorage.getItem('userid') || null;
-};
 
 /* ---------- empty-banner manager (DOM only) ---------- */
 function useEmptyBanner(listId, rowVisible, emptyText) {
   const rowRef = useRef(null);
+
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     window.__listVis = window.__listVis || {};
     const bucket = (window.__listVis[listId] = window.__listVis[listId] || { vis: 0, banner: null });
-    const tbody = rowRef.current?.closest('tbody');
+
+    const tbody = rowRef.current?.closest("tbody");
     if (!tbody) return;
 
-    const ensureBanner = () => {
+    const ensureBannerExists = () => {
       if (bucket.banner && bucket.banner.isConnected) return bucket.banner;
-      const tr = document.createElement('tr');
-      tr.className = 'empty-row';
-      const td = document.createElement('td');
+      const tr = document.createElement("tr");
+      tr.className = "empty-row";
+      const td = document.createElement("td");
       td.colSpan = 999;
       td.innerHTML = `
         <div class="empty-wrap" role="status" aria-live="polite">
@@ -147,8 +123,9 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
     };
 
     let prev = rowRef.current ? rowRef.current.__wasVisible : undefined;
-    if (prev === undefined) { if (rowVisible) bucket.vis += 1; }
-    else {
+    if (prev === undefined) {
+      if (rowVisible) bucket.vis += 1;
+    } else {
       if (rowVisible && !prev) bucket.vis += 1;
       if (!rowVisible && prev) bucket.vis -= 1;
     }
@@ -156,9 +133,11 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
 
     const banner = bucket.banner;
     if (bucket.vis <= 0) {
-      const b = ensureBanner();
+      const b = ensureBannerExists();
       if (!b.isConnected) tbody.appendChild(b);
-    } else if (banner && banner.isConnected) banner.remove();
+    } else if (banner && banner.isConnected) {
+      banner.remove();
+    }
 
     return () => {
       const was = rowRef.current ? rowRef.current.__wasVisible : undefined;
@@ -166,10 +145,10 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
       if (rowRef.current) rowRef.current.__wasVisible = false;
 
       if (bucket.vis <= 0) {
-        const b = ensureBanner();
+        const b = ensureBannerExists();
         if (!b.isConnected && tbody.isConnected) tbody.appendChild(b);
       } else if (bucket.banner && bucket.banner.isConnected && bucket.vis > 0) {
-        bucket.banner.remove();
+        banner.remove();
       }
     };
   }, [listId, rowVisible, emptyText]);
@@ -177,7 +156,7 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
   return { rowRef };
 }
 
-/* ---------- Component ---------- */
+/* ---------- Component (GET-only; server is source of truth) ---------- */
 const WishlistItem = ({ product }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -185,185 +164,243 @@ const WishlistItem = ({ product }) => {
 
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
+  useSelector((state) => state.wishlist); // keep subscription
+  const userIdFromStore = useSelector(selectUserIdFromStore);
 
-  // 1) read local user id and normalize
-  const [rawUserId, setRawUserId] = useState(() => readUserIdFromLocal());
-  const localUserId = normalizeUserId(rawUserId);
-  const hasLocalUser = !!localUserId;
+  // current user id (Redux → localStorage)
+  const [userId, setUserId] = useState(() => userIdFromStore || readUserIdFromLocal());
 
-  // keep userId in sync with storage/focus
+  // update userId when Redux changes or localStorage updates (other tab/system)
+  useEffect(() => {
+    setUserId(userIdFromStore || readUserIdFromLocal());
+  }, [userIdFromStore]);
+
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === 'userId' || e.key === 'userid') setRawUserId(e.newValue || null);
+      if (e.key === "userid" || e.key === "userId") {
+        setUserId(e.newValue || null);
+      }
     };
-    const onFocus = () => setRawUserId(readUserIdFromLocal());
-    const onVisible = () => { if (document.visibilityState === 'visible') setRawUserId(readUserIdFromLocal()); };
-    window.addEventListener('storage', onStorage);
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisible);
+    const onFocus = () => setUserId(userIdFromStore || readUserIdFromLocal());
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setUserId(userIdFromStore || readUserIdFromLocal());
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [userIdFromStore]);
 
   const { _id, title, salesPrice } = product || {};
+  const isInCart = cart_products?.find?.((item) => item?._id === _id);
 
-  // 2) server state (ids only are enough to decide visibility)
+  const [moving, setMoving] = useState(false);
+  const [authModal, setAuthModal] = useState(null);
+
+  // server ids
   const [serverIds, setServerIds] = useState(null);
   const [loadingServer, setLoadingServer] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // 🔎 global search
   const { debounced: globalQuery } = useGlobalSearch(150);
 
-  const searchableFields = useMemo(() => [
-    (p) => p?.title,
-    (p) => p?.name,
-    (p) => p?._id,
-    (p) => p?.id,
-    (p) => p?.slug,
-    (p) => p?.fabricType || p?.fabric_type,
-    (p) => p?.content || p?.contentName || p?.content_label,
-    (p) => p?.design || p?.designName,
-    (p) => p?.colors || p?.color || p?.colorName,
-    (p) => p?.finish || p?.subfinish?.name || p?.finishName,
-    (p) => p?.structure || p?.substructure?.name || p?.structureName,
-    (p) => p?.widthLabel || p?.width_cm || p?.width,
-    (p) => p?.tags,
-    (p) => p?.sku,
-  ], []);
+  const searchableFields = useMemo(
+    () => [
+      (p) => p?.title,
+      (p) => p?.name,
+      (p) => p?._id,
+      (p) => p?.id,
+      (p) => p?.slug,
+      (p) => p?.fabricType || p?.fabric_type,
+      (p) => p?.content || p?.contentName || p?.content_label,
+      (p) => p?.design || p?.designName,
+      (p) => p?.colors || p?.color || p?.colorName,
+      (p) => p?.finish || p?.subfinish?.name || p?.finishName,
+      (p) => p?.structure || p?.substructure?.name || p?.structureName,
+      (p) => p?.widthLabel || p?.width_cm || p?.width,
+      (p) => p?.tags,
+      (p) => p?.sku,
+    ],
+    []
+  );
 
-  // GET server wishlist when local user changes or refresh triggered
+  // GET server wishlist when userId changes or we trigger a refresh
   useEffect(() => {
     let stop = false;
     (async () => {
-      if (!hasLocalUser) { setServerIds(new Set()); setLoadingServer(false); return; }
+      if (!userId) { setServerIds(new Set()); setLoadingServer(false); return; }
       setLoadingServer(true);
-      const { ids, ownerId } = await fetchServerWishlist(localUserId);
+      const list = await fetchServerWishlist(userId);
       if (stop) return;
 
-      // only accept server data if ownerId matches the local userId
-      if (normalizeUserId(ownerId) && normalizeUserId(ownerId) === localUserId) {
-        setServerIds(ids);
-      } else {
-        setServerIds(new Set());
-      }
+      const ids = new Set(
+        (Array.isArray(list) ? list : [])
+          .map((x) => x?._id || x?.id || x)
+          .filter(Boolean)
+          .map(String)
+      );
+
+      setServerIds(ids);
       setLoadingServer(false);
+
+      try {
+        window.dispatchEvent(new CustomEvent("wishlist-synced", { detail: { count: ids.size } }));
+      } catch(err) {console.log("error",err)}
     })();
     return () => { stop = true; };
-  }, [hasLocalUser, localUserId, refreshTick]);
+  }, [userId, refreshTick]);
 
-  // refetch on focus/visible
+  // Re-fetch when window regains focus/visibility
   useEffect(() => {
     const refetch = () => setRefreshTick((n) => n + 1);
     const onFocus = () => refetch();
-    const onVisible = () => document.visibilityState === 'visible' && refetch();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisible);
+    const onVisible = () => document.visibilityState === "visible" && refetch();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
   const matchesQuery = useMemo(() => {
-    const q = (globalQuery || '').trim();
+    const q = (globalQuery || "").trim();
     if (q.length < 2) return true;
-    const pred = buildSearchPredicate(q, searchableFields, { mode: 'AND', normalize: true, minTokenLen: 2 });
+    const pred = buildSearchPredicate(q, searchableFields, {
+      mode: "AND",
+      normalize: true,
+      minTokenLen: 2,
+    });
     return pred(product);
   }, [globalQuery, product, searchableFields]);
 
-  // Only show if server says this product is in wishlist for THIS local user
+  // Only show if server says this product is in wishlist
   const serverReady = !loadingServer && serverIds instanceof Set;
-  const showByServer = serverReady ? serverIds.has(String(_id)) : false;
+  const showByServer = serverReady ? serverIds.has(String(_id)) : true;
   const hidden = !matchesQuery || !showByServer;
 
-  const { rowRef } = useEmptyBanner('wishlist', !hidden, 'No product found in wishlist');
+  const { rowRef } = useEmptyBanner("wishlist", !hidden, "No product found in wishlist");
 
   const currentUrlWithQuery = useMemo(() => {
-    const url = typeof window !== 'undefined' ? new URL(window.location.href) : new URL('http://localhost');
+    const url =
+      typeof window !== "undefined" ? new URL(window.location.href) : new URL("http://localhost");
     return url.pathname + url.search;
   }, [pathname, searchParams]);
 
-  const pushAuthQuery = useCallback((type) => {
-    if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
-    if (type) {
-      url.searchParams.set('auth', type);
-      url.searchParams.set('redirect', currentUrlWithQuery);
-    } else {
-      url.searchParams.delete('auth');
-      url.searchParams.delete('redirect');
-    }
-    const qs = url.searchParams.toString();
-    router.push(qs ? `${url.pathname}?${qs}` : url.pathname, { scroll: false });
-  }, [currentUrlWithQuery, router]);
+  const pushAuthQuery = useCallback(
+    (type) => {
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      if (type) {
+        url.searchParams.set("auth", type);
+        url.searchParams.set("redirect", currentUrlWithQuery);
+      } else {
+        url.searchParams.delete("auth");
+        url.searchParams.delete("redirect");
+      }
+      const qs = url.searchParams.toString();
+      router.push(qs ? `${url.pathname}?${qs}` : url.pathname, { scroll: false });
+    },
+    [currentUrlWithQuery, router]
+  );
 
-  const openLogin = useCallback(() => { pushAuthQuery('login'); }, [pushAuthQuery]);
+  const closeAuth = useCallback(() => {
+    setAuthModal(null);
+    pushAuthQuery(null);
+  }, [pushAuthQuery]);
+  const openLogin = useCallback(() => {
+    setAuthModal("login");
+    pushAuthQuery("login");
+  }, [pushAuthQuery]);
+  const openRegister = useCallback(() => {
+    setAuthModal("register");
+    pushAuthQuery("register");
+  }, [pushAuthQuery]);
 
-  /* ---------- Actions ---------- */
+  /* ---------- Actions (NO PUT here; UI-only changes) ---------- */
   const handleAddProduct = async (prd) => {
-    if (!hasLocalUser) { openLogin(); return; }
-    dispatch(add_cart_product(prd));
-    await removeOneFromWishlist(localUserId, prd?._id || prd?.id);
-    setServerIds((prev) => {
-      const s = new Set(prev || []); s.delete(String(prd?._id || prd?.id)); return s;
-    });
-    dispatch(remove_wishlist_product({ title: prd?.title, id: prd?._id || prd?.id }));
+    if (!userId) { openLogin(); return; }
+    try {
+      setMoving(true);
+      dispatch(add_cart_product(prd));
+      dispatch(remove_wishlist_product({ title, id: _id }));
+
+      // Update UI immediately; server remains source of truth on next refetch
+      setServerIds((prev) => {
+        const s = new Set(prev || []);
+        s.delete(String(_id));
+        return s;
+      });
+    } finally {
+      setTimeout(() => setMoving(false), 250);
+    }
   };
 
   const handleRemovePrd = async (prd) => {
-    if (!hasLocalUser) { openLogin(); return; }
+    dispatch(remove_wishlist_product(prd));
     const id = String(prd?.id || prd?._id);
-    const ok = await removeOneFromWishlist(localUserId, id);
-    if (ok) {
-      setServerIds((prev) => {
-        const s = new Set(prev || []); s.delete(id); return s;
-      });
-      dispatch(remove_wishlist_product(prd));
-    } else {
-      alert('Failed to remove from wishlist.');
-    }
+    setServerIds((prev) => {
+      const s = new Set(prev || []);
+      s.delete(id);
+      return s;
+    });
   };
 
   /* ---------- presentation ---------- */
-  const imageBase = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
+  const imageBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
   const imageUrl =
-    product?.img?.startsWith?.('http') ? product.img : `${imageBase}/uploads/${product?.img || ''}`;
+    product?.img?.startsWith?.("http") ? product.img : `${imageBase}/uploads/${product?.img || ""}`;
   const slug = product?.slug || _id;
 
   const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
-  const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type)) || 'Woven Fabrics';
+  const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type)) || "Woven Fabrics";
   const contentVal = toText(pick(product?.content, product?.contentName, product?.content_label));
-  const weightVal = isFinite(gsm) && gsm > 0 ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz` : toText(product?.weight);
+  const weightVal =
+    isFinite(gsm) && gsm > 0 ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz` : toText(product?.weight);
   const designVal = toText(pick(product?.design, product?.designName));
   const colorsVal = toText(pick(product?.colors, product?.color, product?.colorName));
   const widthCm = Number(pick(product?.widthCm, product?.width_cm, product?.width));
-  const widthVal = isFinite(widthCm) ? `${round(widthCm, 0)} cm / ${round(cmToInch(widthCm), 0)} inch` : toText(product?.widthLabel);
+  const widthVal =
+    isFinite(widthCm) && widthCm > 0
+      ? `${round(widthCm, 0)} cm / ${round(cmToInch(widthCm), 0)} inch`
+      : toText(product?.widthLabel);
   const finishVal = toText(pick(product?.finish, product?.subfinish?.name, product?.finishName));
   const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName));
 
-  const allDetails = [fabricTypeVal, contentVal, weightVal, designVal, colorsVal, widthVal, finishVal, structureVal]
-    .filter((v) => nonEmpty(v) && !isNoneish(v));
+  const allDetails = [
+    fabricTypeVal,
+    contentVal,
+    weightVal,
+    designVal,
+    colorsVal,
+    widthVal,
+    finishVal,
+    structureVal,
+  ].filter((v) => nonEmpty(v) && !isNoneish(v));
   const topFourDetails = allDetails.slice(0, 4);
   const mid4 = Math.ceil(topFourDetails.length / 2);
   const left4 = topFourDetails.slice(0, mid4);
   const right4 = topFourDetails.slice(mid4);
 
-  // If we haven't confirmed server-list yet, don't render row
   if (loadingServer && !serverIds) return null;
 
   return (
     <>
-      <tr className="wishlist-row" ref={rowRef} style={hidden ? { display: 'none' } : undefined}>
+      <tr className="wishlist-row" ref={rowRef} style={hidden ? { display: "none" } : undefined}>
         {/* img */}
         <td className="tp-cart-img wishlist-cell">
           <Link href={`/fabric/${slug}`} className="wishlist-img-link">
             {product?.img && (
               <Image
                 src={imageUrl}
-                alt={title || 'product img'}
+                alt={title || "product img"}
                 width={70}
                 height={100}
                 className="wishlist-img"
@@ -406,22 +443,24 @@ const WishlistItem = ({ product }) => {
         {/* add to cart */}
         <td className="tp-cart-add-to-cart wishlist-cell wishlist-cell-center">
           <button
-            onClick={() => (hasLocalUser ? handleAddProduct(product) : openLogin())}
+            onClick={() => handleAddProduct(product)}
             type="button"
-            className="btn-ghost-invert square"
-            title={hasLocalUser ? 'Move to Cart' : 'Login to move'}
+            className={`btn-ghost-invert square ${moving ? "is-loading" : ""}`}
+            aria-busy={moving ? "true" : "false"}
+            title="Move to Cart"
+            disabled={!!isInCart && !moving}
           >
-            {hasLocalUser ? 'Move to Cart' : 'Login to continue'}
+            {moving ? "Moving…" : "Move to Cart"}
           </button>
         </td>
 
         {/* remove */}
         <td className="tp-cart-action wishlist-cell">
           <button
-            onClick={() => (hasLocalUser ? handleRemovePrd({ title, id: _id }) : openLogin())}
+            onClick={() => handleRemovePrd({ title, id: _id })}
             className="btn-ghost-invert square"
             type="button"
-            title={hasLocalUser ? 'Remove from wishlist' : 'Login to remove'}
+            title="Remove from wishlist"
           >
             <Close />
             <span> Remove</span>
@@ -429,7 +468,14 @@ const WishlistItem = ({ product }) => {
         </td>
       </tr>
 
-      {/* styles */}
+      {/* AUTH MODALS */}
+      {authModal === "login" && (
+        <LoginArea onClose={closeAuth} onSwitchToRegister={openRegister} />
+      )}
+      {authModal === "register" && (
+        <RegisterArea onClose={closeAuth} onSwitchToLogin={openLogin} />
+      )}
+
       <style jsx>{`
         .wishlist-row { border-bottom: 1px solid #eef0f3; transition: background-color 160ms ease, box-shadow 180ms ease; }
         .wishlist-row:hover { background: #fafbfc; }
@@ -448,10 +494,17 @@ const WishlistItem = ({ product }) => {
         .wishlist-spec-row:last-child{ border-bottom:0; }
         .wishlist-spec-value{ font-size:12.5px; font-weight:500; color:#374151; }
         @media (max-width:640px){ .wishlist-specs{ grid-template-columns:1fr; } }
-        .btn-ghost-invert { --navy:#0b1620; display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 18px; font-weight:600; font-size:15px; background:var(--navy); color:#fff; border:1px solid var(--navy); box-shadow:0 6px 18px rgba(0,0,0,0.22); transition: background .18s, color .18s, border-color .18s, box-shadow .18s, transform .12s; }
+        .btn-ghost-invert { --navy:#0b1620; display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 18px; border-radius:0; font-weight:600; font-size:15px; line-height:1; cursor:pointer; user-select:none; background:var(--navy); color:#fff; border:1px solid var(--navy); box-shadow:0 6px 18px rgba(0,0,0,0.22); transition: background .18s, color .18s, border-color .18s, box-shadow .18s, transform .12s; }
         .btn-ghost-invert:hover { background:#fff; color:var(--navy); border-color:var(--navy); box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12); transform: translateY(-1px); }
         .btn-ghost-invert:active { transform: translateY(0); background:#f8fafc; color:var(--navy); box-shadow:0 3px 10px rgba(0,0,0,0.15); }
         .btn-ghost-invert:focus-visible { outline:0; box-shadow:0 0 0 3px rgba(11,22,32,0.35); }
+        .btn-ghost-invert.is-loading { pointer-events:none; opacity:.9; }
+        @media (max-width: 640px) {
+          .wishlist-cell { padding: 10px 8px; }
+          .tp-cart-title.wishlist-cell { padding-left: 0; }
+          .wishlist-img { width: 56px; height: 80px; border-radius: 8px; }
+          .btn-ghost-invert { min-height: 42px; padding: 9px 16px; }
+        }
         .empty-row td { padding: 18px 12px; }
         .empty-wrap { display:flex; align-items:center; gap:10px; justify-content:center; color:#6b7280; font-weight:600; }
         .empty-ic { opacity:.8; }
