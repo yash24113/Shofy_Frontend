@@ -15,7 +15,6 @@ import { handleProductModal } from '@/redux/features/productModalSlice';
 import { useGetProductsByGroupcodeQuery } from '@/redux/features/productApi';
 import { useGetSeoByProductQuery } from '@/redux/features/seoApi';
 
-/* 🔎 add search */
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 import { buildSearchPredicate } from '@/utils/searchMiddleware';
 
@@ -48,8 +47,7 @@ const uniq = (arr) => {
 };
 const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
 
-/* ---- user + storage helpers ---- */
-const getSessionId = () => (typeof window !== 'undefined' && localStorage.getItem('sessionId')) || null;
+/* ---- user helpers ---- */
 const selectUserIdFromStore = (state) =>
   state?.auth?.user?._id ||
   state?.auth?.user?.id ||
@@ -57,12 +55,13 @@ const selectUserIdFromStore = (state) =>
   state?.auth?.userInfo?.id ||
   state?.user?.user?._id ||
   null;
+
 const getUserIdFromLocal = () => {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('userid') || localStorage.getItem('userId') || null;
 };
 
-/* ---- API helpers (PUT/GET here) ---- */
+/* ---- API helpers ---- */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
 const WISHLIST_BASE = (() => {
   if (!API_BASE) return 'https://test.amrita-fashions.com/shopy';
@@ -71,65 +70,51 @@ const WISHLIST_BASE = (() => {
   return `${API_BASE}/shopy`;
 })();
 
-/** GET /shopy/wishlist/:userId -> { userId, productIds: string[] } */
-async function fetchServerWishlist(userId) {
-  if (!userId) return [];
+/** Prefer POST add-one if your API supports it; otherwise falls back to GET+PUT merge */
+async function addOneToWishlist(userId, productId) {
   try {
-    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
-    const res = await fetch(url, { method: 'GET', credentials: 'include' });
-    if (!res.ok) return [];
-    const json = await res.json();
-    const ids = Array.isArray(json?.productIds) ? json.productIds : (Array.isArray(json?.data) ? json.data : []);
-    return (ids || []).map(String);
-  } catch {
-    return [];
-  }
-}
+    // try POST (idempotent add one)
+    const post = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ productId }),
+    });
+    if (post.ok) return true;
+  } catch { return [];}
 
-/** PUT /shopy/wishlist/:userId with { userId, productIds } */
-async function pushServerWishlist(userId, itemsOrIds) {
-  if (!userId) return false;
+  // fallback: GET + merge + PUT
   try {
-    const productIds =
-      Array.isArray(itemsOrIds)
-        ? (typeof itemsOrIds[0] === 'string'
-            ? itemsOrIds
-            : itemsOrIds.map((x) => x?._id || x?.id).filter(Boolean))
-        : [];
-    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
-    const res = await fetch(url, {
+    const getRes = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+    const getJson = getRes.ok ? await getRes.json() : {};
+    const fromApi =
+      Array.isArray(getJson?.data?.products)
+        ? getJson.data.products.map((x) => x?._id || x?.id || x)
+        : Array.isArray(getJson?.productIds)
+          ? getJson.productIds
+          : Array.isArray(getJson?.data)
+            ? getJson.data
+            : [];
+    const set = new Set(fromApi.map(String));
+    set.add(String(productId));
+    const merged = Array.from(set);
+
+    const putRes = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, productIds }),
+      body: JSON.stringify({ userId, productIds: merged }),
     });
-    return res.ok;
+    return putRes.ok;
   } catch {
     return false;
   }
 }
-
-/* local wishlist_items read/write (as in your screenshot) */
-const WISHLIST_ITEMS_KEY = 'wishlist_items';
-const readWishlistItemsLocal = () => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(WISHLIST_ITEMS_KEY);
-    const val = raw ? JSON.parse(raw) : [];
-    return Array.isArray(val) ? val : [];
-  } catch {
-    return [];
-  }
-};
-const writeWishlistItemsLocal = (items) => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(WISHLIST_ITEMS_KEY, JSON.stringify(items || []));
-  } catch  { return [];}
-};
-
-/* map ids -> minimal objects for local key and redux formatter */
-const toLocalWishlistShape = (ids) => ids.map((id) => ({ _id: String(id), id: String(id) }));
 
 /* ---------------- component ---------------- */
 const ProductItem = ({ product }) => {
@@ -137,19 +122,16 @@ const ProductItem = ({ product }) => {
   const rainbowId = useId();
   const dispatch = useDispatch();
 
-  /* 🔎 read global query (debounced) */
   const { debounced: q } = useGlobalSearch();
-
   const [showActions, setShowActions] = useState(false);
   const [supportsHover, setSupportsHover] = useState(true);
-
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setSupportsHover(window.matchMedia('(hover: hover) and (pointer: fine)').matches);
     }
   }, []);
 
-  // userId for sync
+  // userId
   const userIdFromStore = useSelector(selectUserIdFromStore);
   const userId = userIdFromStore || getUserIdFromLocal();
 
@@ -157,40 +139,10 @@ const ProductItem = ({ product }) => {
   const cartItems = useSelector((s) => s.cart?.cart_products || []);
   const wishlistItems = useSelector((s) => s.wishlist?.wishlist || []);
 
-  // ----- CROSS-DEVICE SYNC ON LOGIN / USER CHANGE -----
-  const hydrateWishlistFromServer = useCallback(async () => {
-    if (!userId) return;
+  const productId = product?._id || product?.product?._id || product?.product;
 
-    // 1) read both sources
-    const serverIds = await fetchServerWishlist(userId);        // ['a','b',...]
-    const localItems = readWishlistItemsLocal();                // [{_id, id, ...}]
-    const localIds = localItems.map((x) => String(x?._id || x?.id)).filter(Boolean);
-
-    // 2) merge (set union)
-    const mergedIdSet = new Set([...serverIds.map(String), ...localIds]);
-    const mergedIds = Array.from(mergedIdSet);
-
-    // 3) hydrate Redux wishlist (idempotent)
-    //    We only dispatch add_to_wishlist for ids not already present in Redux.
-    const reduxIds = (wishlistItems || []).map((x) => String(x?._id || x?.id));
-    const needAdd = mergedIds.filter((id) => !reduxIds.includes(id));
-
-    needAdd.forEach((id) => {
-      // We only know the id here; formatProductForWishlist can take minimal shape or you can enhance by product lookup later.
-      dispatch(add_to_wishlist(formatProductForWishlist({ _id: id, id })));
-    });
-
-    // 4) sync localStorage
-    writeWishlistItemsLocal(toLocalWishlistShape(mergedIds));
-
-    // 5) push back to server (so both sides match)
-    await pushServerWishlist(userId, mergedIds);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]); // intentionally not depending on wishlistItems to avoid loops
-
-  useEffect(() => {
-    hydrateWishlistFromServer();
-  }, [hydrateWishlistFromServer]);
+  const inCart = cartItems.some((it) => String(it?._id) === String(productId));
+  const inWishlist = wishlistItems.some((it) => String(it?._id) === String(productId));
 
   // ----- actions -----
   const handleAddProduct = (prd, e) => {
@@ -201,21 +153,25 @@ const ProductItem = ({ product }) => {
   const handleWishlistProduct = async (prd, e) => {
     e?.stopPropagation?.(); e?.preventDefault?.();
 
-    // 1) update Redux/UI
-    const formatted = formatProductForWishlist(prd);
-    dispatch(add_to_wishlist(formatted));
+    if (!userId) {
+      // redirect to login and come back
+      try {
+        const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
+        const redirect = url ? url.pathname + url.search : `/fabric/${prd?.slug || productId}`;
+        router.push(`/login?redirect=${encodeURIComponent(redirect)}`);
+      } catch {
+        router.push('/login');
+      }
+      return;
+    }
 
-    // 2) update local
-    const curr = readWishlistItemsLocal();
-    const nextMap = new Map(curr.map((x) => [String(x?._id || x?.id), x]));
-    nextMap.set(String(formatted?._id || formatted?.id), { _id: formatted?._id || formatted?.id, ...formatted });
-    const next = Array.from(nextMap.values());
-    writeWishlistItemsLocal(next);
-
-    // 3) Server push (idempotent)
-    const idsForPut = next.map((x) => x?._id || x?.id).filter(Boolean);
-    if (userId && idsForPut.length) {
-      await pushServerWishlist(userId, idsForPut);
+    const ok = await addOneToWishlist(userId, productId);
+    if (ok) {
+      // update UI (redux) — store decides dedupe
+      dispatch(add_to_wishlist(formatProductForWishlist({ _id: productId, id: productId, ...prd })));
+    } else {
+      // optional toast
+      console.warn('Failed to add to wishlist');
     }
   };
 
@@ -247,7 +203,6 @@ const ProductItem = ({ product }) => {
   }, [product]);
 
   /* title, slug, category */
-  const productId = product?._id || product?.product?._id || product?.product;
   const { data: seoResp } = useGetSeoByProductQuery(productId, { skip: !productId });
   const seoDoc = Array.isArray(seoResp?.data) ? seoResp?.data?.[0] : seoResp?.data;
 
@@ -305,38 +260,11 @@ const ProductItem = ({ product }) => {
   const leftDetails = details.slice(0, mid);
   const rightDetails = details.slice(mid);
 
-  const showCategory =
-    categoryLabel &&
-    String(categoryLabel).trim().toLowerCase() !== String(fabricTypeVal).trim().toLowerCase();
-
-  /* Share */
-  const handleShare = async (_prd, e) => {
-    e?.stopPropagation?.(); e?.preventDefault?.();
-    try {
-      const url =
-        (typeof window !== 'undefined'
-          ? `${window.location.origin}/fabric/${slug}`
-          : `/fabric/${slug}`);
-      const title = typeof titleHtml === 'string' ? titleHtml : 'Fabric';
-      const text = 'Check out this fabric on Amrita Global Enterprises';
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({ title, text, url });
-      } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
-        alert('Link copied!');
-      } else {
-        prompt('Copy link', url);
-      }
-    } catch(err) { console.log('share error', err); }
-  };
-
-  const inCart = cartItems.some((it) => String(it?._id) === String(productId));
-  const inWishlist = wishlistItems.some((it) => String(it?._id) === String(productId));
-
-  /* 🔎 decide visibility for this item */
+  /* 🔎 filter visibility */
+  const { debounced: qDebounced } = useGlobalSearch();
   const isVisible = useMemo(() => {
-    const query = (q || '').trim();
-    if (query.length < 2) return true; // no filtering until 2+ chars
+    const query = (qDebounced || '').trim();
+    if (query.length < 2) return true;
     const fields = [
       () => titleText,
       () => slug || '',
@@ -348,7 +276,7 @@ const ProductItem = ({ product }) => {
     ];
     const pred = buildSearchPredicate(query, fields, { mode: 'AND', normalize: true });
     return pred(product);
-  }, [q, titleText, slug, categoryLabel, details, fabricTypeVal, designVal, colorsVal, product]);
+  }, [qDebounced, titleText, slug, categoryLabel, details, fabricTypeVal, designVal, colorsVal, product]);
 
   if (!isVisible) return null;
 
@@ -386,7 +314,6 @@ const ProductItem = ({ product }) => {
               </div>
             </Link>
 
-            {/* centered options ribbon */}
             {showOptionsBadge && (
               <button
                 type="button"
@@ -433,17 +360,29 @@ const ProductItem = ({ product }) => {
                 {inWishlist ? <WishlistActive /> : <Wishlist />}
               </button>
 
-              <button type="button" onClick={(e) => handleShare(product, e)} className="action-button" aria-label="Share product" title="Share">
-                <Share />
-              </button>
               <button type="button" onClick={(e) => openQuickView(product, e)} className="action-button" aria-label="Quick view" title="Quick view">
                 <QuickView />
+              </button>
+              <button type="button" onClick={(e) => {
+                e?.stopPropagation?.(); e?.preventDefault?.();
+                try {
+                  const url = typeof window !== 'undefined' ? `${window.location.origin}/fabric/${slug}` : `/fabric/${slug}`;
+                  const title = typeof titleHtml === 'string' ? titleHtml : 'Fabric';
+                  const text = 'Check out this fabric on Amrita Global Enterprises';
+                  if (typeof navigator !== 'undefined' && navigator.share) navigator.share({ title, text, url });
+                  else if (navigator?.clipboard) { navigator.clipboard.writeText(url); alert('Link copied!'); }
+                  else { prompt('Copy link', url); }
+                } catch { return [];}
+              }} className="action-button" aria-label="Share product" title="Share">
+                <Share />
               </button>
             </div>
           </div>
 
           <div className="product-info">
-            {showCategory ? <div className="product-category">{categoryLabel}</div> : null}
+            {categoryLabel && String(categoryLabel).trim().toLowerCase() !== String(fabricTypeVal).trim().toLowerCase()
+              ? <div className="product-category">{categoryLabel}</div>
+              : null}
 
             <h3 className="product-title">
               <Link href={`/fabric/${slug}`}>
@@ -513,31 +452,27 @@ const ProductItem = ({ product }) => {
         }
         .fashion-product-card.show-actions .product-actions{ opacity:1; transform:translateY(0); }
 
-        .action-button{ width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:rgba(255,255,255,.95); backdrop-filter:blur(4px); border:1px solid rgba(0,0,0,.06); box-shadow:0 4px 12px rgba(0,0,0,.08); transition:transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease; }
-        .action-button :global(svg){ width:16px; height:16px; color:var(--primary); transition:color .2s ease; }
-        .action-button:hover{ background:var(--maroon); border-color:var(--maroon); box-shadow:0 6px 16px rgba(128,0,0,.25); transform:scale(1.06); }
+        .action-button{ width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:rgba(255,255,255,.95); border:1px solid rgba(0,0,0,.06); box-shadow:0 4px 12px rgba(0,0,0,.08); transition:transform .2s ease; }
+        .action-button :global(svg){ width:16px; height:16px; color:var(--primary); }
+        .action-button:hover{ background:var(--maroon); border-color:var(--maroon); transform:scale(1.06); }
         .action-button:hover :global(svg){ color:#fff !important; }
-        .action-button.active{ box-shadow:0 6px 16px rgba(0,0,0,.12); }
         .action-button.cart-active{ background:#f0fdf4; border-color:rgba(16,185,129,.35); }
         .action-button.cart-active :global(svg){ color:#10b981; }
         .action-button.wishlist-active{ background:#fef2f2; border-color:rgba(239,68,68,.35); }
         .action-button.wishlist-active :global(svg){ color:#ef4444; }
-        .action-button:focus-visible{ outline:2px solid #800000; outline-offset:2px; }
 
         .product-info{ padding:18px 12px 12px; border-top:1px solid var(--inner-border); background:#fff; }
-        .product-category{ font-size:11px; font-weight:600; letter-spacing:.02em; color:#6b7280; margin-bottom:4px; }
-        .product-title{ font-family:'Montserrat',system-ui,Arial,sans-serif; font-size:clamp(14px,1.9vw,16px); font-weight:700; line-height:1.22; letter-spacing:.002em; color:#111827; margin:0 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
+        .product-category{ font-size:11px; font-weight:600; color:#6b7280; margin-bottom:4px; }
+        .product-title{ font-family:'Montserrat',system-ui,Arial,sans-serif; font-size:clamp(14px,1.9vw,16px); font-weight:700; line-height:1.22; color:#111827; margin:0 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
         .product-title :global(a){ color:inherit; text-decoration:none; }
         .product-title :global(a:hover){ color:#800000; }
 
         .spec-columns{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; margin-top:4px; }
         @media (max-width:340px){ .spec-columns{ grid-template-columns:1fr; } }
         .spec-col{ list-style:none; margin:0; padding:0; }
-        .spec-row{ display:block; padding:5px 0; border-bottom:1px dashed rgba(17,24,39,.06); }
+        .spec-row{ padding:5px 0; border-bottom:1px dashed rgba(17,24,39,.06); }
         .spec-row:last-child{ border-bottom:0; }
-        .spec-value{ font-size:12.5px; font-weight:500; color:#374151; line-height:1.28; letter-spacing:.005em; }
-
-        .price-wrapper{ display:none; }
+        .spec-value{ font-size:12.5px; font-weight:500; color:#374151; }
       `}</style>
     </div>
   );
