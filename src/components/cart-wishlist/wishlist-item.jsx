@@ -57,7 +57,7 @@ const writeWishlistLocal = (items) => {
   try {
     localStorage.setItem(WISHLIST_ITEMS_KEY, JSON.stringify(items || []));
     window.dispatchEvent(new CustomEvent("wishlist-local-changed", { detail: { count: items?.length || 0 } }));
-  } catch {}
+  } catch(err) {console.warn("writeWishlistLocal failed", err);}
 };
 
 /** GET server wishlist */
@@ -276,7 +276,7 @@ const WishlistItem = ({ product }) => {
       setServerIds(ids);
       setLoadingServer(false);
 
-      try { window.dispatchEvent(new CustomEvent("wishlist-synced", { detail: { count: ids.size } })); } catch {}
+      try { window.dispatchEvent(new CustomEvent("wishlist-synced", { detail: { count: ids.size } })); } catch(err) {console.log(err);}
     })();
     return () => { stop = true; };
   }, [userId, refreshTick]);
@@ -352,7 +352,7 @@ const WishlistItem = ({ product }) => {
         return s;
       });
       // Note: you can call PUT here to actually remove from server if desired
-    } finally {}
+    } finally {console.log("handleAddProduct done");}
   };
 
   const handleRemovePrd = async (prd) => {

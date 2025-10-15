@@ -89,7 +89,7 @@ const writeWishlistLocal = (items) => {
   try {
     localStorage.setItem(WISHLIST_ITEMS_KEY, JSON.stringify(items || []));
     window.dispatchEvent(new CustomEvent('wishlist-local-changed', { detail: { count: items?.length || 0 } }));
-  } catch {}
+  } catch(err) {console.warn('writeWishlistLocal failed', err);}
 };
 
 /** GET /shopy/wishlist/:userId -> list of {_id,...} OR ids */
@@ -159,7 +159,7 @@ async function syncWishlistTwoWay(userId) {
     writeWishlistLocal(merged);
     try {
       window.dispatchEvent(new CustomEvent('wishlist-synced', { detail: { count: merged.length } }));
-    } catch {}
+    } catch(err) {console.log(err);}
   }
   return ok;
 }
