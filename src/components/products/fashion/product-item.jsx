@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useId, useMemo } from 'react';
+import React, { useEffect, useState, useId, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -11,7 +11,6 @@ import { add_to_wishlist } from '@/redux/features/wishlist-slice';
 import { add_cart_product } from '@/redux/features/cartSlice';
 
 import { Cart, CartActive, Wishlist, WishlistActive, QuickView, Share } from '@/svg';
-
 import { handleProductModal } from '@/redux/features/productModalSlice';
 import { useGetProductsByGroupcodeQuery } from '@/redux/features/productApi';
 import { useGetSeoByProductQuery } from '@/redux/features/seoApi';
@@ -20,7 +19,7 @@ import { useGetSeoByProductQuery } from '@/redux/features/seoApi';
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 import { buildSearchPredicate } from '@/utils/searchMiddleware';
 
-/* helpers */
+/* ---------------- helpers ---------------- */
 const nonEmpty = (v) => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== '');
 const pick = (...xs) => xs.find(nonEmpty);
 const toText = (v) => {
@@ -63,7 +62,7 @@ const getUserIdFromLocal = () => {
   return localStorage.getItem('userid') || localStorage.getItem('userId') || null;
 };
 
-/* ---- API helpers (PUT here) ---- */
+/* ---- API helpers (PUT/GET here) ---- */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
 const WISHLIST_BASE = (() => {
   if (!API_BASE) return 'https://test.amrita-fashions.com/shopy';
@@ -71,6 +70,21 @@ const WISHLIST_BASE = (() => {
   if (/\/shopy$/i.test(API_BASE)) return API_BASE;
   return `${API_BASE}/shopy`;
 })();
+
+/** GET /shopy/wishlist/:userId -> { userId, productIds: string[] } */
+async function fetchServerWishlist(userId) {
+  if (!userId) return [];
+  try {
+    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
+    const res = await fetch(url, { method: 'GET', credentials: 'include' });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const ids = Array.isArray(json?.productIds) ? json.productIds : (Array.isArray(json?.data) ? json.data : []);
+    return (ids || []).map(String);
+  } catch {
+    return [];
+  }
+}
 
 /** PUT /shopy/wishlist/:userId with { userId, productIds } */
 async function pushServerWishlist(userId, itemsOrIds) {
@@ -90,8 +104,7 @@ async function pushServerWishlist(userId, itemsOrIds) {
       body: JSON.stringify({ userId, productIds }),
     });
     return res.ok;
-  } catch (e) {
-    console.warn('pushServerWishlist failed', e);
+  } catch {
     return false;
   }
 }
@@ -112,11 +125,13 @@ const writeWishlistItemsLocal = (items) => {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(WISHLIST_ITEMS_KEY, JSON.stringify(items || []));
-  } catch (e) {
-    console.log('localStorage write error', e);
-  }
+  } catch  { return [];}
 };
 
+/* map ids -> minimal objects for local key and redux formatter */
+const toLocalWishlistShape = (ids) => ids.map((id) => ({ _id: String(id), id: String(id) }));
+
+/* ---------------- component ---------------- */
 const ProductItem = ({ product }) => {
   const router = useRouter();
   const rainbowId = useId();
@@ -134,11 +149,50 @@ const ProductItem = ({ product }) => {
     }
   }, []);
 
-  // userId for PUT
+  // userId for sync
   const userIdFromStore = useSelector(selectUserIdFromStore);
   const userId = userIdFromStore || getUserIdFromLocal();
 
-  // act immediately
+  // slices
+  const cartItems = useSelector((s) => s.cart?.cart_products || []);
+  const wishlistItems = useSelector((s) => s.wishlist?.wishlist || []);
+
+  // ----- CROSS-DEVICE SYNC ON LOGIN / USER CHANGE -----
+  const hydrateWishlistFromServer = useCallback(async () => {
+    if (!userId) return;
+
+    // 1) read both sources
+    const serverIds = await fetchServerWishlist(userId);        // ['a','b',...]
+    const localItems = readWishlistItemsLocal();                // [{_id, id, ...}]
+    const localIds = localItems.map((x) => String(x?._id || x?.id)).filter(Boolean);
+
+    // 2) merge (set union)
+    const mergedIdSet = new Set([...serverIds.map(String), ...localIds]);
+    const mergedIds = Array.from(mergedIdSet);
+
+    // 3) hydrate Redux wishlist (idempotent)
+    //    We only dispatch add_to_wishlist for ids not already present in Redux.
+    const reduxIds = (wishlistItems || []).map((x) => String(x?._id || x?.id));
+    const needAdd = mergedIds.filter((id) => !reduxIds.includes(id));
+
+    needAdd.forEach((id) => {
+      // We only know the id here; formatProductForWishlist can take minimal shape or you can enhance by product lookup later.
+      dispatch(add_to_wishlist(formatProductForWishlist({ _id: id, id })));
+    });
+
+    // 4) sync localStorage
+    writeWishlistItemsLocal(toLocalWishlistShape(mergedIds));
+
+    // 5) push back to server (so both sides match)
+    await pushServerWishlist(userId, mergedIds);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]); // intentionally not depending on wishlistItems to avoid loops
+
+  useEffect(() => {
+    hydrateWishlistFromServer();
+  }, [hydrateWishlistFromServer]);
+
+  // ----- actions -----
   const handleAddProduct = (prd, e) => {
     e?.stopPropagation?.(); e?.preventDefault?.();
     dispatch(add_cart_product(formatProductForCart(prd)));
@@ -151,14 +205,14 @@ const ProductItem = ({ product }) => {
     const formatted = formatProductForWishlist(prd);
     dispatch(add_to_wishlist(formatted));
 
-    // 2) update localStorage `wishlist_items` (the key shown in your screenshot)
+    // 2) update local
     const curr = readWishlistItemsLocal();
     const nextMap = new Map(curr.map((x) => [String(x?._id || x?.id), x]));
     nextMap.set(String(formatted?._id || formatted?.id), { _id: formatted?._id || formatted?.id, ...formatted });
     const next = Array.from(nextMap.values());
     writeWishlistItemsLocal(next);
 
-    // 3) PUSH to server (PUT) using the ids from localStorage wishlist_items
+    // 3) Server push (idempotent)
     const idsForPut = next.map((x) => x?._id || x?.id).filter(Boolean);
     if (userId && idsForPut.length) {
       await pushServerWishlist(userId, idsForPut);
@@ -273,12 +327,8 @@ const ProductItem = ({ product }) => {
       } else {
         prompt('Copy link', url);
       }
-    } catch(err) {console.log("error",err)}
+    } catch(err) { console.log('share error', err); }
   };
-
-  /* select from slices */
-  const cartItems = useSelector((s) => s.cart?.cart_products || []);
-  const wishlistItems = useSelector((s) => s.wishlist?.wishlist || []);
 
   const inCart = cartItems.some((it) => String(it?._id) === String(productId));
   const inWishlist = wishlistItems.some((it) => String(it?._id) === String(productId));
@@ -450,7 +500,7 @@ const ProductItem = ({ product }) => {
 
         .options-ribbon{ position:absolute; left:50%; transform:translateX(-50%); bottom:10px; border:0; background:transparent; cursor:pointer; z-index:3; }
         .ribbon-inner{ display:flex; align-items:center; gap:8px; height:clamp(22px, 5.2vw, 30px); padding:0 clamp(8px, 2.2vw, 14px); border-radius:999px; background:rgba(255,255,255,0.28); backdrop-filter:blur(8px) saturate(180%); border:1px solid rgba(255,255,255,0.28); box-shadow:0 4px 10px rgba(0,0,0,0.10); transition:all .2s ease; }
-        .options-ribbon:hover .ribbon-inner{ background:rgba(255,255,255,0.45); }
+        .ribbon-inner:hover{ background:rgba(255,255,255,0.45); }
         .ribbon-icon{ display:inline-grid; place-items:center; width:clamp(16px, 4.5vw, 20px); height:clamp(16px, 4.5vw, 20px); }
         .badge-icon{ width:100%; height:100%; display:block; filter:drop-shadow(0 0 2px rgba(255,255,255,0.9)); }
         .ribbon-text{ font-size:clamp(12px, 3.2vw, 14px); font-weight:600; color:#111827; letter-spacing:.2px; line-height:1; }
