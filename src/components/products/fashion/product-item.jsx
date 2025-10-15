@@ -77,12 +77,7 @@ const normalizeUserId = (raw) => {
 
 /* ---- API helpers ---- */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
-const WISHLIST_BASE = (() => {
-  if (!API_BASE) return 'https://test.amrita-fashions.com/shopy';
-  if (/\/api$/i.test(API_BASE)) return API_BASE.replace(/\/api$/i, '');
-  if (/\/shopy$/i.test(API_BASE)) return API_BASE;
-  return `${API_BASE}/shopy`;
-})();
+const WISHLIST_BASE =  'https://test.amrita-fashions.com/shopy';
 
 /** GET current wishlist ids for user (array of string ids) */
 async function getWishlistIds(userId) {
