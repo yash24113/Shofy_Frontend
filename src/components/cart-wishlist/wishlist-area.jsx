@@ -4,192 +4,55 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import WishlistItem from './wishlist-item';
 import { Plus } from '@/svg';
-import { add_to_wishlist } from '@/redux/features/wishlist-slice';
+import { fetchWishlist } from '@/redux/features/wishlist-slice';
 
-/* --------------------------- localStorage helpers --------------------------- */
-const LS_GUEST_KEY = 'wishlist_guest';
-const keyFrom = (sessionId, userId) =>
-  sessionId && userId ? `wishlist_${userId}_${sessionId}` : LS_GUEST_KEY;
-
-const readJSON = (key) => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
-
-const writeJSON = (key, value) => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(key, JSON.stringify(value || []));
-  } catch (e) {
-    console.log('localStorage write error', e);
-  }
-};
-
-const dedupeById = (arr) => {
-  const seen = new Set();
-  return (arr || []).filter((it) => {
-    const id = it?._id || it?.id;
-    if (!id) return false;
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-};
-
-const getSessionUser = () => {
-  if (typeof window === 'undefined') return { sessionId: null, userId: null };
-  return {
-    sessionId: localStorage.getItem('sessionId') || null,
-    userId: localStorage.getItem('userId') || null,
-  };
-};
-/* --------------------------- server (API) helpers --------------------------- */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-
-async function fetchServerWishlist(userId) {
-  if (!userId || !API_BASE) return [];
-  try {
-    const res = await fetch(`${API_BASE}/api/wishlist?userId=${encodeURIComponent(userId)}`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: { 'Accept': 'application/json' },
-      cache: 'no-store',
-    });
-    if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
-    const data = await res.json();
-    // expected { items: [...] } or just array; normalize
-    const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-    return dedupeById(items);
-  } catch (err) {
-    console.warn('fetchServerWishlist failed', err);
-    return [];
-  }
-}
-
-async function pushServerWishlist(userId, items) {
-  if (!userId || !API_BASE) return false;
-  try {
-    const res = await fetch(`${API_BASE}/api/wishlist`, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, items: dedupeById(items || []) }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('pushServerWishlist failed', err);
-    return false;
-  }
-}
-/* --------------------------------------------------------------------------- */
+/* --------------------------- userId selector --------------------------- */
+const selectUserIdFromStore = (state) =>
+  state?.auth?.user?._id ||
+  state?.auth?.user?.id ||
+  state?.auth?.userInfo?._id ||
+  state?.auth?.userInfo?.id ||
+  state?.user?.user?._id ||
+  null;
 
 const WishlistArea = () => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { wishlist } = useSelector((state) => state.wishlist) || { wishlist: [] };
 
-  // session/user to know which key to use
-  const [{ sessionId, userId }, setSU] = useState(getSessionUser());
-  const storageKey = useMemo(() => keyFrom(sessionId, userId), [sessionId, userId]);
+  const { wishlist, loading } = useSelector((s) => s.wishlist) || { wishlist: [], loading: false };
+  const userId = useSelector(selectUserIdFromStore);
 
-  // Merge helper
-  const mergeLists = (...lists) => dedupeById([].concat(...lists.map((x) => x || [])));
-
-  // On mount or when userId changes → sync with server (supports cross-device)
+  /* --------------------------- initial + reactive fetch --------------------------- */
+  // Fetch on mount and whenever userId changes (e.g., you switch Google account)
   useEffect(() => {
-    let mounted = true;
+    if (userId) dispatch(fetchWishlist(userId));
+  }, [dispatch, userId]);
 
-    (async () => {
-      const { sessionId: sid, userId: uid } = getSessionUser();
-      if (!uid) {
-        // guest path: hydrate from guest local
-        const fromGuest = readJSON(LS_GUEST_KEY);
-        if (!fromGuest?.length) return;
-        const byId = new Set((wishlist || []).map((x) => x?._id || x?.id));
-        fromGuest.forEach((item) => {
-          const id = item?._id || item?.id;
-          if (id && !byId.has(id)) dispatch(add_to_wishlist(item));
-        });
-        return;
-      }
-
-      // logged-in: fetch server
-      const serverItems = await fetchServerWishlist(uid);
-      // also read guest + userKey locals to merge
-      const guestLocal = readJSON(LS_GUEST_KEY);
-      const userLocal = readJSON(keyFrom(sid, uid));
-
-      const merged = mergeLists(serverItems, guestLocal, userLocal);
-
-      // write back to server (source of truth across devices)
-      await pushServerWishlist(uid, merged);
-
-      // write to local (user-scoped) + clear guest
-      writeJSON(keyFrom(sid, uid), merged);
-      try {
-        localStorage.removeItem(LS_GUEST_KEY);
-      } catch(e) {console.log("error",e)}
-
-      // hydrate redux
-      if (!mounted) return;
-      const byId = new Set((wishlist || []).map((x) => x?._id || x?.id));
-      merged.forEach((item) => {
-        const id = item?._id || item?.id;
-        if (id && !byId.has(id)) dispatch(add_to_wishlist(item));
-      });
-    })();
-
+  // Refetch whenever tab regains focus or visibility changes
+  useEffect(() => {
+    const refetch = () => userId && dispatch(fetchWishlist(userId));
+    const onFocus = () => refetch();
+    const onVisible = () => document.visibilityState === 'visible' && refetch();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
-      mounted = false;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [dispatch, userId]);
 
-  // Persist Redux wishlist → localStorage for the active key, and to server when logged-in
-  useEffect(() => {
-    if (!storageKey) return;
-    const clean = dedupeById(wishlist || []);
-    writeJSON(storageKey, clean);
-
-    // also mirror to server if logged in
-    if (userId) {
-      pushServerWishlist(userId, clean);
-    }
-  }, [wishlist, storageKey, userId]);
-
-  // Watch for login/logout updates done elsewhere (e.g., LoginForm)
-  useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === 'sessionId' || e.key === 'userId') {
-        const next = getSessionUser();
-        setSU(next);
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
+  /* --------------------------- actions --------------------------- */
   const handleAddProduct = () => router.push('/shop');
-
-  // Gate "Go To Cart" behind sessionId
-  const handleGoToCart = () => {
-    const hasSession =
-      typeof window !== 'undefined' && !!localStorage.getItem('sessionId');
-    router.push(hasSession ? '/cart' : '/login');
-  };
-
+  const handleGoToCart = () => router.push('/cart');
   const handleContinueShopping = () => router.push('/shop');
+
+  const hasItems = Array.isArray(wishlist) && wishlist.length > 0;
 
   return (
     <>
       <section className="tp-cart-area pb-120">
         <div className="container">
-          {(!wishlist || wishlist.length === 0) && (
+          {!hasItems && !loading && (
             <div className="text-center pt-50">
               <h3>No Wishlist Items Found</h3>
               <button
@@ -203,7 +66,7 @@ const WishlistArea = () => {
             </div>
           )}
 
-          {wishlist?.length > 0 && (
+          {hasItems && (
             <div className="row">
               <div className="col-xl-12">
                 <div className="tp-cart-list mb-45 mr-30">
@@ -260,6 +123,7 @@ const WishlistArea = () => {
                     </div>
                   </div>
                 </div>
+
               </div>
             </div>
           )}

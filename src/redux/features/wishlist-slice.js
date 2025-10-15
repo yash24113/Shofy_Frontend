@@ -1,126 +1,206 @@
-// src/redux/features/wishlist-slice.js
+// redux/features/wishlist-slice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { notifyError, notifySuccess } from "@/utils/toast";
 
-/** Helpers */
-const getApiBase = () => (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
-const pickId = (x) =>
-  x?._id || x?.id || x?.product?._id || x?.product?.id || (typeof x?.product === "string" ? x.product : null);
+/* ------------------------- API base helpers ------------------------- */
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
+const WISHLIST_BASE = (() => {
+  if (!API_BASE) return "https://test.amrita-fashions.com/shopy";
+  if (/\/api$/i.test(API_BASE)) return API_BASE.replace(/\/api$/i, "");
+  if (/\/shopy$/i.test(API_BASE)) return API_BASE;
+  return `${API_BASE}/shopy`;
+})();
 
-/** PUT all ids to server */
-async function putAll(userId, ids) {
-  const API_BASE = getApiBase();
-  const url = `${API_BASE}/wishlist/${encodeURIComponent(userId)}`;
+/* ------------------------------- GET ------------------------------- */
+/** GET /shopy/wishlist/:userId  -> returns array of {_id,...} or ids */
+export const fetchWishlist = createAsyncThunk(
+  "wishlist/fetchWishlist",
+  async (userId, { rejectWithValue }) => {
+    try {
+      if (!userId) return [];
+      const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
+      const res = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
+      const data = await res.json();
+
+      // Expected shape: { success, data: { products: [ {_id,...} ] } }
+      if (Array.isArray(data?.data?.products)) return data.data.products;
+
+      // Fallback shapes:
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.items)) return data.items;
+      if (Array.isArray(data?.data?.items)) return data.data.items;
+
+      const idsA = data?.data?.productIds;
+      const idsB = data?.productIds;
+      if (Array.isArray(idsA)) return idsA.map((x) => ({ _id: x?._id || x?.id || x }));
+      if (Array.isArray(idsB)) return idsB.map((x) => ({ _id: x?._id || x?.id || x }));
+
+      return [];
+    } catch (e) {
+      return rejectWithValue(e.message || "Failed to fetch wishlist");
+    }
+  }
+);
+
+/* ------------------------------- PUT ------------------------------- */
+/** PUT /shopy/wishlist/:userId  body: { userId, productIds } */
+async function putWishlistIds(userId, productIds) {
+  const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
   const res = await fetch(url, {
     method: "PUT",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, productIds: ids }),
+    body: JSON.stringify({ userId, productIds }),
   });
-  if (!res.ok) throw new Error(`PUT wishlist failed ${res.status}`);
-  return res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`PUT wishlist ${res.status}`);
+  return res.json();
 }
 
-/** GET server wishlist (array of products or ids) */
-export const fetchWishlist = createAsyncThunk(
-  "wishlist/fetchWishlist",
-  async ({ userId }, { rejectWithValue }) => {
-    try {
-      const API_BASE = getApiBase();
-      const url = `${API_BASE}/wishlist/${encodeURIComponent(userId)}`;
-      const res = await fetch(url, { method: "GET", credentials: "include", headers: { Accept: "application/json" } });
-      if (!res.ok) throw new Error(`GET wishlist failed ${res.status}`);
-      const data = await res.json();
-      // normalize to array of { _id }
-      let list =
-        (Array.isArray(data?.data?.products) && data?.data?.products) ||
-        (Array.isArray(data?.items) && data.items) ||
-        (Array.isArray(data) && data) ||
-        [];
-      return list;
-    } catch (e) {
-      return rejectWithValue(e?.message || "Failed to fetch wishlist");
-    }
-  }
-);
+/* Toggle helper to find product id */
+const getPid = (x) => x?._id || x?.id || x?.product?._id || x?.productId || x?.product || x;
 
-/** TOGGLE one product id, sync full list with PUT */
+/** Toggle an item in wishlist (server is source of truth; optimistic) */
 export const toggleWishlistItem = createAsyncThunk(
   "wishlist/toggleWishlistItem",
-  async ({ userId, productId }, { getState, rejectWithValue }) => {
+  async ({ userId, product }, { getState, rejectWithValue }) => {
     try {
-      if (!userId) throw new Error("Missing userId");
-      if (!productId) throw new Error("Missing productId");
-
+      if (!userId) throw new Error("Not logged in");
       const state = getState();
-      const curr = state?.wishlist?.wishlist || [];
-      const ids = new Set(curr.map(pickId).filter(Boolean).map(String));
+      const current = state.wishlist?.wishlist || [];
+      const pid = String(getPid(product));
+      if (!pid) throw new Error("Product ID missing");
 
-      let actionMsg;
-      if (ids.has(String(productId))) {
-        ids.delete(String(productId));
-        actionMsg = "removed from wishlist";
+      const exists = current.some((it) => String(getPid(it)) === pid);
+      let nextList;
+
+      if (exists) {
+        nextList = current.filter((it) => String(getPid(it)) !== pid);
       } else {
-        ids.add(String(productId));
-        actionMsg = "added to wishlist";
+        // store minimal product doc (id + some label fields) for local UI
+        const title =
+          product?.title ||
+          product?.name ||
+          product?.product?.name ||
+          product?.seoTitle ||
+          "Product";
+        const item = { ...product, _id: pid, id: pid, title };
+        nextList = [...current, item];
       }
 
-      await putAll(userId, Array.from(ids));
-      return { productId: String(productId), actionMsg };
+      // Always push only IDs to server
+      const productIds = nextList.map((it) => getPid(it)).filter(Boolean);
+      await putWishlistIds(userId, productIds);
+
+      // Fire UI toast
+      if (exists) {
+        notifyError("Removed from wishlist");
+      } else {
+        notifySuccess("Added to wishlist");
+      }
+
+      // Return full next list to reducer (keep local docs for rendering)
+      return nextList;
     } catch (e) {
-      return rejectWithValue(e?.message || "Toggle wishlist failed");
+      return rejectWithValue(e.message || "Failed to update wishlist");
     }
   }
 );
 
+/* ------------------------------ DELETE ----------------------------- */
+/** DELETE /shopy/wishlist/:userId/product/:productId */
+export const removeWishlistItem = createAsyncThunk(
+  "wishlist/removeWishlistItem",
+  async ({ userId, productId, title }, { getState, rejectWithValue }) => {
+    try {
+      if (!userId) throw new Error("Not logged in");
+
+      const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(
+        userId
+      )}/product/${encodeURIComponent(productId)}`;
+      const res = await fetch(url, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error(`DELETE wishlist ${res.status}`);
+
+      notifyError(`${title || "Item"} removed from wishlist`);
+
+      // Build the new list locally
+      const current = getState().wishlist?.wishlist || [];
+      const next = current.filter((it) => String(getPid(it)) !== String(productId));
+      return next;
+    } catch (e) {
+      return rejectWithValue(e.message || "Failed to remove from wishlist");
+    }
+  }
+);
+
+/* ------------------------------- Slice ----------------------------- */
 const initialState = {
-  wishlist: [],
+  wishlist: [],     // array of product docs (local for UI; server persists IDs)
   loading: false,
   error: null,
 };
 
-const wishlistSlice = createSlice({
+export const wishlistSlice = createSlice({
   name: "wishlist",
   initialState,
   reducers: {
-    remove_wishlist_product: (state, { payload }) => {
-      const pid = String(pickId(payload));
-      state.wishlist = (state.wishlist || []).filter((it) => String(pickId(it)) !== pid);
-      notifyError(`${payload?.title || "Item"} removed from wishlist`);
+    // In case you want a plain setter (rarely needed now)
+    set_wishlist(state, { payload }) {
+      state.wishlist = Array.isArray(payload) ? payload : [];
     },
-    // optional: clear, hydrate, etc.
+    clear_wishlist(state) {
+      state.wishlist = [];
+      state.error = null;
+      state.loading = false;
+    },
   },
   extraReducers: (builder) => {
     builder
+      // fetch
       .addCase(fetchWishlist.pending, (state) => {
-        state.loading = true; state.error = null;
+        state.loading = true;
+        state.error = null;
       })
       .addCase(fetchWishlist.fulfilled, (state, { payload }) => {
         state.loading = false;
-        state.wishlist = Array.isArray(payload) ? payload : [];
+        // payload may be ids only; normalize to docs with _id
+        state.wishlist = (Array.isArray(payload) ? payload : []).map((x) => {
+          const id = getPid(x);
+          return typeof x === "object" ? { ...x, _id: id, id } : { _id: id, id };
+        });
       })
       .addCase(fetchWishlist.rejected, (state, { payload }) => {
-        state.loading = false; state.error = payload || "Failed to load wishlist";
+        state.loading = false;
+        state.error = payload || "Failed fetching wishlist";
+      })
+      // toggle
+      .addCase(toggleWishlistItem.pending, (state) => {
+        state.error = null;
       })
       .addCase(toggleWishlistItem.fulfilled, (state, { payload }) => {
-        const { productId, actionMsg } = payload || {};
-        const idx = state.wishlist.findIndex((x) => String(pickId(x)) === String(productId));
-        if (idx === -1) {
-          // keep minimal object to mark present; your UI may replace with full product later
-          state.wishlist.push({ _id: productId });
-          notifySuccess(`Item ${actionMsg}`);
-        } else {
-          const removed = state.wishlist[idx];
-          state.wishlist.splice(idx, 1);
-          notifyError(`${removed?.title || "Item"} ${actionMsg}`);
-        }
+        state.wishlist = Array.isArray(payload) ? payload : [];
       })
       .addCase(toggleWishlistItem.rejected, (state, { payload }) => {
-        state.error = payload || "Failed to update wishlist";
-        notifyError(state.error);
+        state.error = payload || "Failed updating wishlist";
+      })
+      // remove
+      .addCase(removeWishlistItem.fulfilled, (state, { payload }) => {
+        state.wishlist = Array.isArray(payload) ? payload : [];
+      })
+      .addCase(removeWishlistItem.rejected, (state, { payload }) => {
+        state.error = payload || "Failed removing wishlist item";
       });
   },
 });
 
-export const { remove_wishlist_product } = wishlistSlice.actions;
+export const { set_wishlist, clear_wishlist } = wishlistSlice.actions;
 export default wishlistSlice.reducer;

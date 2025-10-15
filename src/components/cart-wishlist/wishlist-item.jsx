@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Close } from "@/svg";
 import { add_cart_product } from "@/redux/features/cartSlice";
-import { remove_wishlist_product } from "@/redux/features/wishlist-slice";
+import { removeWishlistItem, fetchWishlist } from "@/redux/features/wishlist-slice"; // ⟵ NEW
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
 
@@ -41,55 +41,6 @@ const selectUserIdFromStore = (state) =>
   state?.auth?.userInfo?.id ||
   state?.user?.user?._id ||
   null;
-
-const readUserIdFromLocal = () => {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("userid") || localStorage.getItem("userId") || null;
-};
-
-/* ---------- server (API) ---------- */
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
-const WISHLIST_BASE = (() => {
-  if (!API_BASE) return "https://test.amrita-fashions.com/shopy";
-  if (/\/api$/i.test(API_BASE)) return API_BASE.replace(/\/api$/i, "");
-  if (/\/shopy$/i.test(API_BASE)) return API_BASE;
-  return `${API_BASE}/shopy`;
-})();
-
-/** GET /shopy/wishlist/:userId  → returns array of {_id,...} */
-async function fetchServerWishlist(userId) {
-  if (!userId) return [];
-  try {
-    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
-    const res = await fetch(url, {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
-    const data = await res.json();
-
-    // Your response shape:
-    // { success, message, data: { products: [ { _id, name } ] } }
-    if (Array.isArray(data?.data?.products)) return data.data.products;
-
-    // fallbacks for older shapes
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.items)) return data.items;
-    if (Array.isArray(data?.data?.items)) return data.data.items;
-
-    const idsA = data?.data?.productIds;
-    const idsB = data?.productIds;
-    if (Array.isArray(idsA)) return idsA.map((x) => ({ _id: x?._id || x?.id || x }));
-    if (Array.isArray(idsB)) return idsB.map((x) => ({ _id: x?._id || x?.id || x }));
-
-    return [];
-  } catch (err) {
-    console.warn("fetchServerWishlist failed", err);
-    return [];
-  }
-}
 
 /* ---------- empty-banner manager (DOM only) ---------- */
 function useEmptyBanner(listId, rowVisible, emptyText) {
@@ -156,7 +107,7 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
   return { rowRef };
 }
 
-/* ---------- Component (GET-only; server is source of truth) ---------- */
+/* ---------- Component (server is source of truth) ---------- */
 const WishlistItem = ({ product }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -164,49 +115,14 @@ const WishlistItem = ({ product }) => {
 
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
-  useSelector((state) => state.wishlist); // keep subscription
-  const userIdFromStore = useSelector(selectUserIdFromStore);
-
-  // current user id (Redux → localStorage)
-  const [userId, setUserId] = useState(() => userIdFromStore || readUserIdFromLocal());
-
-  // update userId when Redux changes or localStorage updates (other tab/system)
-  useEffect(() => {
-    setUserId(userIdFromStore || readUserIdFromLocal());
-  }, [userIdFromStore]);
-
-  useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === "userid" || e.key === "userId") {
-        setUserId(e.newValue || null);
-      }
-    };
-    const onFocus = () => setUserId(userIdFromStore || readUserIdFromLocal());
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        setUserId(userIdFromStore || readUserIdFromLocal());
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [userIdFromStore]);
+  const { wishlist, loading } = useSelector((state) => state.wishlist); // subscribe
+  const userId = useSelector(selectUserIdFromStore);
 
   const { _id, title, salesPrice } = product || {};
   const isInCart = cart_products?.find?.((item) => item?._id === _id);
 
   const [moving, setMoving] = useState(false);
   const [authModal, setAuthModal] = useState(null);
-
-  // server ids
-  const [serverIds, setServerIds] = useState(null);
-  const [loadingServer, setLoadingServer] = useState(true);
-  const [refreshTick, setRefreshTick] = useState(0);
 
   // 🔎 global search
   const { debounced: globalQuery } = useGlobalSearch(150);
@@ -231,35 +147,14 @@ const WishlistItem = ({ product }) => {
     []
   );
 
-  // GET server wishlist when userId changes or we trigger a refresh
+  // Initial fetch + refetch on focus/visibility change
   useEffect(() => {
-    let stop = false;
-    (async () => {
-      if (!userId) { setServerIds(new Set()); setLoadingServer(false); return; }
-      setLoadingServer(true);
-      const list = await fetchServerWishlist(userId);
-      if (stop) return;
+    if (!userId) return;
+    dispatch(fetchWishlist(userId));
+  }, [dispatch, userId]);
 
-      const ids = new Set(
-        (Array.isArray(list) ? list : [])
-          .map((x) => x?._id || x?.id || x)
-          .filter(Boolean)
-          .map(String)
-      );
-
-      setServerIds(ids);
-      setLoadingServer(false);
-
-      try {
-        window.dispatchEvent(new CustomEvent("wishlist-synced", { detail: { count: ids.size } }));
-      } catch(err) {console.log("error",err)}
-    })();
-    return () => { stop = true; };
-  }, [userId, refreshTick]);
-
-  // Re-fetch when window regains focus/visibility
   useEffect(() => {
-    const refetch = () => setRefreshTick((n) => n + 1);
+    const refetch = () => userId && dispatch(fetchWishlist(userId));
     const onFocus = () => refetch();
     const onVisible = () => document.visibilityState === "visible" && refetch();
     window.addEventListener("focus", onFocus);
@@ -268,7 +163,7 @@ const WishlistItem = ({ product }) => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [dispatch, userId]);
 
   const matchesQuery = useMemo(() => {
     const q = (globalQuery || "").trim();
@@ -281,11 +176,13 @@ const WishlistItem = ({ product }) => {
     return pred(product);
   }, [globalQuery, product, searchableFields]);
 
-  // Only show if server says this product is in wishlist
-  const serverReady = !loadingServer && serverIds instanceof Set;
-  const showByServer = serverReady ? serverIds.has(String(_id)) : true;
-  const hidden = !matchesQuery || !showByServer;
+  // Only show if slice says this product is in wishlist
+  const showByServer = useMemo(() => {
+    if (!Array.isArray(wishlist)) return true;
+    return wishlist.some((it) => String(it?._id) === String(_id));
+  }, [wishlist, _id]);
 
+  const hidden = !matchesQuery || !showByServer;
   const { rowRef } = useEmptyBanner("wishlist", !hidden, "No product found in wishlist");
 
   const currentUrlWithQuery = useMemo(() => {
@@ -324,33 +221,36 @@ const WishlistItem = ({ product }) => {
     pushAuthQuery("register");
   }, [pushAuthQuery]);
 
-  /* ---------- Actions (NO PUT here; UI-only changes) ---------- */
+  /* ---------- Actions (server-backed) ---------- */
   const handleAddProduct = async (prd) => {
     if (!userId) { openLogin(); return; }
     try {
       setMoving(true);
       dispatch(add_cart_product(prd));
-      dispatch(remove_wishlist_product({ title, id: _id }));
-
-      // Update UI immediately; server remains source of truth on next refetch
-      setServerIds((prev) => {
-        const s = new Set(prev || []);
-        s.delete(String(_id));
-        return s;
-      });
+      // also remove from wishlist on server
+      await dispatch(
+        removeWishlistItem({ userId, productId: String(_id), title })
+      ).unwrap();
+      // refetch to be safe
+      dispatch(fetchWishlist(userId));
+    } catch (e) {
+      console.error("Move to cart failed", e);
     } finally {
       setTimeout(() => setMoving(false), 250);
     }
   };
 
   const handleRemovePrd = async (prd) => {
-    dispatch(remove_wishlist_product(prd));
-    const id = String(prd?.id || prd?._id);
-    setServerIds((prev) => {
-      const s = new Set(prev || []);
-      s.delete(id);
-      return s;
-    });
+    if (!userId) { openLogin(); return; }
+    try {
+      await dispatch(
+        removeWishlistItem({ userId, productId: String(prd?.id || prd?._id), title: prd?.title })
+      ).unwrap();
+      dispatch(fetchWishlist(userId));
+    } catch (e) {
+      console.error("Remove failed", e);
+      alert("Failed to remove item from wishlist. Please try again.");
+    }
   };
 
   /* ---------- presentation ---------- */
@@ -389,7 +289,7 @@ const WishlistItem = ({ product }) => {
   const left4 = topFourDetails.slice(0, mid4);
   const right4 = topFourDetails.slice(mid4);
 
-  if (loadingServer && !serverIds) return null;
+  if (loading && !Array.isArray(wishlist)) return null;
 
   return (
     <>

@@ -17,7 +17,7 @@ const persistUserIdLS = (uid) => {
   if (!uid || typeof window === "undefined") return;
   try {
     localStorage.setItem("userId", uid);
-  } catch { return [];}
+  } catch  { return [];}
 };
 
 const clearUserIdLS = () => {
