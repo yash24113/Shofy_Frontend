@@ -51,9 +51,9 @@ export const fetchWishlist = createAsyncThunk(
 /* ------------------------------- PUT ------------------------------- */
 /** PUT /shopy/wishlist/:userId  body: { userId, productIds } */
 async function putWishlistIds(userId, productIds) {
-  const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
+  const url = `${WISHLIST_BASE}/wishlist/add`;
   const res = await fetch(url, {
-    method: "PUT",
+    method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userId, productIds }),
