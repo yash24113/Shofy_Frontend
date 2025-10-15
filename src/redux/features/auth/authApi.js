@@ -3,13 +3,28 @@ import { apiSlice } from "@/redux/api/apiSlice";
 import { userLoggedIn } from "./authSlice";
 import Cookies from "js-cookie";
 
-/** helpers */
-const getSessionId = (sid) => {
-  if (sid) return sid;
+/* --------------------------------- helpers --------------------------------- */
+const getUserIdLS = (uid) => {
+  if (uid) return uid;
   if (typeof window !== "undefined") {
-    return localStorage.getItem("sessionId") || "";
+    // unified: we now use localStorage 'userId' (NOT sessionStorage)
+    return localStorage.getItem("userId") || "";
   }
   return "";
+};
+
+const persistUserIdLS = (uid) => {
+  if (!uid || typeof window === "undefined") return;
+  try {
+    localStorage.setItem("userId", uid);
+  } catch { return [];}
+};
+
+const clearUserIdLS = () => {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem("userId");
+  } catch {return [];}
 };
 
 export const authApi = apiSlice.injectEndpoints({
@@ -43,7 +58,7 @@ export const authApi = apiSlice.injectEndpoints({
     }),
 
     /* ──────────────────────────────────────────
-     * Login / Session (store sessionId in localStorage)
+     * Login (store userId in localStorage)
      * ────────────────────────────────────────── */
     loginUser: builder.mutation({
       query: ({ identifier, password }) => ({
@@ -55,15 +70,18 @@ export const authApi = apiSlice.injectEndpoints({
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
           const { data } = await queryFulfilled;
-          const { user, sessionId } = data || {};
+          const { user } = data || {};
+          const userId =
+            user?._id || user?.id || data?.userId || data?.id || ""; // ← adjust if your API returns a different field
+
           if (user) {
             Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 }); // ~12h
           }
-          if (sessionId && typeof window !== "undefined") {
-            localStorage.setItem("sessionId", sessionId); // save for logout
+          if (userId) {
+            persistUserIdLS(userId);
           }
-          if (user || sessionId) {
-            dispatch(userLoggedIn({ sessionId, user }));
+          if (user || userId) {
+            dispatch(userLoggedIn({ user, userId }));
           }
         } catch (err) {
           console.error("loginUser error:", err);
@@ -90,15 +108,18 @@ export const authApi = apiSlice.injectEndpoints({
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
           const { data } = await queryFulfilled;
-          const { user, sessionId } = data || {};
+          const { user } = data || {};
+          const userId =
+            user?._id || user?.id || data?.userId || data?.id || ""; // ← adjust if needed
+
           if (user) {
             Cookies.set("userInfo", JSON.stringify({ user }), { expires: 0.5 });
           }
-          if (sessionId && typeof window !== "undefined") {
-            localStorage.setItem("sessionId", sessionId);
+          if (userId) {
+            persistUserIdLS(userId);
           }
-          if (user || sessionId) {
-            dispatch(userLoggedIn({ sessionId, user }));
+          if (user || userId) {
+            dispatch(userLoggedIn({ user, userId }));
           }
         } catch (err) {
           console.error("verifyLoginOTP error:", err);
@@ -106,36 +127,51 @@ export const authApi = apiSlice.injectEndpoints({
       },
     }),
 
-    // Fetch session details (using sessionId from localStorage)
+    /* ──────────────────────────────────────────
+     * Fetch session details (using userId in localStorage)
+     * ────────────────────────────────────────── */
     getSessionInfo: builder.query({
-      query: ({ sessionId } = {}) => {
-        const sid = getSessionId(sessionId);
-        const url = sid ? `users/session?sessionId=${encodeURIComponent(sid)}` : "users/session";
+      query: ({ userId } = {}) => {
+        const uid = getUserIdLS(userId);
+        // Prefer explicit userId param if available; fall back to cookie session
+        const url = uid
+          ? `users/session?userId=${encodeURIComponent(uid)}`
+          : "users/session";
         return { url, credentials: "include" };
       },
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
           const { data } = await queryFulfilled;
+          // normalize: server may return { session: { user } } or { user } or full user
           const user = data?.session?.user || data?.user || data;
-          if (user) dispatch(userLoggedIn({ user }));
+          const userId =
+            user?._id || user?.id || arg?.userId || getUserIdLS() || "";
+
+          if (user) {
+            // ensure userId is persisted if gleaned from API
+            if (userId) persistUserIdLS(userId);
+            dispatch(userLoggedIn({ user, userId }));
+          }
         } catch (err) {
-          console.error("getSessionInfo error:", err);
+          // Keep this silent-ish to avoid noisy console when not logged in
+          if (process.env.NODE_ENV === "development") {
+            console.warn("getSessionInfo (no active session?):", err);
+          }
         }
       },
     }),
 
     /* ──────────────────────────────────────────
-     * LOGOUT using sessionId from localStorage
-     * Calls: DELETE /users/logout/{sessionId}
+     * LOGOUT using userId from localStorage
+     * Calls: DELETE /users/logout/{userId} (preferred) or /users/logout
      * ────────────────────────────────────────── */
     logoutUser: builder.mutation({
-      query: ({ sessionId } = {}) => {
-        const sid = getSessionId(sessionId);
-        // Guard: if somehow missing, still hit /users/logout to let server clear cookie (optional)
-        const url = sid ? `users/logout/${encodeURIComponent(sid)}` : "users/logout";
+      query: ({ userId } = {}) => {
+        const uid = getUserIdLS(userId);
+        const url = uid ? `users/logout/${encodeURIComponent(uid)}` : "users/logout";
         return {
           url,
-          method: "DELETE", // change to 'POST' if your backend requires POST
+          method: "DELETE", // change to POST if your backend needs POST
           credentials: "include",
         };
       },
@@ -143,12 +179,10 @@ export const authApi = apiSlice.injectEndpoints({
         try {
           await queryFulfilled;
         } catch (err) {
-          // Even if server replies "session not found", clear local state to avoid ghost sessions
+          // Even if server replies "not found", clear local state to avoid ghost sessions
           console.warn("logoutUser server response:", err?.error || err);
         } finally {
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("sessionId");
-          }
+          clearUserIdLS();
           Cookies.remove("userInfo");
         }
       },
@@ -167,7 +201,9 @@ export const authApi = apiSlice.injectEndpoints({
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
           const { data } = await queryFulfilled;
-          dispatch(userLoggedIn({ user: data }));
+          // Keep userId from localStorage if API doesn't echo it
+          const userId = getUserIdLS();
+          dispatch(userLoggedIn({ user: data, userId }));
         } catch (err) {
           console.error("updateProfile error:", err);
         }
@@ -205,7 +241,7 @@ export const authApi = apiSlice.injectEndpoints({
   }),
 });
 
-// Export hooks
+/* --------------------------------- hooks ---------------------------------- */
 export const {
   useSendRegistrationOTPMutation,
   useVerifyOTPAndRegisterMutation,

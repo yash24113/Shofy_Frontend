@@ -7,16 +7,14 @@ import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { formatProductForCart, formatProductForWishlist } from '@/utils/authUtils';
-import { add_to_wishlist } from '@/redux/features/wishlist-slice';
 import { add_cart_product } from '@/redux/features/cartSlice';
+import { toggleWishlistItem } from '@/redux/features/wishlist-slice';
 
 import { Cart, CartActive, Wishlist, WishlistActive, QuickView, Share } from '@/svg';
-
 import { handleProductModal } from '@/redux/features/productModalSlice';
 import { useGetProductsByGroupcodeQuery } from '@/redux/features/productApi';
 import { useGetSeoByProductQuery } from '@/redux/features/seoApi';
 
-/* 🔎 add search */
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 import { buildSearchPredicate } from '@/utils/searchMiddleware';
 
@@ -49,8 +47,7 @@ const uniq = (arr) => {
 };
 const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
 
-/* ---- user + storage helpers ---- */
-const getSessionId = () => (typeof window !== 'undefined' && localStorage.getItem('sessionId')) || null;
+/* ---- user helpers ---- */
 const selectUserIdFromStore = (state) =>
   state?.auth?.user?._id ||
   state?.auth?.user?.id ||
@@ -58,63 +55,10 @@ const selectUserIdFromStore = (state) =>
   state?.auth?.userInfo?.id ||
   state?.user?.user?._id ||
   null;
+
 const getUserIdFromLocal = () => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('userid') || localStorage.getItem('userId') || null;
-};
-
-/* ---- API helpers (PUT here) ---- */
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
-const WISHLIST_BASE = (() => {
-  if (!API_BASE) return 'https://test.amrita-fashions.com/shopy';
-  if (/\/api$/i.test(API_BASE)) return API_BASE.replace(/\/api$/i, '');
-  if (/\/shopy$/i.test(API_BASE)) return API_BASE;
-  return `${API_BASE}/shopy`;
-})();
-
-/** PUT /shopy/wishlist/:userId with { userId, productIds } */
-async function pushServerWishlist(userId, itemsOrIds) {
-  if (!userId) return false;
-  try {
-    const productIds =
-      Array.isArray(itemsOrIds)
-        ? (typeof itemsOrIds[0] === 'string'
-            ? itemsOrIds
-            : itemsOrIds.map((x) => x?._id || x?.id).filter(Boolean))
-        : [];
-    const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
-    const res = await fetch(url, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, productIds }),
-    });
-    return res.ok;
-  } catch (e) {
-    console.warn('pushServerWishlist failed', e);
-    return false;
-  }
-}
-
-/* local wishlist_items read/write (as in your screenshot) */
-const WISHLIST_ITEMS_KEY = 'wishlist_items';
-const readWishlistItemsLocal = () => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(WISHLIST_ITEMS_KEY);
-    const val = raw ? JSON.parse(raw) : [];
-    return Array.isArray(val) ? val : [];
-  } catch {
-    return [];
-  }
-};
-const writeWishlistItemsLocal = (items) => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(WISHLIST_ITEMS_KEY, JSON.stringify(items || []));
-  } catch (e) {
-    console.log('localStorage write error', e);
-  }
+  return localStorage.getItem('userId') || localStorage.getItem('userid') || null;
 };
 
 const ProductItem = ({ product }) => {
@@ -122,7 +66,6 @@ const ProductItem = ({ product }) => {
   const rainbowId = useId();
   const dispatch = useDispatch();
 
-  /* 🔎 read global query (debounced) */
   const { debounced: q } = useGlobalSearch();
 
   const [showActions, setShowActions] = useState(false);
@@ -134,9 +77,30 @@ const ProductItem = ({ product }) => {
     }
   }, []);
 
-  // userId for PUT
-  const userIdFromStore = useSelector(selectUserIdFromStore);
-  const userId = userIdFromStore || getUserIdFromLocal();
+  // 1) Read Redux userId
+  const reduxUserId = useSelector(selectUserIdFromStore);
+
+  // 2) Fallback to localStorage while Redux hydrates
+  const [localUserId, setLocalUserId] = useState(() => getUserIdFromLocal());
+
+  // Keep local fallback in sync if user logs in/out in another tab or later in the session
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === 'userId' || e.key === 'userid') {
+        setLocalUserId(getUserIdFromLocal());
+      }
+    };
+    const onFocus = () => setLocalUserId(getUserIdFromLocal());
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+
+  // 3) Effective userId
+  const userId = reduxUserId || localUserId;
 
   // act immediately
   const handleAddProduct = (prd, e) => {
@@ -144,24 +108,22 @@ const ProductItem = ({ product }) => {
     dispatch(add_cart_product(formatProductForCart(prd)));
   };
 
+  // server-backed toggle (PUT)
   const handleWishlistProduct = async (prd, e) => {
-    e?.stopPropagation?.(); e?.preventDefault?.();
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
 
-    // 1) update Redux/UI
+    // If we still don't have a userId, go to login
+    if (!userId) {
+      router.push('/login');
+      return;
+    }
+
     const formatted = formatProductForWishlist(prd);
-    dispatch(add_to_wishlist(formatted));
-
-    // 2) update localStorage `wishlist_items` (the key shown in your screenshot)
-    const curr = readWishlistItemsLocal();
-    const nextMap = new Map(curr.map((x) => [String(x?._id || x?.id), x]));
-    nextMap.set(String(formatted?._id || formatted?.id), { _id: formatted?._id || formatted?.id, ...formatted });
-    const next = Array.from(nextMap.values());
-    writeWishlistItemsLocal(next);
-
-    // 3) PUSH to server (PUT) using the ids from localStorage wishlist_items
-    const idsForPut = next.map((x) => x?._id || x?.id).filter(Boolean);
-    if (userId && idsForPut.length) {
-      await pushServerWishlist(userId, idsForPut);
+    try {
+      await dispatch(toggleWishlistItem({ userId, product: formatted })).unwrap();
+    } catch (err) {
+      console.error('Wishlist toggle failed:', err);
     }
   };
 
@@ -255,27 +217,6 @@ const ProductItem = ({ product }) => {
     categoryLabel &&
     String(categoryLabel).trim().toLowerCase() !== String(fabricTypeVal).trim().toLowerCase();
 
-  /* Share */
-  const handleShare = async (_prd, e) => {
-    e?.stopPropagation?.(); e?.preventDefault?.();
-    try {
-      const url =
-        (typeof window !== 'undefined'
-          ? `${window.location.origin}/fabric/${slug}`
-          : `/fabric/${slug}`);
-      const title = typeof titleHtml === 'string' ? titleHtml : 'Fabric';
-      const text = 'Check out this fabric on Amrita Global Enterprises';
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({ title, text, url });
-      } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
-        alert('Link copied!');
-      } else {
-        prompt('Copy link', url);
-      }
-    } catch(err) {console.log("error",err)}
-  };
-
   /* select from slices */
   const cartItems = useSelector((s) => s.cart?.cart_products || []);
   const wishlistItems = useSelector((s) => s.wishlist?.wishlist || []);
@@ -336,7 +277,6 @@ const ProductItem = ({ product }) => {
               </div>
             </Link>
 
-            {/* centered options ribbon */}
             {showOptionsBadge && (
               <button
                 type="button"
@@ -383,10 +323,41 @@ const ProductItem = ({ product }) => {
                 {inWishlist ? <WishlistActive /> : <Wishlist />}
               </button>
 
-              <button type="button" onClick={(e) => handleShare(product, e)} className="action-button" aria-label="Share product" title="Share">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e?.stopPropagation?.(); e?.preventDefault?.();
+                  const url = (typeof window !== 'undefined'
+                    ? `${window.location.origin}/fabric/${slug}`
+                    : `/fabric/${slug}`);
+                  const title = typeof titleHtml === 'string' ? titleHtml : 'Fabric';
+                  const text = 'Check out this fabric on Amrita Global Enterprises';
+                  (async () => {
+                    try {
+                      if (navigator?.share) await navigator.share({ title, text, url });
+                      else if (navigator?.clipboard) {
+                        await navigator.clipboard.writeText(url);
+                        alert('Link copied!');
+                      } else {
+                        prompt('Copy link', url);
+                      }
+                    } catch {return [];}
+                  })();
+                }}
+                className="action-button"
+                aria-label="Share product"
+                title="Share"
+              >
                 <Share />
               </button>
-              <button type="button" onClick={(e) => openQuickView(product, e)} className="action-button" aria-label="Quick view" title="Quick view">
+
+              <button
+                type="button"
+                onClick={(e) => openQuickView(product, e)}
+                className="action-button"
+                aria-label="Quick view"
+                title="Quick view"
+              >
                 <QuickView />
               </button>
             </div>
@@ -423,7 +394,6 @@ const ProductItem = ({ product }) => {
         </div>
       </div>
 
-      {/* styles unchanged … */}
       <style jsx>{`
         :global(.products-grid){ display:flex; flex-wrap:wrap; gap:24px; margin:0; }
         :global(.products-grid .product-col){ flex:1 1 calc(25% - 24px); max-width:calc(25% - 24px); }
@@ -450,7 +420,7 @@ const ProductItem = ({ product }) => {
 
         .options-ribbon{ position:absolute; left:50%; transform:translateX(-50%); bottom:10px; border:0; background:transparent; cursor:pointer; z-index:3; }
         .ribbon-inner{ display:flex; align-items:center; gap:8px; height:clamp(22px, 5.2vw, 30px); padding:0 clamp(8px, 2.2vw, 14px); border-radius:999px; background:rgba(255,255,255,0.28); backdrop-filter:blur(8px) saturate(180%); border:1px solid rgba(255,255,255,0.28); box-shadow:0 4px 10px rgba(0,0,0,0.10); transition:all .2s ease; }
-        .options-ribbon:hover .ribbon-inner{ background:rgba(255,255,255,0.45); }
+        .ribbon-inner:hover{ background:rgba(255,255,255,0.45); }
         .ribbon-icon{ display:inline-grid; place-items:center; width:clamp(16px, 4.5vw, 20px); height:clamp(16px, 4.5vw, 20px); }
         .badge-icon{ width:100%; height:100%; display:block; filter:drop-shadow(0 0 2px rgba(255,255,255,0.9)); }
         .ribbon-text{ font-size:clamp(12px, 3.2vw, 14px); font-weight:600; color:#111827; letter-spacing:.2px; line-height:1; }
