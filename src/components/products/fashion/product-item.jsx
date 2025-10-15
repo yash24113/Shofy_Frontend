@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useId, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useId, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -61,6 +61,21 @@ const getUserIdFromLocal = () => {
   return localStorage.getItem('userid') || localStorage.getItem('userId') || null;
 };
 
+/* --- normalize any form of userId to a 24-hex string for API --- */
+const normalizeUserId = (raw) => {
+  if (!raw) return null;
+  if (typeof raw === 'object') {
+    // handle { $oid: "..." } or {_id: "..."}
+    const maybe = raw.$oid || raw._id || raw.id;
+    return normalizeUserId(maybe);
+  }
+  const s = String(raw).trim();
+  const wrapped = s.match(/ObjectId\(['"]?([0-9a-fA-F]{24})['"]?\)/);
+  if (wrapped) return wrapped[1];
+  const hex = s.match(/^[0-9a-fA-F]{24}$/);
+  return hex ? hex[0] : s; // last resort: send as-is; server may accept
+};
+
 /* ---- API helpers ---- */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
 const WISHLIST_BASE = (() => {
@@ -71,9 +86,12 @@ const WISHLIST_BASE = (() => {
 })();
 
 /** Prefer POST add-one if your API supports it; otherwise falls back to GET+PUT merge */
-async function addOneToWishlist(userId, productId) {
+async function addOneToWishlist(userIdRaw, productId) {
+  const userId = normalizeUserId(userIdRaw);
+  if (!userId) return false;
+
   try {
-    // try POST (idempotent add one)
+    // try POST (idempotent single add)
     const post = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
       method: 'POST',
       credentials: 'include',
@@ -81,9 +99,9 @@ async function addOneToWishlist(userId, productId) {
       body: JSON.stringify({ productId }),
     });
     if (post.ok) return true;
-  } catch { return [];}
+  } catch { return [];} // ignore and fall back
 
-  // fallback: GET + merge + PUT
+  // fallback: GET -> merge -> PUT
   try {
     const getRes = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
       method: 'GET',
@@ -131,9 +149,10 @@ const ProductItem = ({ product }) => {
     }
   }, []);
 
-  // userId
+  // userId (store or local) -> normalized for API use
   const userIdFromStore = useSelector(selectUserIdFromStore);
-  const userId = userIdFromStore || getUserIdFromLocal();
+  const rawUserId = userIdFromStore || getUserIdFromLocal();
+  const apiUserId = normalizeUserId(rawUserId);
 
   // slices
   const cartItems = useSelector((s) => s.cart?.cart_products || []);
@@ -153,7 +172,7 @@ const ProductItem = ({ product }) => {
   const handleWishlistProduct = async (prd, e) => {
     e?.stopPropagation?.(); e?.preventDefault?.();
 
-    if (!userId) {
+    if (!apiUserId) {
       // redirect to login and come back
       try {
         const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
@@ -165,12 +184,10 @@ const ProductItem = ({ product }) => {
       return;
     }
 
-    const ok = await addOneToWishlist(userId, productId);
+    const ok = await addOneToWishlist(apiUserId, productId);
     if (ok) {
-      // update UI (redux) — store decides dedupe
       dispatch(add_to_wishlist(formatProductForWishlist({ _id: productId, id: productId, ...prd })));
     } else {
-      // optional toast
       console.warn('Failed to add to wishlist');
     }
   };
@@ -363,24 +380,30 @@ const ProductItem = ({ product }) => {
               <button type="button" onClick={(e) => openQuickView(product, e)} className="action-button" aria-label="Quick view" title="Quick view">
                 <QuickView />
               </button>
-              <button type="button" onClick={(e) => {
-                e?.stopPropagation?.(); e?.preventDefault?.();
-                try {
-                  const url = typeof window !== 'undefined' ? `${window.location.origin}/fabric/${slug}` : `/fabric/${slug}`;
-                  const title = typeof titleHtml === 'string' ? titleHtml : 'Fabric';
-                  const text = 'Check out this fabric on Amrita Global Enterprises';
-                  if (typeof navigator !== 'undefined' && navigator.share) navigator.share({ title, text, url });
-                  else if (navigator?.clipboard) { navigator.clipboard.writeText(url); alert('Link copied!'); }
-                  else { prompt('Copy link', url); }
-                } catch { return [];}
-              }} className="action-button" aria-label="Share product" title="Share">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e?.stopPropagation?.(); e?.preventDefault?.();
+                  try {
+                    const url = typeof window !== 'undefined' ? `${window.location.origin}/fabric/${slug}` : `/fabric/${slug}`;
+                    const ttl = typeof titleHtml === 'string' ? titleHtml : 'Fabric';
+                    const text = 'Check out this fabric on Amrita Global Enterprises';
+                    if (typeof navigator !== 'undefined' && navigator.share) navigator.share({ title: ttl, text, url });
+                    else if (navigator?.clipboard) { navigator.clipboard.writeText(url); alert('Link copied!'); }
+                    else { prompt('Copy link', url); }
+                  } catch { return; }
+                }}
+                className="action-button"
+                aria-label="Share product"
+                title="Share"
+              >
                 <Share />
               </button>
             </div>
           </div>
 
           <div className="product-info">
-            {categoryLabel && String(categoryLabel).trim().toLowerCase() !== String(fabricTypeVal).trim().toLowerCase()
+            {categoryLabel && String(categoryLabel).trim().toLowerCase() !== String(toText(pick(product?.fabricType, product?.fabric_type, seoDoc?.fabricType)) || 'Woven Fabrics').trim().toLowerCase()
               ? <div className="product-category">{categoryLabel}</div>
               : null}
 
@@ -390,45 +413,51 @@ const ProductItem = ({ product }) => {
               </Link>
             </h3>
 
-            {details.length ? (
-              <div className="spec-columns">
-                <ul className="spec-col">
-                  {leftDetails.map((v, i) => (
-                    <li key={i} className="spec-row" title={v}>
-                      <span className="spec-value">{v}</span>
-                    </li>
-                  ))}
-                </ul>
-                <ul className="spec-col">
-                  {rightDetails.map((v, i) => (
-                    <li key={i} className="spec-row" title={v}>
-                      <span className="spec-value">{v}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            {(() => {
+              const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type, seoDoc?.fabricType)) || 'Woven Fabrics';
+              const contentVal = toText(pick(product?.content, product?.contentName, product?.content_label, seoDoc?.content));
+              const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
+              const weightVal = isFinite(gsm) && gsm > 0 ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz` : toText(product?.weight);
+              const designVal = toText(pick(product?.design, product?.designName, seoDoc?.design));
+              const colorsVal = toText(pick(product?.colors, product?.color, product?.colorName, seoDoc?.colors));
+              const widthCm = Number(pick(product?.widthCm, product?.width_cm, product?.width));
+              const widthVal = isFinite(widthCm) && widthCm > 0 ? `${round(widthCm,0)} cm / ${round(cmToInch(widthCm),0)} inch` : toText(product?.widthLabel);
+              const finishVal = toText(pick(product?.finish, product?.subfinish?.name, product?.finishName, seoDoc?.finish));
+              const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName, seoDoc?.structure));
+              const motifVal = toText(pick(product?.motif, product?.motifName, seoDoc?.motif));
+              const leadTimeVal = toText(pick(product?.leadTime, product?.lead_time, seoDoc?.leadTime));
+              const details = uniq([fabricTypeVal, contentVal, weightVal, designVal, colorsVal, widthVal, finishVal, structureVal, motifVal, leadTimeVal]
+                .filter((v) => nonEmpty(v) && !isNoneish(v)));
+              if (!details.length) return null;
+              const mid = Math.ceil(details.length / 2);
+              return (
+                <div className="spec-columns">
+                  <ul className="spec-col">
+                    {details.slice(0, mid).map((v, i) => (
+                      <li key={i} className="spec-row" title={v}><span className="spec-value">{v}</span></li>
+                    ))}
+                  </ul>
+                  <ul className="spec-col">
+                    {details.slice(mid).map((v, i) => (
+                      <li key={i} className="spec-row" title={v}><span className="spec-value">{v}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
 
-      {/* styles unchanged … */}
       <style jsx>{`
         :global(.products-grid){ display:flex; flex-wrap:wrap; gap:24px; margin:0; }
         :global(.products-grid .product-col){ flex:1 1 calc(25% - 24px); max-width:calc(25% - 24px); }
         @media (max-width:991px){ :global(.products-grid .product-col){ flex:1 1 calc(50% - 24px); max-width:calc(50% - 24px); } }
         @media (max-width:575px){ :global(.products-grid .product-col){ flex:1 1 100%; max-width:100%; } }
 
-        .fashion-product-card{
-          --primary:#0f172a; --muted:#6b7280; --accent:#7c3aed;
-          --success:#10b981; --danger:#ef4444; --maroon:#800000;
-          --card-bg:#fff; --card-border:rgba(17,24,39,.12); --inner-border:rgba(17,24,39,.08);
-          --shadow-sm:0 1px 2px rgba(0,0,0,.04);
-          position:relative; width:100%; height:100%;
-          transition:transform .3s ease-out, box-shadow .3s ease-out;
-        }
+        .fashion-product-card{ --primary:#0f172a; --maroon:#800000; position:relative; width:100%; height:100%; transition:transform .3s ease-out, box-shadow .3s ease-out; }
         .fashion-product-card:hover{ transform:translateY(-2px); }
-        .card-wrapper{ background:var(--card-bg); border:2px solid var(--card-border); border-radius:14px; overflow:hidden; box-shadow:var(--shadow-sm); }
+        .card-wrapper{ background:#fff; border:2px solid rgba(17,24,39,.12); border-radius:14px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.04); }
 
         .product-image-container{ position:relative; aspect-ratio:1/1; min-height:220px; overflow:hidden; }
         .image-link{ display:block; height:100%; }
@@ -438,11 +467,8 @@ const ProductItem = ({ product }) => {
         .image-overlay{ position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,.16) 0%, transparent 40%); z-index:1; }
 
         .options-ribbon{ position:absolute; left:50%; transform:translateX(-50%); bottom:10px; border:0; background:transparent; cursor:pointer; z-index:3; }
-        .ribbon-inner{ display:flex; align-items:center; gap:8px; height:clamp(22px, 5.2vw, 30px); padding:0 clamp(8px, 2.2vw, 14px); border-radius:999px; background:rgba(255,255,255,0.28); backdrop-filter:blur(8px) saturate(180%); border:1px solid rgba(255,255,255,0.28); box-shadow:0 4px 10px rgba(0,0,0,0.10); transition:all .2s ease; }
-        .ribbon-inner:hover{ background:rgba(255,255,255,0.45); }
-        .ribbon-icon{ display:inline-grid; place-items:center; width:clamp(16px, 4.5vw, 20px); height:clamp(16px, 4.5vw, 20px); }
-        .badge-icon{ width:100%; height:100%; display:block; filter:drop-shadow(0 0 2px rgba(255,255,255,0.9)); }
-        .ribbon-text{ font-size:clamp(12px, 3.2vw, 14px); font-weight:600; color:#111827; letter-spacing:.2px; line-height:1; }
+        .ribbon-inner{ display:flex; align-items:center; gap:8px; height:clamp(22px, 5.2vw, 30px); padding:0 clamp(8px, 2.2vw, 14px); border-radius:999px; background:rgba(255,255,255,0.28); backdrop-filter:blur(8px) saturate(180%); border:1px solid rgba(255,255,255,0.28); box-shadow:0 4px 10px rgba(0,0,0,0.10); }
+        .ribbon-text{ font-size:clamp(12px, 3.2vw, 14px); font-weight:600; color:#111827; }
         .ribbon-text strong{ font-weight:800; margin-right:4px; }
 
         .product-actions{ position:absolute; top:12px; right:12px; display:flex; flex-direction:column; gap:8px; opacity:0; transform:translateY(-6px); transition:opacity .25s ease, transform .25s ease; z-index:3; }
@@ -461,7 +487,7 @@ const ProductItem = ({ product }) => {
         .action-button.wishlist-active{ background:#fef2f2; border-color:rgba(239,68,68,.35); }
         .action-button.wishlist-active :global(svg){ color:#ef4444; }
 
-        .product-info{ padding:18px 12px 12px; border-top:1px solid var(--inner-border); background:#fff; }
+        .product-info{ padding:18px 12px 12px; border-top:1px solid rgba(17,24,39,.08); background:#fff; }
         .product-category{ font-size:11px; font-weight:600; color:#6b7280; margin-bottom:4px; }
         .product-title{ font-family:'Montserrat',system-ui,Arial,sans-serif; font-size:clamp(14px,1.9vw,16px); font-weight:700; line-height:1.22; color:#111827; margin:0 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
         .product-title :global(a){ color:inherit; text-decoration:none; }

@@ -31,6 +31,20 @@ const isNoneish = (s) => {
   return ['none', 'na', 'none/ na', 'none / na', 'n/a', '-'].includes(t);
 };
 
+/* ---------- userId normalize ---------- */
+const normalizeUserId = (raw) => {
+  if (!raw) return null;
+  if (typeof raw === 'object') {
+    const maybe = raw.$oid || raw._id || raw.id;
+    return normalizeUserId(maybe);
+  }
+  const s = String(raw).trim();
+  const wrapped = s.match(/ObjectId\(['"]?([0-9a-fA-F]{24})['"]?\)/);
+  if (wrapped) return wrapped[1];
+  const hex = s.match(/^[0-9a-fA-F]{24}$/);
+  return hex ? hex[0] : s;
+};
+
 /* ---------- server (API) ---------- */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
 const WISHLIST_BASE = (() => {
@@ -40,8 +54,9 @@ const WISHLIST_BASE = (() => {
   return `${API_BASE}/shopy`;
 })();
 
-/** GET /wishlist/:userId → returns product objects (or ids); normalize to ids Set and list */
-async function fetchServerWishlist(userId) {
+/** GET /wishlist/:userId → normalize to { ids:Set, items:[] } */
+async function fetchServerWishlist(userIdRaw) {
+  const userId = normalizeUserId(userIdRaw);
   if (!userId) return { ids: new Set(), items: [] };
   try {
     const url = `${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`;
@@ -49,14 +64,17 @@ async function fetchServerWishlist(userId) {
     if (!res.ok) throw new Error(`GET wishlist ${res.status}`);
     const data = await res.json();
 
-    // Preferred: { data: { products: [ { _id, ... } ] } }
     const arr = Array.isArray(data?.data?.products)
       ? data.data.products
       : Array.isArray(data?.items)
         ? data.items
-        : Array.isArray(data)
-          ? data
-          : [];
+        : Array.isArray(data?.data?.productIds)
+          ? data.data.productIds.map((x) => ({ _id: x?._id || x?.id || x }))
+          : Array.isArray(data?.productIds)
+            ? data.productIds.map((x) => ({ _id: x?._id || x?.id || x }))
+            : Array.isArray(data)
+              ? data
+              : [];
 
     const ids = new Set(arr.map((x) => String(x?._id || x?.id || x)).filter(Boolean));
     return { ids, items: arr };
@@ -67,14 +85,18 @@ async function fetchServerWishlist(userId) {
 }
 
 /** Prefer DELETE one if supported; else PUT with merged list */
-async function removeOneFromWishlist(userId, productId) {
+async function removeOneFromWishlist(userIdRaw, productId) {
+  const userId = normalizeUserId(userIdRaw);
+  if (!userId) return false;
+
   try {
+    // try DELETE /wishlist/:userId/product/:productId
     const del = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}/product/${encodeURIComponent(productId)}`, {
       method: 'DELETE',
       credentials: 'include'
     });
     if (del.ok) return true;
-  } catch { return [];}
+  } catch {return [];}
 
   // fallback: GET -> filter -> PUT
   try {
@@ -167,16 +189,16 @@ const WishlistItem = ({ product }) => {
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
 
-  const [userId, setUserId] = useState(() => readUserIdFromLocal());
-  const [authModal, setAuthModal] = useState(null);
+  const [rawUserId, setRawUserId] = useState(() => readUserIdFromLocal());
+  const apiUserId = normalizeUserId(rawUserId);
 
   // keep userId in sync
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === 'userid' || e.key === 'userId') setUserId(e.newValue || null);
+      if (e.key === 'userid' || e.key === 'userId') setRawUserId(e.newValue || null);
     };
-    const onFocus = () => setUserId(readUserIdFromLocal());
-    const onVisible = () => { if (document.visibilityState === 'visible') setUserId(readUserIdFromLocal()); };
+    const onFocus = () => setRawUserId(readUserIdFromLocal());
+    const onVisible = () => { if (document.visibilityState === 'visible') setRawUserId(readUserIdFromLocal()); };
     window.addEventListener('storage', onStorage);
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisible);
@@ -188,9 +210,8 @@ const WishlistItem = ({ product }) => {
   }, []);
 
   const { _id, title, salesPrice } = product || {};
-  const isInCart = cart_products?.find?.((item) => item?._id === _id);
 
-  // server state (ids only are enough to decide visibility)
+  // server state
   const [serverIds, setServerIds] = useState(null);
   const [loadingServer, setLoadingServer] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -214,19 +235,19 @@ const WishlistItem = ({ product }) => {
     (p) => p?.sku,
   ], []);
 
-  // GET server wishlist when userId changes or we trigger a refresh
+  // GET server wishlist when userId changes or refresh triggered
   useEffect(() => {
     let stop = false;
     (async () => {
-      if (!userId) { setServerIds(new Set()); setLoadingServer(false); return; }
+      if (!apiUserId) { setServerIds(new Set()); setLoadingServer(false); return; }
       setLoadingServer(true);
-      const list = await fetchServerWishlist(userId);
+      const list = await fetchServerWishlist(apiUserId);
       if (stop) return;
       setServerIds(list.ids);
       setLoadingServer(false);
     })();
     return () => { stop = true; };
-  }, [userId, refreshTick]);
+  }, [apiUserId, refreshTick]);
 
   // refetch on focus/visible
   useEffect(() => {
@@ -250,7 +271,7 @@ const WishlistItem = ({ product }) => {
 
   // Only show if server says this product is in wishlist
   const serverReady = !loadingServer && serverIds instanceof Set;
-  const showByServer = serverReady ? serverIds.has(String(_id)) : true;
+  const showByServer = serverReady ? serverIds.has(String(_id)) : false; // strict: show only if server says yes
   const hidden = !matchesQuery || !showByServer;
 
   const { rowRef } = useEmptyBanner('wishlist', !hidden, 'No product found in wishlist');
@@ -274,16 +295,13 @@ const WishlistItem = ({ product }) => {
     router.push(qs ? `${url.pathname}?${qs}` : url.pathname, { scroll: false });
   }, [currentUrlWithQuery, router]);
 
-  const closeAuth = useCallback(() => { setAuthModal(null); pushAuthQuery(null); }, [pushAuthQuery]);
-  const openLogin = useCallback(() => { setAuthModal('login'); pushAuthQuery('login'); }, [pushAuthQuery]);
-  const openRegister = useCallback(() => { setAuthModal('register'); pushAuthQuery('register'); }, [pushAuthQuery]);
+  const openLogin = useCallback(() => { pushAuthQuery('login'); }, [pushAuthQuery]);
 
   /* ---------- Actions ---------- */
   const handleAddProduct = async (prd) => {
-    if (!userId) { openLogin(); return; }
+    if (!apiUserId) { openLogin(); return; }
     dispatch(add_cart_product(prd));
-    // optionally remove from wishlist on move-to-cart (server + UI)
-    await removeOneFromWishlist(userId, prd?._id || prd?.id);
+    await removeOneFromWishlist(apiUserId, prd?._id || prd?.id);
     setServerIds((prev) => {
       const s = new Set(prev || []);
       s.delete(String(prd?._id || prd?.id));
@@ -293,9 +311,9 @@ const WishlistItem = ({ product }) => {
   };
 
   const handleRemovePrd = async (prd) => {
-    if (!userId) { openLogin(); return; }
+    if (!apiUserId) { openLogin(); return; }
     const id = String(prd?.id || prd?._id);
-    const ok = await removeOneFromWishlist(userId, id);
+    const ok = await removeOneFromWishlist(apiUserId, id);
     if (ok) {
       setServerIds((prev) => {
         const s = new Set(prev || []);
@@ -319,7 +337,7 @@ const WishlistItem = ({ product }) => {
   const designVal = toText(pick(product?.design, product?.designName));
   const colorsVal = toText(pick(product?.colors, product?.color, product?.colorName));
   const widthCm = Number(pick(product?.widthCm, product?.width_cm, product?.width));
-  const widthVal = isFinite(widthCm) && widthCm > 0 ? `${round(widthCm, 0)} cm / ${round(cmToInch(widthCm), 0)} inch` : toText(product?.widthLabel);
+  const widthVal = isFinite(widthCm) && gsm >= 0 ? `${round(widthCm, 0)} cm / ${round(cmToInch(widthCm), 0)} inch` : toText(product?.widthLabel);
   const finishVal = toText(pick(product?.finish, product?.subfinish?.name, product?.finishName));
   const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName));
 
@@ -384,22 +402,22 @@ const WishlistItem = ({ product }) => {
         {/* add to cart */}
         <td className="tp-cart-add-to-cart wishlist-cell wishlist-cell-center">
           <button
-            onClick={() => (userId ? handleAddProduct(product) : openLogin())}
+            onClick={() => (apiUserId ? handleAddProduct(product) : openLogin())}
             type="button"
             className="btn-ghost-invert square"
-            title={userId ? 'Move to Cart' : 'Login to move'}
+            title={apiUserId ? 'Move to Cart' : 'Login to move'}
           >
-            {userId ? 'Move to Cart' : 'Login to continue'}
+            {apiUserId ? 'Move to Cart' : 'Login to continue'}
           </button>
         </td>
 
         {/* remove */}
         <td className="tp-cart-action wishlist-cell">
           <button
-            onClick={() => (userId ? handleRemovePrd({ title, id: _id }) : openLogin())}
+            onClick={() => (apiUserId ? handleRemovePrd({ title, id: _id }) : openLogin())}
             className="btn-ghost-invert square"
             type="button"
-            title={userId ? 'Remove from wishlist' : 'Login to remove'}
+            title={apiUserId ? 'Remove from wishlist' : 'Login to remove'}
           >
             <Close />
             <span> Remove</span>
@@ -407,7 +425,6 @@ const WishlistItem = ({ product }) => {
         </td>
       </tr>
 
-      {/* styles */}
       <style jsx>{`
         .wishlist-row { border-bottom: 1px solid #eef0f3; transition: background-color 160ms ease, box-shadow 180ms ease; }
         .wishlist-row:hover { background: #fafbfc; }
@@ -430,12 +447,6 @@ const WishlistItem = ({ product }) => {
         .btn-ghost-invert:hover { background:#fff; color:var(--navy); border-color:var(--navy); box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12); transform: translateY(-1px); }
         .btn-ghost-invert:active { transform: translateY(0); background:#f8fafc; color:var(--navy); box-shadow:0 3px 10px rgba(0,0,0,0.15); }
         .btn-ghost-invert:focus-visible { outline:0; box-shadow:0 0 0 3px rgba(11,22,32,0.35); }
-        @media (max-width: 640px) {
-          .wishlist-cell { padding: 10px 8px; }
-          .tp-cart-title.wishlist-cell { padding-left: 0; }
-          .wishlist-img { width: 56px; height: 80px; border-radius: 8px; }
-          .btn-ghost-invert { min-height: 42px; padding: 9px 16px; }
-        }
         .empty-row td { padding: 18px 12px; }
         .empty-wrap { display:flex; align-items:center; gap:10px; justify-content:center; color:#6b7280; font-weight:600; }
         .empty-ic { opacity:.8; }
