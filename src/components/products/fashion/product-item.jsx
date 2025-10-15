@@ -20,30 +20,12 @@ import { buildSearchPredicate } from '@/utils/searchMiddleware';
 /* ---------------- helpers ---------------- */
 const nonEmpty = (v) => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== '');
 const pick = (...xs) => xs.find(nonEmpty);
-const toText = (v) => {
-  if (v == null) return '';
-  if (typeof v === 'string' || typeof v === 'number') return String(v);
-  if (Array.isArray(v)) return v.map(toText).filter(Boolean).join(', ');
-  if (typeof v === 'object') return toText(v.name ?? v.value ?? v.title ?? v.label ?? '');
-  return '';
-};
-const isNoneish = (s) => {
-  if (!s) return true;
-  const t = String(s).trim().toLowerCase().replace(/\s+/g, ' ');
-  return ['none', 'na', 'none/ na', 'none / na', 'n/a', '-'].includes(t);
-};
+const toText = (v) => (v == null ? '' : typeof v === 'object' ? toText(v.name ?? v.value ?? v.title ?? v.label ?? '') : String(v));
+const isNoneish = (s) => !s || ['none', 'na', 'none/ na', 'none / na', 'n/a', '-'].includes(String(s).trim().toLowerCase().replace(/\s+/g, ' '));
 const round = (n, d = 1) => (isFinite(n) ? Number(n).toFixed(d).replace(/\.0+$/, '') : '');
 const gsmToOz = (gsm) => gsm * 0.0294935;
 const cmToInch = (cm) => cm / 2.54;
-const uniq = (arr) => {
-  const seen = new Set();
-  return arr.filter((x) => {
-    const k = String(x).trim().toLowerCase();
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
-};
+const uniq = (a) => { const s = new Set(); return a.filter(x => { const k = String(x).trim().toLowerCase(); if (s.has(k)) return false; s.add(k); return true; }); };
 const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
 
 /* ---- user helpers ---- */
@@ -57,17 +39,13 @@ const selectUserIdFromStore = (state) =>
 
 const getUserIdFromLocal = () => {
   if (typeof window === 'undefined') return null;
-  // prefer userId, fallback to legacy userid
   return localStorage.getItem('userId') || localStorage.getItem('userid') || null;
 };
 
-/* --- normalize any form of userId to a 24-hex string for API --- */
+/* normalize possible ObjectId formats to plain 24-hex string */
 const normalizeUserId = (raw) => {
   if (!raw) return null;
-  if (typeof raw === 'object') {
-    const maybe = raw.$oid || raw._id || raw.id;
-    return normalizeUserId(maybe);
-  }
+  if (typeof raw === 'object') return normalizeUserId(raw.$oid || raw._id || raw.id);
   const s = String(raw).trim();
   const wrapped = s.match(/ObjectId\(['"]?([0-9a-fA-F]{24})['"]?\)/);
   if (wrapped) return wrapped[1];
@@ -76,10 +54,8 @@ const normalizeUserId = (raw) => {
 };
 
 /* ---- API helpers ---- */
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
-const WISHLIST_BASE =  'https://test.amrita-fashions.com/shopy';
+const WISHLIST_BASE = 'https://test.amrita-fashions.com/shopy';
 
-/** GET current wishlist ids for user (array of string ids) */
 async function getWishlistIds(userId) {
   try {
     const res = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
@@ -100,23 +76,21 @@ async function getWishlistIds(userId) {
             ? json
             : [];
     return arr.map(String).filter(Boolean);
-  } catch (err) {
-    console.error('getWishlistIds error:', err);
+  } catch (e) {
+    console.error('getWishlistIds error:', e);
     return [];
   }
 }
 
-/** PUT wishlist with merged ids (append productId) */
+/** PUT merge to add one product id */
 async function putAppendWishlist(userIdRaw, productId) {
   const userId = normalizeUserId(userIdRaw);
   if (!userId) return false;
-
   try {
     const current = await getWishlistIds(userId);
-    const set = new Set(current.map(String));
+    const set = new Set(current);
     set.add(String(productId));
     const nextIds = Array.from(set);
-
     const res = await fetch(`${WISHLIST_BASE}/wishlist/${encodeURIComponent(userId)}`, {
       method: 'PUT',
       credentials: 'include',
@@ -124,8 +98,8 @@ async function putAppendWishlist(userIdRaw, productId) {
       body: JSON.stringify({ userId, productIds: nextIds }),
     });
     return res.ok;
-  } catch (err) {
-    console.error('putAppendWishlist error:', err);
+  } catch (e) {
+    console.error('putAppendWishlist error:', e);
     return false;
   }
 }
@@ -139,8 +113,8 @@ const ProductItem = ({ product }) => {
   const { debounced: q } = useGlobalSearch();
   const [showActions, setShowActions] = useState(false);
   const [supportsHover, setSupportsHover] = useState(true);
-  const [wishOn, setWishOn] = useState(false); // optimistic UI after server success
   const [adding, setAdding] = useState(false);
+  const [inWishServer, setInWishServer] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -157,8 +131,18 @@ const ProductItem = ({ product }) => {
   const cartItems = useSelector((s) => s.cart?.cart_products || []);
 
   const productId = product?._id || product?.product?._id || product?.product;
-
   const inCart = cartItems.some((it) => String(it?._id) === String(productId));
+
+  // reflect server state for this card (optional convenience)
+  useEffect(() => {
+    let stop = false;
+    (async () => {
+      if (!apiUserId || !productId) return;
+      const ids = await getWishlistIds(apiUserId);
+      if (!stop) setInWishServer(ids.includes(String(productId)));
+    })();
+    return () => { stop = true; };
+  }, [apiUserId, productId]);
 
   // ----- actions -----
   const handleAddProduct = (prd, e) => {
@@ -170,7 +154,6 @@ const ProductItem = ({ product }) => {
     e?.stopPropagation?.(); e?.preventDefault?.();
 
     if (!apiUserId) {
-      // redirect to login and come back
       try {
         const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
         const redirect = url ? url.pathname + url.search : `/fabric/${prd?.slug || productId}`;
@@ -181,20 +164,16 @@ const ProductItem = ({ product }) => {
       }
       return;
     }
-
     if (adding) return;
+
     setAdding(true);
     const ok = await putAppendWishlist(apiUserId, productId);
     setAdding(false);
 
     if (ok) {
-      setWishOn(true); // optimistic badge on this card
-      try {
-        // broadcast so other parts of the app can refetch if they listen
-        window.dispatchEvent(new CustomEvent('wishlist-updated', { detail: { added: productId } }));
-      } catch (err) {
-        console.error('wishlist-updated event error:', err);
-      }
+      setInWishServer(true);
+      try { window.dispatchEvent(new CustomEvent('wishlist-updated', { detail: { added: productId } })); }
+      catch (err) { console.error('wishlist-updated event error:', err); }
     } else {
       alert('Failed to add to wishlist. Please try again.');
     }
@@ -206,20 +185,11 @@ const ProductItem = ({ product }) => {
   };
 
   /* image helpers */
-  const valueToUrlString = (v) => {
-    if (!v) return '';
-    if (typeof v === 'string') return v.trim();
-    if (Array.isArray(v)) return valueToUrlString(v[0]);
-    if (typeof v === 'object') return valueToUrlString(v.secure_url || v.url || v.path || v.key);
-    return '';
-  };
+  const valueToUrlString = (v) => (!v ? '' : typeof v === 'string' ? v.trim() : Array.isArray(v) ? valueToUrlString(v[0]) : typeof v === 'object' ? valueToUrlString(v.secure_url || v.url || v.path || v.key) : '');
   const isHttpUrl = (s) => /^https?:\/\//i.test(s);
 
   const imageUrl = useMemo(() => {
-    const raw =
-      valueToUrlString(product?.img) ||
-      valueToUrlString(product?.image1) ||
-      valueToUrlString(product?.image2);
+    const raw = valueToUrlString(product?.img) || valueToUrlString(product?.image1) || valueToUrlString(product?.image2);
     if (!raw) return '/assets/img/product/default-product-img.jpg';
     if (isHttpUrl(raw)) return raw;
     const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
@@ -243,9 +213,7 @@ const ProductItem = ({ product }) => {
       product?.groupcode?.name
     ) || '—';
   const titleText = stripHtml(titleHtml);
-
   const slug = product?.slug || product?.product?.slug || seoDoc?.slug || productId;
-
   const categoryLabel =
     pick(
       product?.category?.name,
@@ -262,24 +230,21 @@ const ProductItem = ({ product }) => {
   const showOptionsBadge = !!groupcodeId && !isFetching && !isError && optionCount > 1;
 
   /* values */
-  const fabricTypeVal =
-    toText(pick(product?.fabricType, product?.fabric_type, seoDoc?.fabricType)) || 'Woven Fabrics';
+  const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type, seoDoc?.fabricType)) || 'Woven Fabrics';
   const contentVal = toText(pick(product?.content, product?.contentName, product?.content_label, seoDoc?.content));
   const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
   const weightVal = isFinite(gsm) && gsm > 0 ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz` : toText(product?.weight);
   const designVal = toText(pick(product?.design, product?.designName, seoDoc?.design));
   const colorsVal = toText(pick(product?.colors, product?.color, product?.colorName, seoDoc?.colors));
   const widthCm = Number(pick(product?.widthCm, product?.width_cm, product?.width));
-  const widthVal = isFinite(widthCm) && widthCm > 0 ? `${round(widthCm,0)} cm / ${round(cmToInch(widthCm),0)} inch` : toText(product?.widthLabel);
+  const widthVal = isFinite(widthCm) && widthCm > 0 ? `${round(widthCm, 0)} cm / ${round(cmToInch(widthCm), 0)} inch` : toText(product?.widthLabel);
   const finishVal = toText(pick(product?.finish, product?.subfinish?.name, product?.finishName, seoDoc?.finish));
   const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName, seoDoc?.structure));
   const motifVal = toText(pick(product?.motif, product?.motifName, seoDoc?.motif));
   const leadTimeVal = toText(pick(product?.leadTime, product?.lead_time, seoDoc?.leadTime));
 
-  const details = uniq(
-    [fabricTypeVal, contentVal, weightVal, designVal, colorsVal, widthVal, finishVal, structureVal, motifVal, leadTimeVal]
-      .filter((v) => nonEmpty(v) && !isNoneish(v))
-  );
+  const details = uniq([fabricTypeVal, contentVal, weightVal, designVal, colorsVal, widthVal, finishVal, structureVal, motifVal, leadTimeVal]
+    .filter((v) => nonEmpty(v) && !isNoneish(v)));
 
   const mid = Math.ceil(details.length / 2);
   const leftDetails = details.slice(0, mid);
@@ -304,8 +269,6 @@ const ProductItem = ({ product }) => {
   }, [qDebounced, titleText, slug, categoryLabel, details, fabricTypeVal, designVal, colorsVal, product]);
 
   if (!isVisible) return null;
-
-  const wishlistActive = wishOn; // server-backed optimistic
 
   return (
     <div className="product-col">
@@ -379,13 +342,13 @@ const ProductItem = ({ product }) => {
               <button
                 type="button"
                 onClick={(e) => handleWishlistProduct(product, e)}
-                className={`action-button ${wishlistActive ? 'active wishlist-active' : ''}`}
-                aria-label={wishlistActive ? 'In wishlist' : 'Add to wishlist'}
-                aria-pressed={wishlistActive}
-                title={wishlistActive ? 'Added to wishlist' : 'Add to wishlist'}
+                className={`action-button ${inWishServer ? 'active wishlist-active' : ''}`}
+                aria-label={inWishServer ? 'In wishlist' : 'Add to wishlist'}
+                aria-pressed={inWishServer}
+                title={inWishServer ? 'Added to wishlist' : 'Add to wishlist'}
                 disabled={adding}
               >
-                {wishlistActive ? <WishlistActive /> : <Wishlist />}
+                {inWishServer ? <WishlistActive /> : <Wishlist />}
               </button>
 
               <button type="button" onClick={(e) => openQuickView(product, e)} className="action-button" aria-label="Quick view" title="Quick view">
@@ -399,12 +362,10 @@ const ProductItem = ({ product }) => {
                     const url = typeof window !== 'undefined' ? `${window.location.origin}/fabric/${slug}` : `/fabric/${slug}`;
                     const ttl = typeof titleHtml === 'string' ? titleHtml : 'Fabric';
                     const text = 'Check out this fabric on Amrita Global Enterprises';
-                    if (typeof navigator !== 'undefined' && navigator.share) navigator.share({ title: ttl, text, url });
+                    if (navigator?.share) navigator.share({ title: ttl, text, url });
                     else if (navigator?.clipboard) { navigator.clipboard.writeText(url); alert('Link copied!'); }
                     else { prompt('Copy link', url); }
-                  } catch (err) {
-                    console.error('share error:', err);
-                  }
+                  } catch (err) { console.error('share error:', err); }
                 }}
                 className="action-button"
                 aria-label="Share product"
@@ -448,6 +409,7 @@ const ProductItem = ({ product }) => {
         </div>
       </div>
 
+      {/* styles (unchanged) */}
       <style jsx>{`
         :global(.products-grid){ display:flex; flex-wrap:wrap; gap:24px; margin:0; }
         :global(.products-grid .product-col){ flex:1 1 calc(25% - 24px); max-width:calc(25% - 24px); }
@@ -455,12 +417,15 @@ const ProductItem = ({ product }) => {
         @media (max-width:575px){ :global(.products-grid .product-col){ flex:1 1 100%; max-width:100%; } }
 
         .fashion-product-card{
-          --primary:#0f172a; --maroon:#800000;
+          --primary:#0f172a; --muted:#6b7280; --accent:#7c3aed;
+          --success:#10b981; --danger:#ef4444; --maroon:#800000;
+          --card-bg:#fff; --card-border:rgba(17,24,39,.12); --inner-border:rgba(17,24,39,.08);
+          --shadow-sm:0 1px 2px rgba(0,0,0,.04);
           position:relative; width:100%; height:100%;
           transition:transform .3s ease-out, box-shadow .3s ease-out;
         }
         .fashion-product-card:hover{ transform:translateY(-2px); }
-        .card-wrapper{ background:#fff; border:2px solid rgba(17,24,39,.12); border-radius:14px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+        .card-wrapper{ background:var(--card-bg); border:2px solid var(--card-border); border-radius:14px; overflow:hidden; box-shadow:var(--shadow-sm); }
 
         .product-image-container{ position:relative; aspect-ratio:1/1; min-height:220px; overflow:hidden; }
         .image-link{ display:block; height:100%; }
@@ -470,8 +435,11 @@ const ProductItem = ({ product }) => {
         .image-overlay{ position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,.16) 0%, transparent 40%); z-index:1; }
 
         .options-ribbon{ position:absolute; left:50%; transform:translateX(-50%); bottom:10px; border:0; background:transparent; cursor:pointer; z-index:3; }
-        .ribbon-inner{ display:flex; align-items:center; gap:8px; height:clamp(22px, 5.2vw, 30px); padding:0 clamp(8px, 2.2vw, 14px); border-radius:999px; background:rgba(255,255,255,0.28); backdrop-filter:blur(8px) saturate(180%); border:1px solid rgba(255,255,255,0.28); box-shadow:0 4px 10px rgba(0,0,0,0.10); }
-        .ribbon-text{ font-size:clamp(12px, 3.2vw, 14px); font-weight:600; color:#111827; }
+        .ribbon-inner{ display:flex; align-items:center; gap:8px; height:clamp(22px, 5.2vw, 30px); padding:0 clamp(8px, 2.2vw, 14px); border-radius:999px; background:rgba(255,255,255,0.28); backdrop-filter:blur(8px) saturate(180%); border:1px solid rgba(255,255,255,0.28); box-shadow:0 4px 10px rgba(0,0,0,0.10); transition:all .2s ease; }
+        .ribbon-inner:hover{ background:rgba(255,255,255,0.45); }
+        .ribbon-icon{ display:inline-grid; place-items:center; width:clamp(16px, 4.5vw, 20px); height:clamp(16px, 4.5vw, 20px); }
+        .badge-icon{ width:100%; height:100%; display:block; filter:drop-shadow(0 0 2px rgba(255,255,255,0.9)); }
+        .ribbon-text{ font-size:clamp(12px, 3.2vw, 14px); font-weight:600; color:#111827; letter-spacing:.2px; line-height:1; }
         .ribbon-text strong{ font-weight:800; margin-right:4px; }
 
         .product-actions{ position:absolute; top:12px; right:12px; display:flex; flex-direction:column; gap:8px; opacity:0; transform:translateY(-6px); transition:opacity .25s ease, transform .25s ease; z-index:3; }
