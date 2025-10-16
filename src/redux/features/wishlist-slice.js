@@ -82,7 +82,6 @@ export const toggleWishlistItem = createAsyncThunk(
       if (exists) {
         nextList = current.filter((it) => String(getPid(it)) !== pid);
       } else {
-        // store minimal product doc (id + some label fields) for local UI
         const title =
           product?.title ||
           product?.name ||
@@ -93,18 +92,15 @@ export const toggleWishlistItem = createAsyncThunk(
         nextList = [...current, item];
       }
 
-      // Always push only IDs to server
       const productIds = nextList.map((it) => getPid(it)).filter(Boolean);
       await putWishlistIds(userId, productIds);
 
-      // Fire UI toast
       if (exists) {
         notifyError("Removed from wishlist");
       } else {
         notifySuccess("Added to wishlist");
       }
 
-      // Return full next list to reducer (keep local docs for rendering)
       return nextList;
     } catch (e) {
       return rejectWithValue(e.message || "Failed to update wishlist");
@@ -132,7 +128,6 @@ export const removeWishlistItem = createAsyncThunk(
 
       notifyError(`${title || "Item"} removed from wishlist`);
 
-      // Build the new list locally
       const current = getState().wishlist?.wishlist || [];
       const next = current.filter((it) => String(getPid(it)) !== String(productId));
       return next;
@@ -147,14 +142,13 @@ const initialState = {
   wishlist: [],     // array of product docs (local for UI; server persists IDs)
   loading: false,
   error: null,
-  currentUserId: null, // Track which user's wishlist we're showing
+  currentUserId: null,
 };
 
 export const wishlistSlice = createSlice({
   name: "wishlist",
   initialState,
   reducers: {
-    // In case you want a plain setter (rarely needed now)
     set_wishlist(state, { payload }) {
       state.wishlist = Array.isArray(payload) ? payload : [];
     },
@@ -164,12 +158,10 @@ export const wishlistSlice = createSlice({
       state.loading = false;
       state.currentUserId = null;
     },
-    // Clear wishlist when user changes
     clear_wishlist_for_user_switch(state) {
       state.wishlist = [];
       state.error = null;
       state.loading = false;
-      // Don't clear currentUserId here, let the fetch action set it
     },
   },
   extraReducers: (builder) => {
@@ -181,12 +173,11 @@ export const wishlistSlice = createSlice({
       })
       .addCase(fetchWishlist.fulfilled, (state, { payload, meta }) => {
         state.loading = false;
-        // payload may be ids only; normalize to docs with _id
         state.wishlist = (Array.isArray(payload) ? payload : []).map((x) => {
           const id = getPid(x);
           return typeof x === "object" ? { ...x, _id: id, id } : { _id: id, id };
         });
-        state.currentUserId = meta.arg; // Track which user's wishlist we loaded
+        state.currentUserId = meta.arg;
       })
       .addCase(fetchWishlist.rejected, (state, { payload }) => {
         state.loading = false;

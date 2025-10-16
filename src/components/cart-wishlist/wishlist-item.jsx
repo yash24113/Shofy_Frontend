@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Close } from "@/svg";
 import { add_cart_product } from "@/redux/features/cartSlice";
-import { removeWishlistItem } from "@/redux/features/wishlist-slice";
+import { removeWishlistItem, fetchWishlist } from "@/redux/features/wishlist-slice"; // ⟵ ADD THIS
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
 import useWishlistManager from "@/hooks/useWishlistManager";
@@ -106,7 +106,7 @@ const WishlistItem = ({ product }) => {
   const searchParams = useSearchParams();
 
   const dispatch = useDispatch();
-  const { cart_products } = useSelector((state) => state.cart);
+  const { cart_products } = useSelector((state) => state.cart) || {};
   const { userId, wishlist, loading } = useWishlistManager();
 
   const { _id, title, salesPrice } = product || {};
@@ -137,8 +137,6 @@ const WishlistItem = ({ product }) => {
     ],
     []
   );
-
-  // Wishlist fetching is now handled by useWishlistManager hook
 
   const matchesQuery = useMemo(() => {
     const q = (globalQuery || "").trim();
@@ -207,7 +205,7 @@ const WishlistItem = ({ product }) => {
         removeWishlistItem({ userId, productId: String(_id), title })
       ).unwrap();
       // refetch to be safe
-      dispatch(fetchWishlist(userId));
+      dispatch(fetchWishlist(userId)); // ⟵ now correctly imported
     } catch (e) {
       console.error("Move to cart failed", e);
     } finally {
@@ -221,7 +219,7 @@ const WishlistItem = ({ product }) => {
       await dispatch(
         removeWishlistItem({ userId, productId: String(prd?.id || prd?._id), title: prd?.title })
       ).unwrap();
-      dispatch(fetchWishlist(userId));
+      dispatch(fetchWishlist(userId)); // ⟵ now correctly imported
     } catch (e) {
       console.error("Remove failed", e);
       alert("Failed to remove item from wishlist. Please try again.");
@@ -229,9 +227,9 @@ const WishlistItem = ({ product }) => {
   };
 
   /* ---------- presentation ---------- */
-  const imageBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
+  const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
   const imageUrl =
-    product?.img?.startsWith?.("http") ? product.img : `${imageBase}/uploads/${product?.img || ""}`;
+    product?.img?.startsWith?.("http") ? product.img : (product?.img ? `${apiBase}/uploads/${product.img}` : "");
   const slug = product?.slug || _id;
 
   const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
@@ -272,7 +270,7 @@ const WishlistItem = ({ product }) => {
         {/* img */}
         <td className="tp-cart-img wishlist-cell">
           <Link href={`/fabric/${slug}`} className="wishlist-img-link">
-            {product?.img && (
+            {!!imageUrl && (
               <Image
                 src={imageUrl}
                 alt={title || "product img"}
@@ -325,7 +323,7 @@ const WishlistItem = ({ product }) => {
             title="Move to Cart"
             disabled={!!isInCart && !moving}
           >
-            {moving ? "Moving…" : "Move to Cart"}
+            {moving ? "Moving…" : (isInCart ? "Already in Cart" : "Move to Cart")}
           </button>
         </td>
 
