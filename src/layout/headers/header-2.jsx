@@ -271,7 +271,7 @@ const HeaderTwo = ({ style_2 = false }) => {
   const handleLogout = () => {
     try {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('sessionId');
+        localStorage.removeItem('userId');
         try {
           import('js-cookie')
             .then((Cookies) => Cookies.default.remove('userInfo'))
