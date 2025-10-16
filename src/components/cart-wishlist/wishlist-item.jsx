@@ -116,8 +116,9 @@ const WishlistItem = ({ product }) => {
   // also read slice.loading to know fetch state
   const wlLoading = useSelector((s) => s.wishlist?.loading) ?? false;
 
-  const { _id, title, salesPrice } = product || {};
-  const isInCart = cart_products?.find?.((item) => item?._id === _id);
+  // Normalize id early
+  const _id = product?._id || product?.id || product?.product?._id || product?.productId || product?.product || null;
+  const isInCart = cart_products?.find?.((item) => String(item?._id) === String(_id));
 
   const [moving, setMoving] = useState(false);
   const [authModal, setAuthModal] = useState(null);
@@ -210,9 +211,24 @@ const WishlistItem = ({ product }) => {
     if (!userId) { openLogin(); return; }
     try {
       setMoving(true);
+      // 1) Call Add to Cart API
+      const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
+      const url = `${base}/cart/add`;
+      try {
+        await fetch(url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, productId: String(_id), quantity: 1 }),
+        });
+      } catch(_) { /* proceed to local update regardless */ }
+
+      // 2) Optimistically update local cart slice
       dispatch(add_cart_product(prd));
+
+      // 3) Remove from wishlist on server and refresh
       await dispatch(
-        removeWishlistItem({ userId, productId: String(_id), title })
+        removeWishlistItem({ userId, productId: String(_id), title: getDisplayTitle })
       ).unwrap();
       dispatch(fetchWishlist(userId));
     } catch (e) {
@@ -226,7 +242,7 @@ const WishlistItem = ({ product }) => {
     if (!userId) { openLogin(); return; }
     try {
       await dispatch(
-        removeWishlistItem({ userId, productId: String(prd?.id || prd?._id), title: prd?.title })
+        removeWishlistItem({ userId, productId: String(prd?.id || prd?._id), title: getDisplayTitle })
       ).unwrap();
       dispatch(fetchWishlist(userId));
     } catch (e) {
@@ -237,9 +253,44 @@ const WishlistItem = ({ product }) => {
 
   /* ---------- presentation ---------- */
   const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
-  const imageUrl =
-    product?.img?.startsWith?.("http") ? product.img : (product?.img ? `${apiBase}/uploads/${product.img}` : "");
-  const slug = product?.slug || _id;
+  const fallbackCdn = (process.env.NEXT_PUBLIC_CDN_BASE || 'https://test.amrita-fashions.com/shopy').replace(/\/+$/, "");
+  // Image resolution with robust cleaning similar to ProductItem
+  const valueToUrlString = (v) => {
+    if (!v) return '';
+    if (typeof v === 'string') return v.trim();
+    if (Array.isArray(v)) return valueToUrlString(v[0]);
+    if (typeof v === 'object') return valueToUrlString(v.secure_url || v.url || v.path || v.key || v.img);
+    return '';
+  };
+  const rawImg =
+    valueToUrlString(product?.img) ||
+    valueToUrlString(product?.image) ||
+    valueToUrlString(product?.image1) ||
+    valueToUrlString(product?.image2) ||
+    valueToUrlString(product?.product?.img) || '';
+  const isHttpUrl = (s) => /^https?:\/\//i.test(s || '');
+  const clean = (p) => String(p || '')
+    .replace(/^\/+/, '')
+    .replace(/^api\/uploads\/?/, '')
+    .replace(/^uploads\/?/, '');
+  const imageUrl = rawImg
+    ? (isHttpUrl(rawImg)
+        ? rawImg
+        : `${(apiBase || fallbackCdn)}/uploads/${clean(rawImg)}`)
+    : '';
+
+  // Title and slug fallbacks
+  const getDisplayTitle =
+    toText(pick(
+      product?.title,
+      product?.name,
+      product?.product?.name,
+      product?.productname,
+      product?.productTitle,
+      product?.seoTitle,
+      product?.groupcode?.name,
+    ));
+  const slug = product?.slug || product?.product?.slug || _id;
 
   const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
   const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type)); // no default
@@ -256,6 +307,7 @@ const WishlistItem = ({ product }) => {
   const finishVal = toText(pick(product?.finish, product?.subfinish?.name, product?.finishName));
   const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName));
 
+  // Build top details only when available
   const allDetails = [
     fabricTypeVal,
     contentVal,
@@ -283,9 +335,9 @@ const WishlistItem = ({ product }) => {
         <td className="tp-cart-img wishlist-cell">
           <Link href={`/fabric/${slug}`} className="wishlist-img-link">
             {!!imageUrl && (
-              <Image
+              <img
                 src={imageUrl}
-                alt={title || "product img"}
+                alt={getDisplayTitle || "product image"}
                 width={70}
                 height={100}
                 className="wishlist-img"
@@ -298,7 +350,7 @@ const WishlistItem = ({ product }) => {
         {/* title */}
         <td className="tp-cart-title wishlist-cell">
           <Link href={`/fabric/${slug}`} className="wishlist-title">
-            {title}
+            {getDisplayTitle || 'Product'}
           </Link>
           {topFourDetails.length ? (
             <div className="wishlist-specs">
@@ -322,7 +374,16 @@ const WishlistItem = ({ product }) => {
 
         {/* price */}
         <td className="tp-cart-price wishlist-cell">
-          <span className="wishlist-price">{Number(salesPrice || 0).toFixed(2)}</span>
+          {(() => {
+            const priceRaw = pick(
+              product?.salesPrice,
+              product?.price,
+              product?.product?.salesPrice,
+              product?.product?.price
+            );
+            const price = Number(priceRaw || 0);
+            return <span className="wishlist-price">{price.toFixed(2)}</span>;
+          })()}
         </td>
 
         {/* add to cart */}
@@ -342,7 +403,7 @@ const WishlistItem = ({ product }) => {
         {/* remove */}
         <td className="tp-cart-action wishlist-cell">
           <button
-            onClick={() => handleRemovePrd({ title, id: _id })}
+            onClick={() => handleRemovePrd({ title: getDisplayTitle, id: _id })}
             className="btn-ghost-invert square"
             type="button"
             title="Remove from wishlist"
