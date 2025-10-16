@@ -6,7 +6,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { usePathname } from 'next/navigation';
 import useSticky from '@/hooks/use-sticky';
 import useCartInfo from '@/hooks/use-cart-info';
-import Cookies from 'js-cookie';
 import {
   openCartMini,
   get_cart_products,
@@ -20,18 +19,10 @@ import { FaHeart, FaUser } from 'react-icons/fa';
 import { FiMenu } from 'react-icons/fi';
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 
-/* ------------ config for search dropdown ------------ */
 const PAGE_SIZE = 20;
 const MAX_LIMIT = 200;
-
-/* ------------------ small helpers ------------------ */
-const baseApi = () => {
-  const b = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-  return b.endsWith('/') ? b.slice(0, -1) : b;
-};
 const nonEmpty = (v) => v !== undefined && v !== null && String(v).trim() !== '';
 
-/* Normalize any backend shape to our display shape */
 function normalizeProduct(p) {
   const id = p._id || p.id || p.slug || String(Math.random());
   const slug = p.slug || p.seoSlug || p.handle || '';
@@ -43,9 +34,8 @@ function normalizeProduct(p) {
   return { id, slug, name, img, price };
 }
 
-/* Try multiple endpoints; first OK+JSON wins */
 async function searchProducts(q, limit = PAGE_SIZE, signal) {
-  const b = baseApi();
+  const b = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
   const queries = [
     `${b}/product/search?q=${encodeURIComponent(q)}&limit=${limit}`,
     `${b}/product?q=${encodeURIComponent(q)}&limit=${limit}`,
@@ -64,7 +54,7 @@ async function searchProducts(q, limit = PAGE_SIZE, signal) {
                 : [];
       return arr.map(normalizeProduct);
     } catch {
-      // ignore and try next endpoint
+      // try next
     }
   }
   return [];
@@ -74,10 +64,9 @@ const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
 
-  const { wishlist } = useSelector((state) => state.wishlist || { wishlist: [] });
+  const { wishlist } = useSelector((s) => s.wishlist || { wishlist: [] });
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
-  // (compat)
   useCartInfo();
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
 
@@ -85,7 +74,7 @@ const HeaderTwo = ({ style_2 = false }) => {
 
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
 
-  // ===== GLOBAL SEARCH (shared) =====
+  // ===== GLOBAL SEARCH =====
   const { query, setQuery, debounced } = useGlobalSearch(150);
   const [searchOpen, setSearchOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -96,38 +85,26 @@ const HeaderTwo = ({ style_2 = false }) => {
   const searchWrapRef = useRef(null);
   const dropRef = useRef(null);
 
-  // Reset when query changes
-  useEffect(() => {
-    setLimit(PAGE_SIZE);
-  }, [debounced]);
+  useEffect(() => { setLimit(PAGE_SIZE); }, [debounced]);
 
-  // Fetch as you type (2+ chars) for suggestions
   useEffect(() => {
     const controller = new AbortController();
     const q = (debounced || '').trim();
     if (q.length < 2) {
-      setResults([]);
-      setSelIndex(-1);
-      setLoading(false);
-      setLoadingMore(false);
+      setResults([]); setSelIndex(-1); setLoading(false); setLoadingMore(false);
       return;
     }
     setLoading(true);
     setSearchOpen(true);
     searchProducts(q, Math.min(limit, MAX_LIMIT), controller.signal)
-      .then((arr) => {
-        setResults(arr);
-        setSelIndex(arr.length ? 0 : -1);
-      })
+      .then((arr) => { setResults(arr); setSelIndex(arr.length ? 0 : -1); })
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, [debounced, limit]);
 
-  // Infinite scroll inside dropdown: grow limit → refetch bigger set
   useEffect(() => {
     const el = dropRef.current;
     if (!el) return;
-
     const onScroll = () => {
       if (loading || loadingMore) return;
       const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
@@ -141,7 +118,6 @@ const HeaderTwo = ({ style_2 = false }) => {
     return () => el.removeEventListener('scroll', onScroll);
   }, [limit, loading, loadingMore]);
 
-  // Close popover on outside click / ESC
   useEffect(() => {
     const onDoc = (e) => {
       const w = searchWrapRef.current;
@@ -160,28 +136,18 @@ const HeaderTwo = ({ style_2 = false }) => {
     };
   }, []);
 
-  // ✅ Clear the search box whenever route/path changes (fallback)
   const pathname = usePathname();
   useEffect(() => {
     if (!pathname) return;
-    setQuery('');
-    setResults([]);
-    setSelIndex(-1);
-    setSearchOpen(false);
-    setLimit(PAGE_SIZE);
+    setQuery(''); setResults([]); setSelIndex(-1); setSearchOpen(false); setLimit(PAGE_SIZE);
   }, [pathname, setQuery]);
 
-  // ---- Immediate reset + navigate (prevents value sticking after redirect) ----
   const resetSearchUI = () => {
-    setQuery('');
-    setResults([]);
-    setSelIndex(-1);
-    setSearchOpen(false);
-    setLimit(PAGE_SIZE);
+    setQuery(''); setResults([]); setSelIndex(-1); setSearchOpen(false); setLimit(PAGE_SIZE);
   };
   const go = (href) => {
-    resetSearchUI();            // clear immediately
-    try { window.scrollTo?.(0, 0); } catch(err) { console.log("Error",err)}
+    resetSearchUI();
+    try { window.scrollTo?.(0, 0); } catch(err) { console.log("err:",err) ;}
     window.location.href = href;
   };
 
@@ -202,7 +168,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     }
   };
 
-  // Keyboard nav
+  // ✅ This exists (fixes the lint error)
   const onSearchKeyDown = (e) => {
     if (!searchOpen) return;
     if (e.key === 'ArrowDown') {
@@ -211,10 +177,8 @@ const HeaderTwo = ({ style_2 = false }) => {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelIndex((i) => Math.max(-1, i - 1));
-    } else if (e.key === 'Enter') {
-      // Enter should submit (and thus clear then redirect)
-      // Let onSubmit handler run.
     }
+    // Enter key is handled by form submit
   };
 
   // ===== Session & user dropdown =====
@@ -292,7 +256,11 @@ const HeaderTwo = ({ style_2 = false }) => {
     <>
       <header>
         <div className={`tp-header-area tp-header-style-${style_2 ? 'primary' : 'darkRed'} tp-header-height`}>
-          <div id="header-sticky" className={`tp-header-bottom-2 tp-header-sticky ${sticky ? 'header-sticky' : ''}`}>
+          <div
+            id="header-sticky"
+            className={`tp-header-bottom-2 tp-header-sticky ${sticky ? 'header-sticky' : ''}`}
+            style={{ position: 'relative', overflow: 'visible' }}
+          >
             <div className="container">
               <div className="tp-mega-menu-wrapper p-relative">
                 <div className="row align-items-center">
@@ -345,12 +313,6 @@ const HeaderTwo = ({ style_2 = false }) => {
                           />
                           <button type="submit" aria-label="Search"><Search /></button>
                         </form>
-
-                        {/* If you re-enable the dropdown, ensure links call go(href) to clear instantly */}
-                        {/* Example:
-                        <Link href={href} onClick={(e)=>{ e.preventDefault(); go(href); }} ...>
-                        */}
-                        {/* <div className="search-drop" ref={dropRef}> ... </div> */}
                       </div>
 
                       {/* Actions */}
@@ -378,22 +340,12 @@ const HeaderTwo = ({ style_2 = false }) => {
                                       className="user-item"
                                       type="button"
                                       role="menuitem"
-                                      onClick={() => {
-                                        setUserOpen(false);
-                                        go('/profile');
-                                      }}
+                                      onClick={() => { setUserOpen(false); go('/profile'); }}
                                     >
                                       My Profile
                                     </button>
-
                                     <div className="user-divider" />
-
-                                    <button
-                                      className="user-item danger"
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={handleLogout}
-                                    >
+                                    <button className="user-item danger" type="button" role="menuitem" onClick={handleLogout}>
                                       Logout
                                     </button>
                                   </div>
@@ -450,6 +402,9 @@ const HeaderTwo = ({ style_2 = false }) => {
                 </div>
               </div>
             </div>
+
+            {/* FULL-WIDTH underline inside the sticky header (stays on scroll) */}
+            <div className={`brand-underline-full ${sticky ? 'is-sticky' : ''}`} aria-hidden="true" />
           </div>
         </div>
       </header>
@@ -465,39 +420,29 @@ const HeaderTwo = ({ style_2 = false }) => {
         .tp-header-search-2 input { padding-right: 44px; }
         .tp-header-search-2 button { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: 0; display: inline-flex; align-items: center; }
 
-        .search-drop{
+        /* ===== Full-width gradient underline (sticks & thins on scroll) ===== */
+        .brand-underline-full{
           position:absolute;
-          z-index:1100;
-          width:min(560px,70vw);
-          max-height:60vh;
-          overflow:auto;
-          margin-top:10px;
-          background:#fff;
-          border:1px solid #e5e7eb;
-          border-radius:12px;
-          box-shadow:0 18px 40px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.06);
-          padding:6px;
+          left:50%;
+          bottom:-6px;
+          transform:translateX(-50%);
+          width:100vw;
+          height:10px;
+          background: linear-gradient(90deg, #E6B354, #C7A458, #7F8DB8, #4866C1);
+          border-radius:9999px;
+          box-shadow:0 0 0 1px rgba(255,255,255,.06) inset;
+          pointer-events:none;
         }
-        .search-empty{ padding:14px 16px; font-size:14px; color:#374151; }
-        .search-hint{ font-size:12px; color:#6b7280; margin-top:4px; }
-        .search-list{ list-style:none; padding:0; margin:0; }
-        .search-item{ border-radius:10px; }
-        .search-item + .search-item{ margin-top:4px; }
-        .search-item.is-active{ background:#eef2ff; }
-        .search-link{ display:flex; align-items:center; gap:12px; padding:10px 12px; text-decoration:none; color:#111827; }
-        .search-link img{ width:44px; height:44px; object-fit:cover; border-radius:8px; flex:0 0 auto; background:#f3f4f6; border:1px solid #f3f4f6; }
-        .search-meta{ display:flex; flex-direction:column; min-width:0; }
-        .search-name{ font-weight:600; font-size:14px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:360px; }
-        .search-price{ font-size:12px; color:#6b7280; margin-top:2px; }
-
-        .search-more, .search-cap{
-          padding:10px 12px;
-          font-size:12px;
-          color:#6b7280;
-          text-align:center;
+        .brand-underline-full.is-sticky{
+          height:6px;
+          bottom:-5px;
+        }
+        @media (max-width:480px){
+          .brand-underline-full{ height:8px; bottom:-5px; }
+          .brand-underline-full.is-sticky{ height:5px; bottom:-4px; }
         }
 
-        /* ===== Dropdown (account) ===== */
+        /* Dropdown (account) */
         .user-menu-dropdown{
           position:absolute;
           right:0;
@@ -535,7 +480,7 @@ const HeaderTwo = ({ style_2 = false }) => {
         @keyframes menuPop{ from{ transform:translateY(-4px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
         @media (max-width:480px){ .user-menu-dropdown{ min-width:210px; right:-8px; } .user-menu-dropdown::before{ right:24px; } }
 
-        /* ===== Auth CTA (logged-out) ===== */
+        /* Auth CTA (logged-out) */
         .tp-auth-cta{
           display:inline-flex;
           align-items:center;

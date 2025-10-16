@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import social_data from '@/data/social-data';
 import { Email, Location } from '@/svg';
+import { FaYoutube } from 'react-icons/fa'; // ← React Icon for YouTube
 
 /* ---- brand palette ---- */
 const BG_TOP = '#112338';
@@ -33,29 +34,28 @@ const PhoneIcon = () => (
   </svg>
 );
 
-/* SVG Fallback for YouTube */
-const YouTubeSvg = (props) => (
-  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" {...props}>
-    <path fill="currentColor" d="M23.5 6.2a3.7 3.7 0 0 0-2.6-2.6C18.9 3 12 3 12 3s-6.9 0-8.9.6A3.7 3.7 0 0 0 .5 6.2 38.7 38.7 0 0 0 0 12c0 1.9.2 3.8.5 5.8a3.7 3.7 0 0 0 2.6 2.6C5.1 21 12 21 12 21s6.9 0 8.9-.6a3.7 3.7 0 0 0 2.6-2.6c.3-2 .5-3.9.5-5.8 0-1.9-.2-3.8-.5-5.8zM9.6 15.6V8.4L15.8 12l-6.2 3.6z"/>
-  </svg>
-);
+function normalizeSocial(item) {
+  const label = (item?.label || '').toLowerCase().trim();
+  const icon  = (item?.icon  || '').toLowerCase().trim();
+  const link  = (item?.link  || '').toLowerCase().replace(/\/+$/, '').trim();
+  return `${label}|${icon}|${link}`;
+}
+function isYouTube(item) {
+  const s = `${item?.label ?? ''} ${item?.icon ?? ''} ${item?.link ?? ''}`.toLowerCase();
+  return s.includes('youtube') || s.includes('youtu.be') || s.includes('youtube.com');
+}
 
 const Footer = () => {
-  // ensure there’s a youtube entry; if not, add one so the icon always shows
+  // Deduplicate + keep only first 5 items (exactly five shown)
   const socials = React.useMemo(() => {
-    const hasYouTube = (social_data || []).some(
-      s => /youtube/i.test(`${s?.label ?? ''} ${s?.icon ?? ''}`)
-    );
-    if (hasYouTube) return social_data;
-    return [
-      ...(social_data || []),
-      {
-        id: 'yt-fallback',
-        label: 'YouTube',
-        icon: 'fa-brands fa-youtube',
-        link: 'https://www.youtube.com/', // change to your channel URL
-      },
-    ];
+    const seen = new Set();
+    const cleaned = (social_data || []).filter((it) => {
+      const key = normalizeSocial(it);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return Boolean(it?.link) && Boolean(it?.icon || it?.label);
+    });
+    return cleaned.slice(0, 5); // ← exactly five icons
   }, []);
 
   return (
@@ -77,7 +77,6 @@ const Footer = () => {
                         <div>Prahlad Nagar, Ahmedabad, Gujarat, India – 380015</div>
                       </div>
                     </div>
-
                     <div className="age-addressSection">
                       <div className="age-addressTitle">Factory Address</div>
                       <div className="age-addressLines">
@@ -85,7 +84,6 @@ const Footer = () => {
                         <div>Ahmedabad, Gujarat, India – 382449</div>
                       </div>
                     </div>
-
                     <div className="age-addressSection">
                       <div className="age-addressTitle">Warehouse Address</div>
                       <div className="age-addressLines">
@@ -93,7 +91,6 @@ const Footer = () => {
                         <div>Narol, Ahmedabad, Gujarat, India – 382405</div>
                       </div>
                     </div>
-
                     <div className="age-addressSection age--noSep">
                       <div className="age-addressTitle">UAE Office Address</div>
                       <div className="age-addressLines">
@@ -175,11 +172,10 @@ const Footer = () => {
                     </div>
                   </div>
 
-                  {/* Social */}
+                  {/* Social (single row, exactly five, YouTube via react-icons) */}
                   <div className="age-social" role="group" aria-label="Social links">
                     {socials.map((s) => {
-                      const isYouTube =
-                        /youtube/i.test(`${s?.label ?? ''} ${s?.icon ?? ''} ${s?.link ?? ''}`);
+                      const yt = isYouTube(s);
                       return (
                         <a
                           key={s.id}
@@ -190,11 +186,7 @@ const Footer = () => {
                           title={s.label || undefined}
                           className="age-socialBtn"
                         >
-                          {isYouTube ? (
-                            <YouTubeSvg />
-                          ) : (
-                            <i className={s.icon} aria-hidden="true" />
-                          )}
+                          {yt ? <FaYoutube size={20} /> : <i className={s.icon} aria-hidden="true" />}
                         </a>
                       );
                     })}
@@ -245,13 +237,15 @@ const Footer = () => {
         .age-footer__gradient{ background:linear-gradient(180deg,${BG_TOP},${BG_BOTTOM}); border-top:1px solid ${BORDER_SOFT}; }
 
         .age-container{ max-width:1200px; margin:0 auto; padding:0 16px; }
+
         .age-grid{ display:grid; grid-template-columns: 1.2fr .8fr .9fr .9fr; gap:28px; }
-        @media (max-width: 991px){ .age-grid{ grid-template-columns: 1fr 1fr; } }
-        @media (max-width: 575px){ .age-grid{ grid-template-columns: 1fr; } }
+        @media (max-width: 1100px){ .age-grid{ grid-template-columns: 1fr 1fr; gap:24px; } }
+        @media (max-width: 640px){ .age-grid{ grid-template-columns: 1fr; gap:20px; } }
+
         .age-col{ min-width:0; }
 
-        .age-footer__top{ padding:56px 0 28px; }
-        .age-footer__bottom{ background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0)); border-top:1px solid ${BORDER_SOFT}; padding:16px 0 22px; }
+        .age-footer__top{ padding:48px 0 26px; }
+        .age-footer__bottom{ background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0)); border-top:1px solid ${BORDER_SOFT}; padding:14px 0 20px; }
 
         .age-title{
           font-family:'Poppins','Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
@@ -259,7 +253,6 @@ const Footer = () => {
         }
         .age-title::after{ content:''; position:absolute; left:0; bottom:-8px; width:36px; height:3px; border-radius:3px; background:linear-gradient(90deg,${BRAND_GOLD},${BRAND_BLUE}); opacity:.95; }
 
-        /* Links – stronger specificity + !important to beat globals */
         .age-list{ list-style:none; margin:0; padding:0; }
         .age-list li{ margin:0 0 10px; }
         .age-footer :global(a.age-link){
@@ -307,8 +300,16 @@ const Footer = () => {
         .age-addrPin :global(svg){ width:18px; height:18px; stroke-width:1.8; }
         .age-addrLines{ line-height:1.65; color:${TEXT_SOFT}; }
 
-        .age-social{ display:flex; gap:12px; margin-top:14px; flex-wrap:wrap; }
+        /* SOCIAL: single row, no wrap, scroll on small widths */
+        .age-social{
+          display:flex; gap:12px; margin-top:14px;
+          flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden;
+          -webkit-overflow-scrolling:touch; scrollbar-width:thin;
+        }
+        .age-social::-webkit-scrollbar{ height:6px; }
+        .age-social::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.2); border-radius:999px; }
         .age-socialBtn{
+          flex:0 0 auto;
           width:44px; height:44px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center;
           color:${TEXT_MAIN}; border:1px solid ${BORDER_SOFT}; background:rgba(255,255,255,.06);
           transition:transform .15s ease, box-shadow .2s ease, background .2s;
@@ -324,7 +325,7 @@ const Footer = () => {
         .age-copy strong{ color:${TEXT_MAIN}; font-weight:800; }
         .age-dot{ margin:0 10px; color:rgba(255,255,255,.45); }
 
-        .age-trust{ display:flex; gap:10px; margin-top:2px; }
+        .age-trust{ display:flex; gap:10px; margin-top:2px; flex-wrap:wrap; justify-content:center; }
         .age-trustCard{
           width:52px; height:52px; border-radius:12px; background:#fff;
           border:1px solid rgba(16,24,40,.08);
@@ -336,9 +337,11 @@ const Footer = () => {
         .age-trustCard :global(img){ max-height:36px; filter:grayscale(.05) saturate(.95) contrast(1.05); }
         .age-trustCard:hover :global(img){ filter:grayscale(0) saturate(1.2) contrast(1.1); }
 
-        @media (max-width:991px){ .age-title{ font-size:18px; } }
+        @media (max-width:991px){
+          .age-title{ font-size:18px; }
+          .age-footer__top{ padding:40px 0 22px; }
+        }
         @media (max-width:575px){
-          .age-footer__top{ padding:44px 0 24px; }
           .age-copy{ font-size:13.6px; }
           .age-trustCard{ width:42px; height:42px; border-radius:10px; }
           .age-trustCard :global(img){ max-height:30px; }

@@ -9,10 +9,31 @@ import MicrosoftClarity from '@/components/analytics/MicrosoftClarity';
 
 /* Font Awesome CSS + reset */
 import '/public/assets/css/font-awesome-pro.css';
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
+        <title>Amrita Global Enterprises</title>
+
+        {/* Favicon / Touch Icons (from amritafashions.com) */}
+        <link
+          rel="icon"
+          href="https://amritafashions.com/wp-content/uploads/amrita-fashions-company-logo-150x150.webp"
+          sizes="32x32"
+          type="image/webp"
+        />
+        <link
+          rel="icon"
+          href="https://amritafashions.com/wp-content/uploads/amrita-fashions-company-logo-270x270.webp"
+          sizes="192x192"
+          type="image/webp"
+        />
+        <link
+          rel="apple-touch-icon"
+          href="https://amritafashions.com/wp-content/uploads/amrita-fashions-company-logo-270x270.webp"
+        />
+
         {/* Preload CSS & fonts */}
         <link
           rel="preload"
