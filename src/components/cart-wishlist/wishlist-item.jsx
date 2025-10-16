@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Close } from "@/svg";
 import { add_cart_product } from "@/redux/features/cartSlice";
-import { removeWishlistItem, fetchWishlist } from "@/redux/features/wishlist-slice"; // ⟵ ADD THIS
+import { removeWishlistItem, fetchWishlist } from "@/redux/features/wishlist-slice";
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
 import useWishlistManager from "@/hooks/useWishlistManager";
@@ -106,8 +106,15 @@ const WishlistItem = ({ product }) => {
   const searchParams = useSearchParams();
 
   const dispatch = useDispatch();
-  const { cart_products } = useSelector((state) => state.cart) || {};
+
+  // cart slice
+  const { cart_products } = useSelector((s) => s.cart) || {};
+
+  // wishlist manager (provides userId, wishlist, loading)
   const { userId, wishlist, loading } = useWishlistManager();
+
+  // also read slice.loading to know fetch state
+  const wlLoading = useSelector((s) => s.wishlist?.loading) ?? false;
 
   const { _id, title, salesPrice } = product || {};
   const isInCart = cart_products?.find?.((item) => item?._id === _id);
@@ -151,11 +158,15 @@ const WishlistItem = ({ product }) => {
 
   // Only show if slice says this product is in wishlist
   const showByServer = useMemo(() => {
-    if (!Array.isArray(wishlist)) return true;
+    if (!Array.isArray(wishlist)) return false;
     return wishlist.some((it) => String(it?._id) === String(_id));
   }, [wishlist, _id]);
 
-  const hidden = !matchesQuery || !showByServer;
+  // ✅ Gating without early return: decide visibility at render time
+  const wlReady = Array.isArray(wishlist) && !wlLoading && !loading;
+  const hiddenBecauseNotReady = !wlReady;
+  const hidden = hiddenBecauseNotReady || !matchesQuery || !showByServer;
+
   const { rowRef } = useEmptyBanner("wishlist", !hidden, "No product found in wishlist");
 
   const currentUrlWithQuery = useMemo(() => {
@@ -200,12 +211,10 @@ const WishlistItem = ({ product }) => {
     try {
       setMoving(true);
       dispatch(add_cart_product(prd));
-      // also remove from wishlist on server
       await dispatch(
         removeWishlistItem({ userId, productId: String(_id), title })
       ).unwrap();
-      // refetch to be safe
-      dispatch(fetchWishlist(userId)); // ⟵ now correctly imported
+      dispatch(fetchWishlist(userId));
     } catch (e) {
       console.error("Move to cart failed", e);
     } finally {
@@ -219,7 +228,7 @@ const WishlistItem = ({ product }) => {
       await dispatch(
         removeWishlistItem({ userId, productId: String(prd?.id || prd?._id), title: prd?.title })
       ).unwrap();
-      dispatch(fetchWishlist(userId)); // ⟵ now correctly imported
+      dispatch(fetchWishlist(userId));
     } catch (e) {
       console.error("Remove failed", e);
       alert("Failed to remove item from wishlist. Please try again.");
@@ -233,7 +242,7 @@ const WishlistItem = ({ product }) => {
   const slug = product?.slug || _id;
 
   const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
-  const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type)) || "Woven Fabrics";
+  const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type)); // no default
   const contentVal = toText(pick(product?.content, product?.contentName, product?.content_label));
   const weightVal =
     isFinite(gsm) && gsm > 0 ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz` : toText(product?.weight);
@@ -262,11 +271,14 @@ const WishlistItem = ({ product }) => {
   const left4 = topFourDetails.slice(0, mid4);
   const right4 = topFourDetails.slice(mid4);
 
-  if (loading && !Array.isArray(wishlist)) return null;
-
   return (
     <>
-      <tr className="wishlist-row" ref={rowRef} style={hidden ? { display: "none" } : undefined}>
+      <tr
+        className="wishlist-row"
+        ref={rowRef}
+        style={hidden ? { display: "none" } : undefined}
+        aria-hidden={hidden ? "true" : "false"}
+      >
         {/* img */}
         <td className="tp-cart-img wishlist-cell">
           <Link href={`/fabric/${slug}`} className="wishlist-img-link">
