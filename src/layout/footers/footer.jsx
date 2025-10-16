@@ -34,6 +34,13 @@ const PhoneIcon = () => (
   </svg>
 );
 
+/* SVG Fallback for YouTube (shows even if icon fonts are missing) */
+const YouTubeSvg = (props) => (
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" {...props}>
+    <path fill="currentColor" d="M23.5 6.2a3.7 3.7 0 0 0-2.6-2.6C18.9 3 12 3 12 3s-6.9 0-8.9.6A3.7 3.7 0 0 0 .5 6.2 38.7 38.7 0 0 0 0 12c0 1.9.2 3.8.5 5.8a3.7 3.7 0 0 0 2.6 2.6C5.1 21 12 21 12 21s6.9 0 8.9-.6a3.7 3.7 0 0 0 2.6-2.6c.3-2 .5-3.9.5-5.8 0-1.9-.2-3.8-.5-5.8zM9.6 15.6V8.4L15.8 12l-6.2 3.6z"/>
+  </svg>
+);
+
 const Footer = () => {
   return (
     <footer aria-label="Site Footer" className="age-footer">
@@ -154,19 +161,28 @@ const Footer = () => {
 
                   {/* Social */}
                   <div className="age-social" role="group" aria-label="Social links">
-                    {social_data.map((s) => (
-                      <a
-                        key={s.id}
-                        href={s.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={s.label || 'Social link'}
-                        title={s.label || undefined}
-                        className="age-socialBtn"
-                      >
-                        <i className={s.icon} aria-hidden="true" />
-                      </a>
-                    ))}
+                    {social_data.map((s) => {
+                      const isYouTube =
+                        (s.label && /youtube/i.test(s.label)) ||
+                        (s.icon && /youtube/i.test(s.icon));
+                      return (
+                        <a
+                          key={s.id}
+                          href={s.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={s.label || 'Social link'}
+                          title={s.label || undefined}
+                          className="age-socialBtn"
+                        >
+                          {isYouTube ? (
+                            <YouTubeSvg />
+                          ) : (
+                            <i className={s.icon} aria-hidden="true" />
+                          )}
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -224,7 +240,7 @@ const Footer = () => {
         .age-container{ max-width:1200px; margin:0 auto; padding:0 16px; }
         .age-grid{
           display:grid;
-          grid-template-columns: 1.2fr .8fr .9fr .9fr; /* close to your original */
+          grid-template-columns: 1.2fr .8fr .9fr .9fr;
           gap:28px;
         }
         @media (max-width: 991px){
@@ -256,13 +272,24 @@ const Footer = () => {
           content:''; position:absolute; left:0; bottom:-8px; width:36px; height:3px; border-radius:3px;
           background:linear-gradient(90deg,${BRAND_GOLD},${BRAND_BLUE}); opacity:.95;
         }
+
+        /* Links behave like phone/email (dashed underline + gold on hover) */
         .age-list{ list-style:none; margin:0; padding:0; }
         .age-list li{ margin:0 0 10px; }
         .age-link{
-          display:inline-block; font-weight:600; font-size:15px; text-decoration:none; color:${TEXT_MAIN};
-          transition:color .22s ease, transform .15s ease;
+          display:inline-block;
+          font-weight:600;
+          font-size:15px;
+          text-decoration:none;
+          color:${TEXT_MAIN};
+          border-bottom:1px dashed rgba(255,255,255,.25);
+          transition:color .22s ease, transform .15s ease, border-bottom-color .22s ease;
         }
-        .age-link:hover{ color:${BRAND_GOLD}; transform:translateX(3px); }
+        .age-link:hover{
+          color:${BRAND_GOLD};
+          border-bottom-color:${BRAND_GOLD};
+          transform:translateX(3px);
+        }
 
         /* Address board */
         .age-addressBoard{
@@ -314,6 +341,7 @@ const Footer = () => {
         .age-talkIcon{ color:${BRAND_GOLD}; display:inline-flex; align-items:center; justify-content:center; }
         .age-talkLink{
           color:${TEXT_MAIN}; text-decoration:none; border-bottom:1px dashed rgba(255,255,255,.25);
+          transition:color .22s ease, border-bottom-color .22s ease;
         }
         .age-talkLink:hover{ color:${BRAND_GOLD}; border-bottom-color:${BRAND_GOLD}; }
 
