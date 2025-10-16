@@ -4,7 +4,6 @@ import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-// internal (kept your social + icons)
 import social_data from '@/data/social-data';
 import { Email, Location } from '@/svg';
 
@@ -34,7 +33,7 @@ const PhoneIcon = () => (
   </svg>
 );
 
-/* SVG Fallback for YouTube (shows even if icon fonts are missing) */
+/* SVG Fallback for YouTube */
 const YouTubeSvg = (props) => (
   <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" {...props}>
     <path fill="currentColor" d="M23.5 6.2a3.7 3.7 0 0 0-2.6-2.6C18.9 3 12 3 12 3s-6.9 0-8.9.6A3.7 3.7 0 0 0 .5 6.2 38.7 38.7 0 0 0 0 12c0 1.9.2 3.8.5 5.8a3.7 3.7 0 0 0 2.6 2.6C5.1 21 12 21 12 21s6.9 0 8.9-.6a3.7 3.7 0 0 0 2.6-2.6c.3-2 .5-3.9.5-5.8 0-1.9-.2-3.8-.5-5.8zM9.6 15.6V8.4L15.8 12l-6.2 3.6z"/>
@@ -42,6 +41,23 @@ const YouTubeSvg = (props) => (
 );
 
 const Footer = () => {
+  // ensure there’s a youtube entry; if not, add one so the icon always shows
+  const socials = React.useMemo(() => {
+    const hasYouTube = (social_data || []).some(
+      s => /youtube/i.test(`${s?.label ?? ''} ${s?.icon ?? ''}`)
+    );
+    if (hasYouTube) return social_data;
+    return [
+      ...(social_data || []),
+      {
+        id: 'yt-fallback',
+        label: 'YouTube',
+        icon: 'fa-brands fa-youtube',
+        link: 'https://www.youtube.com/', // change to your channel URL
+      },
+    ];
+  }, []);
+
   return (
     <footer aria-label="Site Footer" className="age-footer">
       <div className="age-footer__gradient">
@@ -161,10 +177,9 @@ const Footer = () => {
 
                   {/* Social */}
                   <div className="age-social" role="group" aria-label="Social links">
-                    {social_data.map((s) => {
+                    {socials.map((s) => {
                       const isYouTube =
-                        (s.label && /youtube/i.test(s.label)) ||
-                        (s.icon && /youtube/i.test(s.icon));
+                        /youtube/i.test(`${s?.label ?? ''} ${s?.icon ?? ''} ${s?.link ?? ''}`);
                       return (
                         <a
                           key={s.id}
@@ -191,7 +206,7 @@ const Footer = () => {
           </div>
         </div>
 
-        {/* ===== Bottom (copyright + mini trusted logos) ===== */}
+        {/* ===== Bottom ===== */}
         <div className="age-footer__bottom">
           <div className="age-container">
             <div className="age-bottomWrap">
@@ -224,159 +239,91 @@ const Footer = () => {
 
       {/* ===== styles ===== */}
       <style jsx>{`
-        /* Footer-only fonts (scoped) */
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Poppins:wght@600;700;800&display=swap');
 
-        .age-footer {
-          font-family:'Plus Jakarta Sans', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif;
-          color:${TEXT_MAIN};
-        }
-        .age-footer__gradient{
-          background:linear-gradient(180deg,${BG_TOP},${BG_BOTTOM});
-          border-top:1px solid ${BORDER_SOFT};
-        }
+        .age-footer { font-family:'Plus Jakarta Sans', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif; color:${TEXT_MAIN}; }
+        .age-footer__gradient{ background:linear-gradient(180deg,${BG_TOP},${BG_BOTTOM}); border-top:1px solid ${BORDER_SOFT}; }
 
-        /* Layout primitives (namespaced, no collision) */
         .age-container{ max-width:1200px; margin:0 auto; padding:0 16px; }
-        .age-grid{
-          display:grid;
-          grid-template-columns: 1.2fr .8fr .9fr .9fr;
-          gap:28px;
-        }
-        @media (max-width: 991px){
-          .age-grid{ grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 575px){
-          .age-grid{ grid-template-columns: 1fr; }
-        }
+        .age-grid{ display:grid; grid-template-columns: 1.2fr .8fr .9fr .9fr; gap:28px; }
+        @media (max-width: 991px){ .age-grid{ grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 575px){ .age-grid{ grid-template-columns: 1fr; } }
         .age-col{ min-width:0; }
 
         .age-footer__top{ padding:56px 0 28px; }
-        .age-footer__bottom{
-          background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0));
-          border-top:1px solid ${BORDER_SOFT};
-          padding:16px 0 22px;
-        }
+        .age-footer__bottom{ background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0)); border-top:1px solid ${BORDER_SOFT}; padding:16px 0 22px; }
 
-        /* Titles & links */
         .age-title{
           font-family:'Poppins','Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
-          color:${TEXT_MAIN};
-          font-weight:800;
-          font-size:20px;
-          letter-spacing:.2px;
-          margin:0 0 18px;
-          position:relative;
+          color:${TEXT_MAIN}; font-weight:800; font-size:20px; letter-spacing:.2px; margin:0 0 18px; position:relative;
         }
-        .age-title::after{
-          content:''; position:absolute; left:0; bottom:-8px; width:36px; height:3px; border-radius:3px;
-          background:linear-gradient(90deg,${BRAND_GOLD},${BRAND_BLUE}); opacity:.95;
-        }
+        .age-title::after{ content:''; position:absolute; left:0; bottom:-8px; width:36px; height:3px; border-radius:3px; background:linear-gradient(90deg,${BRAND_GOLD},${BRAND_BLUE}); opacity:.95; }
 
-        /* Links behave like phone/email (dashed underline + gold on hover) */
+        /* Links – stronger specificity + !important to beat globals */
         .age-list{ list-style:none; margin:0; padding:0; }
         .age-list li{ margin:0 0 10px; }
-        .age-link{
-          display:inline-block;
-          font-weight:600;
-          font-size:15px;
-          text-decoration:none;
-          color:${TEXT_MAIN};
-          border-bottom:1px dashed rgba(255,255,255,.25);
+        .age-footer :global(a.age-link){
+          display:inline-block; font-weight:600; font-size:15px; text-decoration:none;
+          color:${TEXT_MAIN} !important;
+          border-bottom:1px dashed rgba(255,255,255,.25) !important;
           transition:color .22s ease, transform .15s ease, border-bottom-color .22s ease;
         }
-        .age-link:hover{
-          color:${BRAND_GOLD};
-          border-bottom-color:${BRAND_GOLD};
+        .age-footer :global(a.age-link:hover){
+          color:${BRAND_GOLD} !important;
+          border-bottom-color:${BRAND_GOLD} !important;
           transform:translateX(3px);
         }
 
-        /* Address board */
         .age-addressBoard{
           background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));
-          border:1px solid ${BORDER_SOFT};
-          border-radius:16px;
-          padding:16px 16px 8px;
+          border:1px solid ${BORDER_SOFT}; border-radius:16px; padding:16px 16px 8px;
         }
         .age-addressSection{ position:relative; padding:10px 0 12px; }
-        .age-addressSection:not(.age--noSep)::after{
-          content:''; position:absolute; left:0; right:0; bottom:0; height:1px; background:${BORDER_SOFT};
-        }
+        .age-addressSection:not(.age--noSep)::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:1px; background:${BORDER_SOFT}; }
         .age-addressTitle{
-          font-family:'Poppins','Plus Jakarta Sans',system-ui;
-          font-weight:800; letter-spacing:.2px; margin:0 0 6px; color:${TEXT_MAIN};
+          font-family:'Poppins','Plus Jakarta Sans',system-ui; font-weight:800; letter-spacing:.2px; margin:0 0 6px; color:${TEXT_MAIN};
           display:flex; align-items:center; gap:8px;
         }
-        .age-addressTitle::before{
-          content:''; width:8px; height:8px; border-radius:50%;
-          background:linear-gradient(90deg,${BRAND_GOLD},${BRAND_BLUE});
-          box-shadow:0 0 0 3px rgba(255,255,255,.06);
-        }
+        .age-addressTitle::before{ content:''; width:8px; height:8px; border-radius:50%; background:linear-gradient(90deg,${BRAND_GOLD},${BRAND_BLUE}); box-shadow:0 0 0 3px rgba(255,255,255,.06); }
         .age-addressLines{ color:${TEXT_SOFT}; line-height:1.65; }
 
-        /* Newsletter */
         .age-newsMini{ margin:6px 0 12px; }
         .age-newsDesc{ color:${TEXT_SOFT}; margin:0 0 10px; font-size:18px; line-height:1.65; }
-        .age-pill{
-          position:relative; display:flex; align-items:center;
-          background:#fff; border:1px solid rgba(0,0,0,.04);
-          border-radius:9999px; height:52px; padding:6px;
-          box-shadow:0 10px 26px rgba(0,0,0,.18);
-        }
-        .age-pill input{
-          flex:1; height:100%; background:transparent; border:none; color:#0b1220;
-          padding:0 18px; outline:none; font-size:15px;
-        }
+        .age-pill{ position:relative; display:flex; align-items:center; background:#fff; border:1px solid rgba(0,0,0,.04); border-radius:9999px; height:52px; padding:6px; box-shadow:0 10px 26px rgba(0,0,0,.18); }
+        .age-pill input{ flex:1; height:100%; background:transparent; border:none; color:#0b1220; padding:0 18px; outline:none; font-size:15px; }
         .age-pill input::placeholder{ color:#6b7280; }
-        .age-pillBtn{
-          width:40px; height:40px; border-radius:9999px; border:none; cursor:pointer;
-          display:flex; align-items:center; justify-content:center;
-          background:${BRAND_GOLD}; color:#fff; box-shadow:0 10px 22px rgba(214,167,75,.35);
-        }
+        .age-pillBtn{ width:40px; height:40px; border-radius:9999px; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; background:${BRAND_GOLD}; color:#fff; box-shadow:0 10px 22px rgba(214,167,75,.35); }
         .age-arrow{ font-size:24px; line-height:1; transform:translateY(-1px); }
 
-        /* Talk */
         .age-talk{ margin:12px 0 6px; }
         .age-talkRow{ display:flex; gap:10px; align-items:center; margin:6px 0; }
         .age-talkIcon{ color:${BRAND_GOLD}; display:inline-flex; align-items:center; justify-content:center; }
-        .age-talkLink{
-          color:${TEXT_MAIN}; text-decoration:none; border-bottom:1px dashed rgba(255,255,255,.25);
-          transition:color .22s ease, border-bottom-color .22s ease;
-        }
+        .age-talkLink{ color:${TEXT_MAIN}; text-decoration:none; border-bottom:1px dashed rgba(255,255,255,.25); transition:color .22s ease, border-bottom-color .22s ease; }
         .age-talkLink:hover{ color:${BRAND_GOLD}; border-bottom-color:${BRAND_GOLD}; }
 
-        /* Quick HQ line */
         .age-talkAddress{ margin-top:6px; }
         .age-addrRow{ display:flex; gap:10px; align-items:flex-start; }
         .age-addrPin{ color:${BRAND_GOLD}; display:inline-flex; align-items:center; justify-content:center; }
         .age-addrPin :global(svg){ width:18px; height:18px; stroke-width:1.8; }
         .age-addrLines{ line-height:1.65; color:${TEXT_SOFT}; }
 
-        /* Social */
         .age-social{ display:flex; gap:12px; margin-top:14px; flex-wrap:wrap; }
         .age-socialBtn{
           width:44px; height:44px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center;
           color:${TEXT_MAIN}; border:1px solid ${BORDER_SOFT}; background:rgba(255,255,255,.06);
           transition:transform .15s ease, box-shadow .2s ease, background .2s;
         }
-        .age-socialBtn:hover{
-          transform:translateY(-3px);
-          background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,.08));
-          box-shadow:0 10px 24px rgba(0,0,0,.35);
-        }
+        .age-socialBtn:hover{ transform:translateY(-3px); background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,.08)); box-shadow:0 10px 24px rgba(0,0,0,.35); }
         .age-social i { font-style: normal; color:${TEXT_MAIN}; }
         :global(.age-social .fa-brands){ font-family:"Font Awesome 6 Brands" !important; font-weight:400 !important; }
-        :global(.age-social .fa-solid),
-        :global(.age-social .fa-regular){ font-family:"Font Awesome 6 Free" !important; font-weight:900 !important; }
+        :global(.age-social .fa-solid), :global(.age-social .fa-regular){ font-family:"Font Awesome 6 Free" !important; font-weight:900 !important; }
 
-        /* Bottom */
         .age-bottomWrap{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; }
         .age-topbar{ width:72px; height:3px; border-radius:3px; background:linear-gradient(90deg,${BRAND_BLUE},${BRAND_GOLD}); opacity:.9; }
         .age-copy{ margin:0; color:${TEXT_SOFT}; font-size:14.5px; letter-spacing:.25px; }
         .age-copy strong{ color:${TEXT_MAIN}; font-weight:800; }
         .age-dot{ margin:0 10px; color:rgba(255,255,255,.45); }
 
-        /* MINI trusted logos */
         .age-trust{ display:flex; gap:10px; margin-top:2px; }
         .age-trustCard{
           width:52px; height:52px; border-radius:12px; background:#fff;
@@ -385,17 +332,11 @@ const Footer = () => {
           display:flex; align-items:center; justify-content:center;
           transition:transform .16s ease, box-shadow .16s ease, filter .16s ease;
         }
-        .age-trustCard:hover{
-          transform:translateY(-2px);
-          box-shadow:0 10px 22px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.85);
-        }
+        .age-trustCard:hover{ transform:translateY(-2px); box-shadow:0 10px 22px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.85); }
         .age-trustCard :global(img){ max-height:36px; filter:grayscale(.05) saturate(.95) contrast(1.05); }
         .age-trustCard:hover :global(img){ filter:grayscale(0) saturate(1.2) contrast(1.1); }
 
-        /* Responsive tweaks */
-        @media (max-width:991px){
-          .age-title{ font-size:18px; }
-        }
+        @media (max-width:991px){ .age-title{ font-size:18px; } }
         @media (max-width:575px){
           .age-footer__top{ padding:44px 0 24px; }
           .age-copy{ font-size:13.6px; }
