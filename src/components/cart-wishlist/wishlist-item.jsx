@@ -6,9 +6,10 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Close } from "@/svg";
 import { add_cart_product } from "@/redux/features/cartSlice";
-import { removeWishlistItem, fetchWishlist } from "@/redux/features/wishlist-slice"; // ⟵ NEW
+import { removeWishlistItem } from "@/redux/features/wishlist-slice";
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
+import useWishlistManager from "@/hooks/useWishlistManager";
 
 import useGlobalSearch from "@/hooks/useGlobalSearch";
 import { buildSearchPredicate } from "@/utils/searchMiddleware";
@@ -32,15 +33,6 @@ const isNoneish = (s) => {
   const t = String(s).trim().toLowerCase().replace(/\s+/g, " ");
   return ["none", "na", "none/ na", "none / na", "n/a", "-"].includes(t);
 };
-
-/* ---------- user id helpers ---------- */
-const selectUserIdFromStore = (state) =>
-  state?.auth?.user?._id ||
-  state?.auth?.user?.id ||
-  state?.auth?.userInfo?._id ||
-  state?.auth?.userInfo?.id ||
-  state?.user?.user?._id ||
-  null;
 
 /* ---------- empty-banner manager (DOM only) ---------- */
 function useEmptyBanner(listId, rowVisible, emptyText) {
@@ -115,8 +107,7 @@ const WishlistItem = ({ product }) => {
 
   const dispatch = useDispatch();
   const { cart_products } = useSelector((state) => state.cart);
-  const { wishlist, loading } = useSelector((state) => state.wishlist); // subscribe
-  const userId = useSelector(selectUserIdFromStore);
+  const { userId, wishlist, loading } = useWishlistManager();
 
   const { _id, title, salesPrice } = product || {};
   const isInCart = cart_products?.find?.((item) => item?._id === _id);
@@ -147,23 +138,7 @@ const WishlistItem = ({ product }) => {
     []
   );
 
-  // Initial fetch + refetch on focus/visibility change
-  useEffect(() => {
-    if (!userId) return;
-    dispatch(fetchWishlist(userId));
-  }, [dispatch, userId]);
-
-  useEffect(() => {
-    const refetch = () => userId && dispatch(fetchWishlist(userId));
-    const onFocus = () => refetch();
-    const onVisible = () => document.visibilityState === "visible" && refetch();
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [dispatch, userId]);
+  // Wishlist fetching is now handled by useWishlistManager hook
 
   const matchesQuery = useMemo(() => {
     const q = (globalQuery || "").trim();

@@ -47,19 +47,7 @@ const uniq = (arr) => {
 };
 const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
 
-/* ---- user helpers ---- */
-const selectUserIdFromStore = (state) =>
-  state?.auth?.user?._id ||
-  state?.auth?.user?.id ||
-  state?.auth?.userInfo?._id ||
-  state?.auth?.userInfo?.id ||
-  state?.user?.user?._id ||
-  null;
-
-const getUserIdFromLocal = () => {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('userId') || localStorage.getItem('userid') || null;
-};
+import { selectUserId } from '@/utils/userSelectors';
 
 const ProductItem = ({ product }) => {
   const router = useRouter();
@@ -77,30 +65,8 @@ const ProductItem = ({ product }) => {
     }
   }, []);
 
-  // 1) Read Redux userId
-  const reduxUserId = useSelector(selectUserIdFromStore);
-
-  // 2) Fallback to localStorage while Redux hydrates
-  const [localUserId, setLocalUserId] = useState(() => getUserIdFromLocal());
-
-  // Keep local fallback in sync if user logs in/out in another tab or later in the session
-  useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === 'userId' || e.key === 'userid') {
-        setLocalUserId(getUserIdFromLocal());
-      }
-    };
-    const onFocus = () => setLocalUserId(getUserIdFromLocal());
-    window.addEventListener('storage', onStorage);
-    window.addEventListener('focus', onFocus);
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, []);
-
-  // 3) Effective userId
-  const userId = reduxUserId || localUserId;
+  // Get userId from centralized selector
+  const userId = useSelector(selectUserId);
 
   // act immediately
   const handleAddProduct = (prd, e) => {

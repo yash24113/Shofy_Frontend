@@ -147,6 +147,7 @@ const initialState = {
   wishlist: [],     // array of product docs (local for UI; server persists IDs)
   loading: false,
   error: null,
+  currentUserId: null, // Track which user's wishlist we're showing
 };
 
 export const wishlistSlice = createSlice({
@@ -161,6 +162,14 @@ export const wishlistSlice = createSlice({
       state.wishlist = [];
       state.error = null;
       state.loading = false;
+      state.currentUserId = null;
+    },
+    // Clear wishlist when user changes
+    clear_wishlist_for_user_switch(state) {
+      state.wishlist = [];
+      state.error = null;
+      state.loading = false;
+      // Don't clear currentUserId here, let the fetch action set it
     },
   },
   extraReducers: (builder) => {
@@ -170,13 +179,14 @@ export const wishlistSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchWishlist.fulfilled, (state, { payload }) => {
+      .addCase(fetchWishlist.fulfilled, (state, { payload, meta }) => {
         state.loading = false;
         // payload may be ids only; normalize to docs with _id
         state.wishlist = (Array.isArray(payload) ? payload : []).map((x) => {
           const id = getPid(x);
           return typeof x === "object" ? { ...x, _id: id, id } : { _id: id, id };
         });
+        state.currentUserId = meta.arg; // Track which user's wishlist we loaded
       })
       .addCase(fetchWishlist.rejected, (state, { payload }) => {
         state.loading = false;
@@ -202,5 +212,5 @@ export const wishlistSlice = createSlice({
   },
 });
 
-export const { set_wishlist, clear_wishlist } = wishlistSlice.actions;
+export const { set_wishlist, clear_wishlist, clear_wishlist_for_user_switch } = wishlistSlice.actions;
 export default wishlistSlice.reducer;

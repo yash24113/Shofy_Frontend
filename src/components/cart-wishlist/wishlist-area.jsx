@@ -4,42 +4,13 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import WishlistItem from './wishlist-item';
 import { Plus } from '@/svg';
-import { fetchWishlist } from '@/redux/features/wishlist-slice';
-
-/* --------------------------- userId selector --------------------------- */
-const selectUserIdFromStore = (state) =>
-  state?.auth?.user?._id ||
-  state?.auth?.user?.id ||
-  state?.auth?.userInfo?._id ||
-  state?.auth?.userInfo?.id ||
-  state?.user?.user?._id ||
-  null;
+import useWishlistManager from '@/hooks/useWishlistManager';
 
 const WishlistArea = () => {
-  const dispatch = useDispatch();
   const router = useRouter();
 
-  const { wishlist, loading } = useSelector((s) => s.wishlist) || { wishlist: [], loading: false };
-  const userId = useSelector(selectUserIdFromStore);
-
-  /* --------------------------- initial + reactive fetch --------------------------- */
-  // Fetch on mount and whenever userId changes (e.g., you switch Google account)
-  useEffect(() => {
-    if (userId) dispatch(fetchWishlist(userId));
-  }, [dispatch, userId]);
-
-  // Refetch whenever tab regains focus or visibility changes
-  useEffect(() => {
-    const refetch = () => userId && dispatch(fetchWishlist(userId));
-    const onFocus = () => refetch();
-    const onVisible = () => document.visibilityState === 'visible' && refetch();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [dispatch, userId]);
+  // Use the wishlist manager hook
+  const { userId, wishlist, loading } = useWishlistManager();
 
   /* --------------------------- actions --------------------------- */
   const handleAddProduct = () => router.push('/shop');
