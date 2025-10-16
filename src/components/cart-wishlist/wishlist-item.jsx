@@ -223,8 +223,32 @@ const WishlistItem = ({ product }) => {
         });
       } catch(_) { /* proceed to local update regardless */ }
 
-      // 2) Optimistically update local cart slice
-      dispatch(add_cart_product(prd));
+      // 2) Optimistically update local cart slice (and persist to localStorage)
+      const priceRaw = pick(
+        prd?.salesPrice,
+        prd?.price,
+        prd?.product?.salesPrice,
+        prd?.product?.price
+      );
+      const normalizedCartItem = {
+        ...prd,
+        _id,
+        id: _id,
+        title:
+          toText(pick(
+            prd?.title,
+            prd?.name,
+            prd?.product?.name,
+            prd?.productname,
+            prd?.productTitle,
+            prd?.seoTitle,
+            prd?.groupcode?.name,
+          )) || 'Product',
+        price: Number(priceRaw || 0),
+        image: prd?.image || prd?.img || prd?.image1 || prd?.product?.img || '',
+        quantity: 1, // default quantity 1
+      };
+      dispatch(add_cart_product(normalizedCartItem));
 
       // 3) Remove from wishlist on server and refresh
       await dispatch(
