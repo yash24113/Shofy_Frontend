@@ -108,6 +108,7 @@ export const apiSlice = createApi({
     "Subfinish",
     "Subsuitable",
     "Group",
+    "Cart",
   ],
 });
 

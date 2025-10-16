@@ -234,8 +234,9 @@ const WishlistItem = ({ product }) => {
         ...prd,
         _id,
         id: _id,
-        title:
-          toText(pick(
+        title: (() => {
+          // Use the same logic as getDisplayTitle to avoid IDs
+          const nameOptions = [
             prd?.title,
             prd?.name,
             prd?.product?.name,
@@ -243,7 +244,19 @@ const WishlistItem = ({ product }) => {
             prd?.productTitle,
             prd?.seoTitle,
             prd?.groupcode?.name,
-          )) || 'Product',
+            prd?.fabricType,
+            prd?.content,
+            prd?.design,
+          ].filter(Boolean);
+          
+          const actualName = nameOptions.find(name => {
+            if (!name) return false;
+            const nameStr = String(name).trim();
+            return nameStr.length > 0 && !/^[a-f0-9]{24}$/i.test(nameStr);
+          });
+          
+          return actualName ? toText(actualName) : 'Product';
+        })(),
         price: Number(priceRaw || 0),
         image: prd?.image || prd?.img || prd?.image1 || prd?.product?.img || '',
         quantity: 1, // default quantity 1
@@ -303,9 +316,25 @@ const WishlistItem = ({ product }) => {
         : `${(apiBase || fallbackCdn)}/uploads/${clean(rawImg)}`)
     : '';
 
-  // Title and slug fallbacks
-  const getDisplayTitle =
-    toText(pick(
+  // Title and slug fallbacks - prioritize actual names over IDs
+  const getDisplayTitle = useMemo(() => {
+    // Debug: Log all available name options
+    console.log('Wishlist Item - Product Data:', {
+      id: _id,
+      title: product?.title,
+      name: product?.name,
+      productName: product?.product?.name,
+      productname: product?.productname,
+      productTitle: product?.productTitle,
+      seoTitle: product?.seoTitle,
+      groupcodeName: product?.groupcode?.name,
+      fabricType: product?.fabricType,
+      content: product?.content,
+      design: product?.design,
+    });
+    
+    // First try to get actual product names/titles
+    const nameOptions = [
       product?.title,
       product?.name,
       product?.product?.name,
@@ -313,7 +342,50 @@ const WishlistItem = ({ product }) => {
       product?.productTitle,
       product?.seoTitle,
       product?.groupcode?.name,
-    ));
+      product?.fabricType,
+      product?.content,
+      product?.design,
+    ].filter(Boolean);
+    
+    // If we have actual names, use the first one
+    const actualName = nameOptions.find(name => {
+      if (!name) return false;
+      const nameStr = String(name).trim();
+      // Don't use IDs (long alphanumeric strings) as names
+      return nameStr.length > 0 && !/^[a-f0-9]{24}$/i.test(nameStr);
+    });
+    
+    if (actualName) {
+      console.log('Wishlist Item - Using actual name:', actualName);
+      return toText(actualName);
+    }
+    
+    // Fallback to any available text (but not IDs)
+    const fallback = nameOptions.find(name => {
+      const nameStr = String(name).trim();
+      return nameStr.length > 0 && nameStr.length < 50; // Reasonable length for a name
+    });
+    
+    // If still no good name, try to build one from fabric details
+    if (!fallback) {
+      const fabricParts = [
+        product?.color || product?.colorName,
+        product?.content || product?.contentName,
+        product?.fabricType,
+        product?.design || product?.designName,
+      ].filter(Boolean).map(part => toText(part));
+      
+      if (fabricParts.length > 0) {
+        const builtName = fabricParts.join(' ') + ' Fabric';
+        console.log('Wishlist Item - Built name from parts:', builtName);
+        return builtName;
+      }
+    }
+    
+    const result = fallback ? toText(fallback) : 'Product';
+    console.log('Wishlist Item - Final title:', result);
+    return result;
+  }, [product, _id]);
   const slug = product?.slug || product?.product?.slug || _id;
 
   const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));

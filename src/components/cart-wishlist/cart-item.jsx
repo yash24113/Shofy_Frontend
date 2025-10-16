@@ -3,14 +3,15 @@ import React, { useMemo, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
 // icons & actions
 import { Close, Minus, Plus } from "@/svg";
+import { toggleWishlistItem } from "@/redux/features/wishlist-slice";
+import { selectUserId } from "@/utils/userSelectors";
 import {
-  add_cart_product,
-  quantityDecrement,
-  remove_product,
-} from "@/redux/features/cartSlice";
-import { add_to_wishlist } from "@/redux/features/wishlist-slice";
+  useUpdateCartItemMutation,
+  useRemoveCartItemMutation,
+} from "@/redux/features/cartApi";
 
 /* 🔎 add search */
 import useGlobalSearch from "@/hooks/useGlobalSearch";
@@ -84,12 +85,16 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
 
 const CartItem = ({ product }) => {
   const dispatch = useDispatch();
+  const userId = useSelector(selectUserId);
+  const [updateCartItem, { isLoading: isUpdating }] = useUpdateCartItemMutation();
+  const [removeCartItem, { isLoading: isRemoving }] = useRemoveCartItemMutation();
 
   /* 🔎 global query */
   const { debounced: q } = useGlobalSearch();
 
   // normalize fields
   const {
+    productId,
     _id,
     id,
     slug,
@@ -98,11 +103,11 @@ const CartItem = ({ product }) => {
     title = "Product",
     salesPrice = 0,
     price = 0,
-    orderQuantity = 0,
+    orderQuantity,
     quantity: stockQuantity,
   } = product || {};
 
-  const PID = _id || id;
+  const PID = productId || _id || id;
   const href = `/fabric/${slug || PID || ""}`;
   const unit = typeof salesPrice === "number"
     ? salesPrice
@@ -128,11 +133,52 @@ const CartItem = ({ product }) => {
     image: image || img || "",
   };
 
-  const inc = () => dispatch(add_cart_product(normalized));
-  const dec = () => dispatch(quantityDecrement({ _id: PID, id: PID }));
-  const remove = () => {
-    dispatch(add_to_wishlist(product));
-    dispatch(remove_product({ _id: PID, id: PID, title }));
+  const inc = async () => {
+    if (!PID || isUpdating) return;
+    const newQuantity = (orderQuantity || 0) + 1;
+    console.log('Increasing quantity:', { productId: PID, currentQuantity: orderQuantity, newQuantity });
+    
+    try {
+      const result = await updateCartItem({ 
+        productId: PID, 
+        quantity: newQuantity,
+        userId,
+      }).unwrap();
+      console.log('Quantity increased successfully:', result);
+    } catch (error) {
+      console.error('Failed to increment quantity:', error);
+    }
+  };
+
+  const dec = async () => {
+    if (!PID || isUpdating || (orderQuantity || 0) <= 1) return;
+    const newQuantity = Math.max(1, (orderQuantity || 0) - 1);
+    console.log('Decreasing quantity:', { productId: PID, currentQuantity: orderQuantity, newQuantity });
+    
+    try {
+      const result = await updateCartItem({ 
+        productId: PID, 
+        quantity: newQuantity,
+        userId, 
+      }).unwrap();
+      console.log('Quantity decreased successfully:', result);
+    } catch (error) {
+      console.error('Failed to decrement quantity:', error);
+    }
+  };
+
+  const remove = async () => {
+    if (!PID || isRemoving) return;
+    try {
+      // Add to wishlist first (if user is logged in)
+      if (userId) {
+        dispatch(toggleWishlistItem({ userId, productId: PID, product }));
+      }
+      // Then remove from cart
+      await removeCartItem({productId:PID, userId}).unwrap();
+    } catch (error) {
+      console.error('Failed to remove item:', error);
+    }
   };
 
   /* 🔎 decide row visibility */
@@ -185,13 +231,25 @@ const CartItem = ({ product }) => {
         {/* quantity */}
         <td className="col-qty">
           <div className="qty">
-            <button type="button" className="qty-btn" onClick={dec} aria-label={`Decrease ${title}`}>
+            <button 
+              type="button" 
+              className={`qty-btn ${isUpdating ? 'loading' : ''}`}
+              onClick={dec} 
+              disabled={isUpdating || (orderQuantity || 0) <= 1}
+              aria-label={`Decrease ${title}`}
+            >
               <Minus />
             </button>
             <span className="qty-value" aria-live="polite" aria-label={`Quantity of ${title}`}>
               {orderQuantity}
             </span>
-            <button type="button" className="qty-btn" onClick={inc} aria-label={`Increase ${title}`}>
+            <button 
+              type="button" 
+              className={`qty-btn ${isUpdating ? 'loading' : ''}`}
+              onClick={inc} 
+              disabled={isUpdating}
+              aria-label={`Increase ${title}`}
+            >
               <Plus />
             </button>
           </div>
@@ -199,9 +257,15 @@ const CartItem = ({ product }) => {
 
         {/* action */}
         <td className="col-action">
-          <button type="button" onClick={remove} className="btn-ghost-invert square" title="Remove item">
+          <button 
+            type="button" 
+            onClick={remove} 
+            disabled={isRemoving}
+            className={`btn-ghost-invert square ${isRemoving ? 'loading' : ''}`} 
+            title="Remove item"
+          >
             <Close />
-            <span>Remove</span>
+            <span>{isRemoving ? 'Removing...' : 'Remove'}</span>
           </button>
         </td>
       </tr>
@@ -227,14 +291,18 @@ const CartItem = ({ product }) => {
 
         .qty{ display:inline-flex; align-items:center; gap:14px; border:1px solid #e5e7eb; border-radius:999px; background:#fff; padding:8px 14px; }
         .qty-btn{ display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:999px; border:0; background:#f3f4f6; cursor:pointer; transition:background .15s ease, transform .04s ease; }
-        .qty-btn:hover{ background:#e5e7eb; }
-        .qty-btn:active{ transform:scale(.98); }
+        .qty-btn:hover:not(:disabled){ background:#e5e7eb; }
+        .qty-btn:active:not(:disabled){ transform:scale(.98); }
+        .qty-btn:disabled{ opacity:0.6; cursor:not-allowed; }
+        .qty-btn.loading{ opacity:0.7; }
         .qty-value{ min-width:28px; text-align:center; font-weight:700; font-size:16px; color:#0b1220; line-height:1; letter-spacing:.2px; }
 
         .btn-ghost-invert.square { --navy: #0b1620; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 22px; min-height: 44px; background: var(--navy); color: #fff; font-weight: 600; font-size: 15px; line-height: 1; border: 1px solid var(--navy); border-radius: 0; cursor: pointer; user-select: none; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); transition: background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 120ms ease; }
-        .btn-ghost-invert.square:hover { background: #fff; color: var(--navy); border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,.12); transform: translateY(-1px); }
-        .btn-ghost-invert.square:active { transform: translateY(0); background: #f8fafc; color: var(--navy); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15); }
+        .btn-ghost-invert.square:hover:not(:disabled) { background: #fff; color: var(--navy); border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,.12); transform: translateY(-1px); }
+        .btn-ghost-invert.square:active:not(:disabled) { transform: translateY(0); background: #f8fafc; color: var(--navy); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15); }
         .btn-ghost-invert.square:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(11, 22, 32, 0.35); }
+        .btn-ghost-invert.square:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-ghost-invert.square.loading { opacity: 0.7; }
 
         @media (max-width:992px){ .col-title{ max-width:420px; } .col-action{ width:160px; } }
         @media (max-width:640px){

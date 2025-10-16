@@ -4,9 +4,27 @@ import { useRouter } from "next/navigation";
 import useCartInfo from "@/hooks/use-cart-info";
 
 const CartCheckout = () => {
-  const { total } = useCartInfo();
+  const { total, quantity } = useCartInfo();
   const [shipCost, setShipCost] = useState(0);
   const router = useRouter();
+  
+  // Don't show checkout if no items
+  if (quantity === 0) {
+    return (
+      <div className="tp-cart-checkout-wrapper">
+        <div className="text-center py-4">
+          <p>Your cart is empty</p>
+          <button
+            type="button"
+            className="btn-ghost-invert w-100"
+            onClick={() => router.push('/shop')}
+          >
+            Continue Shopping
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // handle shipping cost
   const handleShippingCost = (value) => {

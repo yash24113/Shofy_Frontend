@@ -7,16 +7,47 @@ import { useDispatch, useSelector } from 'react-redux';
 import useCartInfo from '@/hooks/use-cart-info';
 import RenderCartProgress from './render-cart-progress';
 import empty_cart_img from '@assets/img/product/cartmini/empty-cart.png';
-import { closeCartMini, remove_product } from '@/redux/features/cartSlice';
+import { closeCartMini } from '@/redux/features/cartSlice';
+import { selectUserId } from '@/utils/userSelectors';
+import { 
+  useGetCartDataQuery, 
+  useRemoveCartItemMutation 
+} from '@/redux/features/cartApi';
 
 const CartMiniSidebar = () => {
-  const { cart_products, cartMiniOpen } = useSelector((state) => state.cart);
+  const { cartMiniOpen } = useSelector((state) => state.cart);
+  const userId = useSelector(selectUserId);
   const { total } = useCartInfo();
   const dispatch = useDispatch();
+  
+  // Fetch cart data using API
+  const { 
+    data: cartResponse, 
+    isLoading 
+  } = useGetCartDataQuery(userId, {
+    skip: !userId,
+  });
+  
+  const [removeCartItem, { isLoading: isRemoving }] = useRemoveCartItemMutation();
+  
+  // Debug logging
+  console.log('Cart Mini Debug:', {
+    userId,
+    cartData: cartResponse,
+    isLoading,
+    cartDataKeys: cartResponse ? Object.keys(cartResponse) : 'no data'
+  });
+  
+  const cart_products = cartResponse?.items || [];
 
   // handle remove product
-  const handleRemovePrd = (prd) => {
-    dispatch(remove_product(prd))
+  const handleRemovePrd = async (productId) => {
+    if (isRemoving || !userId || !productId) return;
+    try {
+      await removeCartItem({ productId, userId }).unwrap();
+    } catch (error) {
+      console.error('Failed to remove item:', error);
+    }
   }
 
 // handle close cart mini 
@@ -42,18 +73,28 @@ const handleCloseCartMini = () => {
               <RenderCartProgress/>
             </div>
             {cart_products.length > 0 && <div className="cartmini__widget">
-              {cart_products.map((item,i) => {
-                const slug = item.slug || item._id;
+              {cart_products.map((item) => {
+                const PID = item.productId || item._id || item.id;
+                const slug = item.slug || PID;
+                const href = `/fabric/${slug}`;
+                
+                const rawImg = item.img || item.image || "";
+                const imageUrl = rawImg?.startsWith("http")
+                  ? rawImg
+                  : rawImg
+                  ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${rawImg}`
+                  : '/assets/img/product/default-product-img.jpg';
+
                 return (
-                  <div key={i} className="cartmini__widget-item">
+                  <div key={PID} className="cartmini__widget-item">
                     <div className="cartmini__thumb">
-                      <Link href={`/fabric/${slug}`}>
-                        <Image src={item.img || '/assets/img/product/default-product-img.jpg'} width={70} height={60} alt="product img" />
+                      <Link href={href}>
+                        <Image src={imageUrl} width={70} height={60} alt="product img" />
                       </Link>
                     </div>
                     <div className="cartmini__content">
                       <h5 className="cartmini__title">
-                        <Link href={`/fabric/${slug}`}>{item.name || item.title}</Link>
+                        <Link href={href}>{item.name || item.title}</Link>
                       </h5>
                       <div className="cartmini__price-wrapper">
                         {item.discount > 0 ? (
@@ -68,7 +109,13 @@ const handleCloseCartMini = () => {
                         <span className="cartmini__quantity">{" "}x{item.orderQuantity}</span>
                       </div>
                     </div>
-                    <a onClick={() => handleRemovePrd({ title: item.title, id: item._id })} className="cartmini__del cursor-pointer"><i className="fa-regular fa-xmark"></i></a>
+                    <a 
+                      onClick={() => handleRemovePrd(PID)} 
+                      className={`cartmini__del cursor-pointer ${isRemoving ? 'loading' : ''}`}
+                      style={{ opacity: isRemoving ? 0.6 : 1 }}
+                    >
+                      <i className="fa-regular fa-xmark"></i>
+                    </a>
                   </div>
                 );
               })}

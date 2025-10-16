@@ -1,17 +1,39 @@
 'use client';
 import { useMemo } from "react";
 import { useSelector } from "react-redux";
+import { selectUserId } from "@/utils/userSelectors";
+import { useGetCartDataQuery } from "@/redux/features/cartApi";
 
 const useCartInfo = () => {
+    const userId = useSelector(selectUserId);
+    
+    // Try to get cart data from API first
+    const { data: cartData } = useGetCartDataQuery(userId, {
+        skip: !userId,
+    });
+    
+    // Fallback to Redux cart data if API data is not available
     const { cart_products = [] } = useSelector((state) => state.cart);
+    
+    // Use API data if available, otherwise fallback to Redux
+    // Ensure cartItems is always an array
+    const cartItems = Array.isArray(cartData?.cartItems) 
+        ? cartData.cartItems 
+        : Array.isArray(cartData) 
+            ? cartData 
+            : Array.isArray(cart_products) 
+                ? cart_products 
+                : [];
 
     const { total, quantity } = useMemo(() => {
-        return cart_products.reduce(
+        return cartItems.reduce(
             (cartTotal, cartItem) => {
-                const { salesPrice, orderQuantity } = cartItem;
-                const itemTotal = (salesPrice || 0) * orderQuantity;
+                const { salesPrice, price, orderQuantity, quantity: itemQuantity } = cartItem;
+                const itemPrice = salesPrice || price || 0;
+                const qty = orderQuantity || itemQuantity || 0;
+                const itemTotal = itemPrice * qty;
                 cartTotal.total += itemTotal;
-                cartTotal.quantity += orderQuantity;
+                cartTotal.quantity += qty;
                 return cartTotal;
             },
             {
@@ -19,7 +41,7 @@ const useCartInfo = () => {
                 quantity: 0,
             }
         );
-    }, [cart_products]);
+    }, [cartItems]);
 
     return {
         quantity,
