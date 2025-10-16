@@ -272,6 +272,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     try {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('userId');
+        localStorage.removeItem('sessionId');
         try {
           import('js-cookie')
             .then((Cookies) => Cookies.default.remove('userInfo'))
