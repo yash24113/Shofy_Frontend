@@ -1,33 +1,45 @@
 'use client';
-import React, { useMemo, useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { useRouter } from "next/navigation";
 // icons
 import { Close, Minus, Plus } from "@/svg";
 import { selectUserId } from "@/utils/userSelectors";
 import { useUpdateCartItemMutation } from "@/redux/features/cartApi";
-
-/* 🔎 add search */
+/* refresh cart after mutations */
+import { get_cart_products } from "@/redux/features/cartSlice";
+/* search */
 import useGlobalSearch from "@/hooks/useGlobalSearch";
 import { buildSearchPredicate } from "@/utils/searchMiddleware";
 
-/* ---------- empty-banner manager ---------- */
+/** @typedef {{ vis:number, banner:HTMLTableRowElement|null }} ListVisBucket */
+
+if (typeof window !== "undefined") {
+  // for editor intellisense only
+  window.__listVis = window.__listVis || {};
+}
+
+/* ========= Empty banner manager (JS version) ========= */
 function useEmptyBanner(listId, rowVisible, emptyText) {
   const rowRef = useRef(null);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.__listVis = window.__listVis || {};
-    const bucket = (window.__listVis[listId] = window.__listVis[listId] || { vis: 0, banner: null });
 
-    const tbody = rowRef.current?.closest('tbody');
+    /** @type {Record<string, ListVisBucket>} */
+    const buckets = (window.__listVis = window.__listVis || {});
+    const bucket = (buckets[listId] = buckets[listId] || { vis: 0, banner: null });
+
+    const tbody = rowRef.current?.closest("tbody");
     if (!tbody) return;
 
     const ensureBannerExists = () => {
       if (bucket.banner && bucket.banner.isConnected) return bucket.banner;
-      const tr = document.createElement('tr');
-      tr.className = 'empty-row';
-      const td = document.createElement('td');
+      const tr = document.createElement("tr");
+      tr.className = "empty-row";
+      const td = document.createElement("td");
       td.colSpan = 999;
       td.innerHTML = `
         <div class="empty-wrap" role="status" aria-live="polite">
@@ -42,13 +54,16 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
       return tr;
     };
 
-    let prev = rowRef.current ? rowRef.current.__wasVisible : undefined;
-    if (prev === undefined) { if (rowVisible) bucket.vis += 1; }
-    else {
+    const prevStr = rowRef.current?.dataset.wasVisible;
+    const prev = prevStr === "true" ? true : prevStr === "false" ? false : undefined;
+
+    if (prev === undefined) {
+      if (rowVisible) bucket.vis += 1;
+    } else {
       if (rowVisible && !prev) bucket.vis += 1;
       if (!rowVisible && prev) bucket.vis -= 1;
     }
-    if (rowRef.current) rowRef.current.__wasVisible = rowVisible;
+    if (rowRef.current) rowRef.current.dataset.wasVisible = String(rowVisible);
 
     const banner = bucket.banner;
     if (bucket.vis <= 0) {
@@ -59,9 +74,9 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
     }
 
     return () => {
-      const was = rowRef.current ? rowRef.current.__wasVisible : undefined;
+      const was = rowRef.current?.dataset.wasVisible === "true";
       if (was) bucket.vis = Math.max(0, bucket.vis - 1);
-      if (rowRef.current) rowRef.current.__wasVisible = false;
+      if (rowRef.current) rowRef.current.dataset.wasVisible = "false";
 
       if (bucket.vis <= 0) {
         const b = ensureBannerExists();
@@ -75,16 +90,20 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
   return { rowRef };
 }
 
+/* ========= Component (JS version) ========= */
 const CartItem = ({ product }) => {
+  const dispatch = useDispatch();
+  const router = useRouter();
   const userId = useSelector(selectUserId);
   const [updateCartItem, { isLoading: isUpdating }] = useUpdateCartItemMutation();
+
   const [isRemoving, setIsRemoving] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGone, setIsGone] = useState(false); // optimistic hide
 
-  /* 🔎 global query */
+  /* global query */
   const { debounced: q } = useGlobalSearch();
 
-  // Normalize fields (server returns nested product in productId)
   const {
     productId,
     _id,
@@ -96,134 +115,126 @@ const CartItem = ({ product }) => {
     salesPrice = 0,
     price = 0,
     orderQuantity,
-    quantity: stockQuantity,
   } = product || {};
 
-  // If productId is an object, prefer its fields
   const nested = typeof productId === "object" && productId ? productId : null;
-  const PID = (nested?._id) || (typeof productId === 'string' ? productId : null) || _id || id;
-  const name = nested?.name || title || "Product";
-  const safeSlug = nested?.slug || slug || PID || "";
+
+  const PID =
+    (nested && nested._id) ||
+    (typeof productId === "string" ? productId : null) ||
+    _id ||
+    id ||
+    null;
+
+  const name = (nested && nested.name) || title || "Product";
+  const safeSlug = (nested && nested.slug) || slug || PID || "";
   const href = `/fabric/${safeSlug}`;
 
-  // Prices (fallback if server line price not included)
-  const unit = typeof salesPrice === "number" ? salesPrice : (parseFloat(salesPrice) || price || 0);
+  const unit =
+    typeof salesPrice === "number"
+      ? salesPrice
+      : Number.parseFloat(String(salesPrice)) || price || 0;
   const lineTotal = (unit || 0) * (orderQuantity || 0);
 
-  // Image picking
   const rawImg =
-    nested?.image1 ||
-    nested?.img ||
-    nested?.image ||
-    img ||
-    image ||
-    "";
-  const imageUrl = rawImg?.startsWith("http")
-    ? rawImg
-    : rawImg
-    ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${rawImg}`
-    : "/images/placeholder-portrait.webp";
+    (nested && (nested.image1 || nested.img || nested.image)) || img || image || "";
+  const imageUrl =
+    typeof rawImg === "string" && rawImg.startsWith("http")
+      ? rawImg
+      : rawImg
+      ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${rawImg}`
+      : "/images/placeholder-portrait.webp";
 
   /* -------------------- API helpers -------------------- */
 
   // DELETE /shopy/cart/remove/:productId
-  const removeFromCart = useCallback(async (productId) => {
-    const url = `https://test.amrita-fashions.com/shopy/cart/remove/${productId}`;
-    const res = await fetch(url, {
-      method: 'DELETE',
-      headers: { 
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include',
-      body: JSON.stringify({ userId })
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Cart remove failed: ${res.status} ${text}`);
-    }
-    return res.json().catch(() => ({}));
-  }, [userId]);
+  const removeFromCart = useCallback(
+    async (productIdToRemove) => {
+      const url = `https://test.amrita-fashions.com/shopy/cart/remove/${productIdToRemove}`;
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`Cart remove failed: ${res.status} ${text}`);
+      }
+      await res.json().catch(() => ({}));
+    },
+    [userId]
+  );
 
-  // POST /shopy/wishlist/add
-  const addToWishlist = useCallback(async (userId, productId) => {
+  // POST /shopy/wishlist/add (tries multiple encodings)
+  const addToWishlist = useCallback(async (uId, pId) => {
     const base = `https://test.amrita-fashions.com/shopy/wishlist/add`;
     const options = [
-      // 1) application/x-www-form-urlencoded
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
         },
-        body: new URLSearchParams({
-          userId: String(userId),
-          productId: String(productId)
-        })
+        body: new URLSearchParams({ userId: String(uId), productId: String(pId) }),
       },
-      // 2) application/json
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ userId, productId })
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ userId: uId, productId: pId }),
       },
-      // 3) multipart/form-data
       {
-        method: 'POST',
+        method: "POST",
         body: (() => {
           const fd = new FormData();
-          fd.append('userId', String(userId));
-          fd.append('productId', String(productId));
+          fd.append("userId", String(uId));
+          fd.append("productId", String(pId));
           return fd;
-        })()
+        })(),
       },
-      // 4) query parameters
       {
-        method: 'POST',
-        url: `${base}?userId=${encodeURIComponent(String(userId))}&productId=${encodeURIComponent(String(productId))}`
-      }
+        method: "POST",
+        url: `${base}?userId=${encodeURIComponent(String(uId))}&productId=${encodeURIComponent(
+          String(pId)
+        )}`,
+      },
     ];
 
     let lastError = null;
-    
+
     for (const opt of options) {
       try {
-        const { url = base, ...fetchOpts } = opt;
-        const res = await fetch(url, {
-          ...fetchOpts,
-          credentials: 'include'
-        });
-
+        const { url, ...fetchOpts } = opt.url ? { url: opt.url, ...opt } : { url: base, ...opt };
+        const res = await fetch(url, { ...fetchOpts, credentials: "include" });
         if (res.ok) {
-          return await res.json().catch(() => ({}));
+          await res.json().catch(() => ({}));
+          return;
         }
-        
-        // If we get a 4xx error, no need to try other methods
         if (res.status >= 400 && res.status < 500) {
-          const errorText = await res.text().catch(() => 'Unknown error');
+          const errorText = await res.text().catch(() => "Unknown error");
           throw new Error(`Server rejected request: ${res.status} ${errorText}`);
         }
-      } catch (error) {
-        lastError = error;
-        console.warn('Wishlist add attempt failed:', error.message);
+      } catch (e) {
+        lastError = e;
+        // try next encoding
       }
     }
-
-    throw lastError || new Error('Failed to add to wishlist: All attempts failed');
+    throw lastError || new Error("Failed to add to wishlist: All attempts failed");
   }, []);
 
-
-  /* -------------------- quantity handlers -------------------- */
+  /* -------------------- qty handlers -------------------- */
   const inc = async () => {
     if (!PID || isUpdating) return;
     const newQuantity = (orderQuantity || 0) + 1;
     try {
       await updateCartItem({ productId: PID, quantity: newQuantity, userId }).unwrap();
+      dispatch(get_cart_products());
+      router.refresh();
     } catch (error) {
-      console.error('Failed to increment quantity:', error);
+      console.error("Failed to increment quantity:", error);
     }
   };
 
@@ -232,8 +243,10 @@ const CartItem = ({ product }) => {
     const newQuantity = Math.max(1, (orderQuantity || 0) - 1);
     try {
       await updateCartItem({ productId: PID, quantity: newQuantity, userId }).unwrap();
+      dispatch(get_cart_products());
+      router.refresh();
     } catch (error) {
-      console.error('Failed to decrement quantity:', error);
+      console.error("Failed to decrement quantity:", error);
     }
   };
 
@@ -243,8 +256,16 @@ const CartItem = ({ product }) => {
     setIsRemoving(true);
     try {
       await removeFromCart(PID);
+      setIsGone(true);                 // optimistic hide
+      dispatch(get_cart_products());   // sync Redux
+      router.refresh();                // update SSR data
+      if (typeof window !== "undefined" && window.toast) {
+        window.toast.success("Removed from cart");
+      }
     } catch (error) {
-      console.error('Failed to remove item:', error);
+      if (typeof window !== "undefined" && window.toast) {
+        window.toast.error("Failed to remove item");
+      }
     } finally {
       setIsRemoving(false);
     }
@@ -252,81 +273,51 @@ const CartItem = ({ product }) => {
 
   const saveForWishlist = async () => {
     if (!PID || !userId || isSaving || isRemoving) return;
-    
     setIsSaving(true);
-    
     try {
-      // 1) First try to add to wishlist
       await addToWishlist(userId, PID);
-      
-      // 2) Then remove from cart
-      try {
-        await removeFromCart(PID);
-        // Show success message if toast is available
-        if (typeof window !== 'undefined' && window.toast) {
-          window.toast.success('Moved to wishlist successfully');
-        } else {
-          alert('Item moved to wishlist successfully!');
-        }
-      } catch (cartError) {
-        console.error('Failed to remove from cart:', cartError);
-        // If cart removal fails, still show success since it's in wishlist
-        if (typeof window !== 'undefined' && window.toast) {
-          window.toast.success('Added to wishlist! Please refresh to update cart.');
-        } else {
-          alert('Added to wishlist! Please refresh to update cart.');
-        }
+      await removeFromCart(PID);
+      setIsGone(true);
+      dispatch(get_cart_products());
+      router.refresh();
+      if (typeof window !== "undefined" && window.toast) {
+        window.toast.success("Moved to wishlist");
       }
-      
-      // 3) Force a page refresh to update the UI
-      if (typeof window !== 'undefined') {
-        window.location.reload();
-      }
-      
     } catch (error) {
-      console.error('Save to wishlist failed:', error);
-      if (typeof window !== 'undefined') {
-        if (window.toast) {
-          window.toast.error('Failed to save to wishlist: ' + (error.message || 'Please try again'));
-        } else {
-          alert('Failed to save to wishlist. Please try again.');
-        }
+      if (typeof window !== "undefined") {
+        if (window.toast) window.toast.error("Failed to save to wishlist");
+        else alert("Failed to save to wishlist. Please try again.");
       }
     } finally {
       setIsSaving(false);
     }
   };
 
-  /* 🔎 visibility for search */
-  const rowVisible = useMemo(() => {
-    const query = (q || '').trim();
+  /* search visibility */
+  const searchVisible = useMemo(() => {
+    const query = (q || "").trim();
     if (query.length < 2) return true;
     const fields = [
-      () => name || '',
-      () => safeSlug || '',
-      () => String(product?.design || ''),
-      () => String(product?.color || ''),
+      () => name || "",
+      () => safeSlug || "",
+      () => String(product?.design ?? ""),
+      () => String(product?.color ?? ""),
     ];
-    const pred = buildSearchPredicate(query, fields, { mode: 'AND', normalize: true });
+    const pred = buildSearchPredicate(query, fields, { mode: "AND", normalize: true });
     return pred(product);
   }, [q, product, name, safeSlug]);
 
-  const { rowRef } = useEmptyBanner('cart', !!rowVisible, 'No product found in cart');
+  const rowVisible = searchVisible && !isGone;
+  const { rowRef } = useEmptyBanner("cart", !!rowVisible, "No product found in cart");
 
   return (
     <>
-      <tr className="cart-row" ref={rowRef} style={!rowVisible ? { display: 'none' } : undefined}>
+      <tr className="cart-row" ref={rowRef} style={!rowVisible ? { display: "none" } : undefined}>
         {/* image */}
         <td className="col-img" data-label="Product">
           <Link href={href} className="thumb-wrap" aria-label={name}>
             <span className="thumb">
-              <Image
-                src={imageUrl}
-                alt={name}
-                width={96}
-                height={96}
-                className="thumb-img"
-              />
+              <Image src={imageUrl} alt={name} width={96} height={96} className="thumb-img" />
             </span>
           </Link>
         </td>
@@ -340,9 +331,7 @@ const CartItem = ({ product }) => {
 
         {/* price */}
         <td className="col-price" data-label="Total">
-          <span className="price">
-            {unit ? `₹${(lineTotal || 0).toFixed(2)}` : '—'}
-          </span>
+          <span className="price">{unit ? `₹${(lineTotal || 0).toFixed(2)}` : "—"}</span>
         </td>
 
         {/* quantity */}
@@ -350,7 +339,7 @@ const CartItem = ({ product }) => {
           <div className="qty">
             <button
               type="button"
-              className={`qty-btn ${isUpdating ? 'loading' : ''}`}
+              className={`qty-btn ${isUpdating ? "loading" : ""}`}
               onClick={dec}
               disabled={isUpdating || (orderQuantity || 0) <= 1}
               aria-label={`Decrease ${name}`}
@@ -362,7 +351,7 @@ const CartItem = ({ product }) => {
             </span>
             <button
               type="button"
-              className={`qty-btn ${isUpdating ? 'loading' : ''}`}
+              className={`qty-btn ${isUpdating ? "loading" : ""}`}
               onClick={inc}
               disabled={isUpdating}
               aria-label={`Increase ${name}`}
@@ -379,22 +368,22 @@ const CartItem = ({ product }) => {
               type="button"
               onClick={removeOnly}
               disabled={isRemoving || isSaving}
-              className={`btn-ghost-invert square ${isRemoving ? 'loading' : ''}`}
+              className={`btn-ghost-invert square ${isRemoving ? "loading" : ""}`}
               title="Remove item"
             >
               <Close />
-              <span>{isRemoving ? 'Removing…' : 'Remove'}</span>
+              <span>{isRemoving ? "Removing…" : "Remove"}</span>
             </button>
 
             <button
               type="button"
               onClick={saveForWishlist}
               disabled={isSaving || isRemoving || !userId}
-              className={`btn-outline square ${isSaving ? 'loading' : ''}`}
+              className={`btn-outline square ${isSaving ? "loading" : ""}`}
               title="Save for wishlist"
             >
               <span className="heart" aria-hidden>♥</span>
-              <span>{isSaving ? 'Saving…' : 'Save for wishlist'}</span>
+              <span>{isSaving ? "Saving…" : "Save for wishlist"}</span>
             </button>
           </div>
         </td>
@@ -482,4 +471,5 @@ const CartItem = ({ product }) => {
     </>
   );
 };
+
 export default CartItem;

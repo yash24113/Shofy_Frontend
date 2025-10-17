@@ -1,5 +1,5 @@
 'use client';
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
@@ -7,7 +7,6 @@ import { useDispatch, useSelector } from 'react-redux';
 // internal
 import { closeCartMini } from '@/redux/features/cartSlice';
 import { selectUserId } from '@/utils/userSelectors';
-import useCartInfo from '@/hooks/use-cart-info'; // keep if you still use it elsewhere
 import RenderCartProgress from './render-cart-progress';
 import empty_cart_img from '@assets/img/product/cartmini/empty-cart.png';
 
@@ -23,24 +22,20 @@ import { formatProductForWishlist } from '@/utils/authUtils';
 
 /* ----------------------- helpers ----------------------- */
 const pickImg = (p) => {
-  // server product object fields
-  const candidates = [
-    p?.img,
-    p?.image1,
-    p?.image2,
-    p?.image,
-    p?.videoThumbnail,
-  ].filter(Boolean);
+  const candidates = [p?.img, p?.image1, p?.image2, p?.image, p?.videoThumbnail].filter(Boolean);
   const url = candidates.find((x) => typeof x === 'string' && x.trim() !== '');
   return url || '/assets/img/product/default-product-img.jpg';
 };
-
 const pickSlug = (p) => p?.slug || p?._id || p?.id || '';
-
 const toCurrency = (n) => {
   const x = Number(n);
   if (!Number.isFinite(x)) return '0.00';
   return x.toFixed(2);
+};
+const itemKey = (ci) => {
+  const p = ci?.productId || ci?.product || {};
+  const pid = p?._id || ci?._id || ci?.productId || '';
+  return `${pid}-${ci?._id || ''}`;
 };
 
 const CartMiniSidebar = () => {
@@ -48,53 +43,62 @@ const CartMiniSidebar = () => {
   const { cartMiniOpen } = useSelector((s) => s.cart);
   const userId = useSelector(selectUserId);
 
-  // Server cart
-  const { data: cartResponse, isLoading } = useGetCartDataQuery(userId, {
+  // Server cart + handy refetch
+  const {
+    data: cartResponse,
+    isLoading,
+    refetch,
+  } = useGetCartDataQuery(userId, {
     skip: !userId,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
   });
 
   const [removeCartItem, { isLoading: isRemoving }] = useRemoveCartItemMutation();
 
-  // Normalize server response (supports both {items:[]} and {data:{items:[]}})
+  // ---------- Local mirror for optimistic updates ----------
   const serverItems = useMemo(() => {
-    const items =
-      cartResponse?.data?.items ||
-      cartResponse?.items ||
-      [];
+    const items = cartResponse?.data?.items || cartResponse?.items || [];
     return Array.isArray(items) ? items : [];
   }, [cartResponse]);
 
-  // Subtotal: if API provides cartTotal use it, else compute locally as quantity * (server price if any)
+  const [localItems, setLocalItems] = useState(serverItems);
+
+  // keep local in sync with server when it changes (but only if we didn’t just perform an optimistic change that’s still pending)
+  useEffect(() => {
+    setLocalItems(serverItems);
+  }, [serverItems]);
+
+  // Subtotal: prefer API total if available
   const subtotal = useMemo(() => {
     const apiTotal =
       cartResponse?.data?.cartTotal ??
       cartResponse?.cartTotal ??
       null;
-
-    if (typeof apiTotal === 'number' && Number.isFinite(apiTotal)) {
-      return apiTotal;
-    }
-    // fallback: compute if you later add price on server
-    // currently your sample has no price per item; keep 0.00
-    return 0;
+    return typeof apiTotal === 'number' && Number.isFinite(apiTotal) ? apiTotal : 0;
   }, [cartResponse]);
 
   const handleCloseCartMini = useCallback(() => {
     dispatch(closeCartMini());
   }, [dispatch]);
 
-  // Remove from cart → add to wishlist
+  // Remove from cart → add to wishlist (optimistic)
   const handleRemoveAndWishlist = useCallback(
     async (cartItem) => {
       if (!userId || !cartItem || isRemoving) return;
+
       const product = cartItem?.productId || cartItem?.product || null;
-      const productId = product?._id || cartItem?.productId || cartItem?._id;
+      const productId = (product && product._id) || cartItem?.productId || cartItem?._id;
+
+      // 1) Optimistically remove from local list
+      const keyToRemove = itemKey(cartItem);
+      setLocalItems((prev) => prev.filter((ci) => itemKey(ci) !== keyToRemove));
 
       try {
-        // 1) Remove from server cart
+        // 2) Server remove
         await removeCartItem({ productId, userId }).unwrap();
 
-        // 2) Add to wishlist (client action → your wishlist slice will POST as you implemented)
+        // 3) Add to wishlist (client action; your slice will POST)
         if (product) {
           const wlPayload = formatProductForWishlist({
             _id: product?._id || productId,
@@ -107,15 +111,22 @@ const CartMiniSidebar = () => {
           });
           dispatch(add_to_wishlist(wlPayload));
         }
+
+        // 4) Re-sync with server to be safe
+        refetch();
       } catch (err) {
-        // prefer a toast in your project
         console.error('Remove cart & add to wishlist failed:', err);
+        // rollback optimistic change on failure
+        setLocalItems((prev) => {
+          const alreadyExists = prev.some((ci) => itemKey(ci) === keyToRemove);
+          return alreadyExists ? prev : [cartItem, ...prev];
+        });
       }
     },
-    [dispatch, isRemoving, removeCartItem, userId]
+    [dispatch, isRemoving, refetch, removeCartItem, userId]
   );
 
-  const hasItems = serverItems.length > 0;
+  const hasItems = localItems.length > 0;
 
   return (
     <>
@@ -148,22 +159,23 @@ const CartMiniSidebar = () => {
               <div className="px-3 py-4 text-sm opacity-75">Loading your cart…</div>
             ) : hasItems ? (
               <div className="cartmini__widget">
-                {serverItems.map((ci) => {
+                {localItems.map((ci) => {
                   const p = ci?.productId || ci?.product || {};
-                  const pid = p?._id || ci?._id || ci?.productId;
                   const slug = pickSlug(p);
                   const href = slug ? `/fabric/${slug}` : '#';
                   const imageUrl = pickImg(p);
+                  const qty = ci?.quantity ?? 1;
 
                   return (
-                    <div key={`${pid}-${ci?._id || ''}`} className="cartmini__widget-item">
+                    <div key={itemKey(ci)} className="cartmini__widget-item">
                       <div className="cartmini__thumb">
-                        <Link href={href}>
+                        <Link href={href} className="block">
                           <Image
                             src={imageUrl}
                             width={70}
                             height={60}
                             alt={p?.name || p?.title || 'product'}
+                            className="rounded"
                           />
                         </Link>
                       </div>
@@ -174,9 +186,8 @@ const CartMiniSidebar = () => {
                         </h5>
 
                         <div className="cartmini__price-wrapper">
-                          {/* No price in sample response – show quantity cleanly */}
                           <span className="cartmini__price">—</span>
-                          <span className="cartmini__quantity"> x{ci?.quantity ?? 1}</span>
+                          <span className="cartmini__quantity"> x{qty}</span>
                         </div>
                       </div>
 
@@ -226,6 +237,37 @@ const CartMiniSidebar = () => {
 
       {/* overlay */}
       <div onClick={handleCloseCartMini} className={`body-overlay ${cartMiniOpen ? 'opened' : ''}`} />
+
+      {/* Responsive tweaks (scoped) */}
+      <style jsx>{`
+        .cartmini__widget { max-height: 60vh; overflow: auto; padding-right: 6px; }
+        .cartmini__widget-item {
+          display: grid;
+          grid-template-columns: 72px 1fr auto;
+          gap: 12px;
+          align-items: center;
+          padding: 10px 4px;
+          border-bottom: 1px dashed #e8ebf0;
+        }
+        .cartmini__title { font-size: 14px; line-height: 1.35; margin: 0 0 6px; }
+        .cartmini__price-wrapper { font-size: 13px; color: #657083; }
+        .cartmini__del { background: transparent; border: 0; padding: 6px; }
+        .cartmini__thumb :global(img) { object-fit: cover; }
+        
+        @media (max-width: 480px) {
+          .cartmini__widget-item {
+            grid-template-columns: 56px 1fr auto;
+            gap: 10px;
+          }
+          .cartmini__title { font-size: 13px; }
+          .cartmini__price-wrapper { font-size: 12px; }
+          .cartmini__checkout-title h4 { font-size: 16px; }
+        }
+
+        @media (min-width: 1200px) {
+          .cartmini__widget { max-height: 66vh; }
+        }
+      `}</style>
     </>
   );
 };
