@@ -131,77 +131,88 @@ const CartItem = ({ product }) => {
     const url = `https://test.amrita-fashions.com/shopy/cart/remove/${productId}`;
     const res = await fetch(url, {
       method: 'DELETE',
-      headers: { 'Accept': 'application/json' },
+      headers: { 
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
       credentials: 'include',
+      body: JSON.stringify({ userId })
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`Cart remove failed: ${res.status} ${text}`);
     }
     return res.json().catch(() => ({}));
-  }, []);
+  }, [userId]);
 
-  // POST /shopy/wishlist/add  -> try multiple body styles to satisfy server
+  // POST /shopy/wishlist/add
   const addToWishlist = useCallback(async (userId, productId) => {
     const base = `https://test.amrita-fashions.com/shopy/wishlist/add`;
-
-    // 1) application/x-www-form-urlencoded
-    try {
-      const form = new URLSearchParams();
-      form.set('userId', String(userId));
-      form.set('productId', String(productId));
-
-      const res = await fetch(base, {
+    const options = [
+      // 1) application/x-www-form-urlencoded
+      {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json'
         },
-        credentials: 'include',
-        body: form.toString(),
-      });
-      if (res.ok) return res.json().catch(() => ({}));
-    } catch(err){console.log("erro:",err)}
-
-    // 2) application/json
-    try {
-      const res = await fetch(base, {
+        body: new URLSearchParams({
+          userId: String(userId),
+          productId: String(productId)
+        })
+      },
+      // 2) application/json
+      {
         method: 'POST',
         headers: {
-          'Content-Type':'application/json',
-          'Accept':'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        credentials: 'include',
-        body: JSON.stringify({ userId, productId }),
-      });
-      if (res.ok) return res.json().catch(() => ({}));
-    } catch(err){ console.log("erro:",err) }
-
-    // 3) multipart/form-data
-    try {
-      const fd = new FormData();
-      fd.append('userId', String(userId));
-      fd.append('productId', String(productId));
-      const res = await fetch(base, {
+        body: JSON.stringify({ userId, productId })
+      },
+      // 3) multipart/form-data
+      {
         method: 'POST',
-        credentials: 'include',
-        body: fd,
-      });
-      if (res.ok) return res.json().catch(() => ({}));
-    } catch(err){console.log("erro:",err)}
+        body: (() => {
+          const fd = new FormData();
+          fd.append('userId', String(userId));
+          fd.append('productId', String(productId));
+          return fd;
+        })()
+      },
+      // 4) query parameters
+      {
+        method: 'POST',
+        url: `${base}?userId=${encodeURIComponent(String(userId))}&productId=${encodeURIComponent(String(productId))}`
+      }
+    ];
 
-    // 4) query string (some servers read req.query instead of req.body)
-    const withQuery = `${base}?userId=${encodeURIComponent(String(userId))}&productId=${encodeURIComponent(String(productId))}`;
-    const res4 = await fetch(withQuery, {
-      method: 'POST',
-      headers: { 'Accept': 'application/json' },
-      credentials: 'include',
-    });
-    if (!res4.ok) {
-      const text = await res4.text().catch(() => '');
-      throw new Error(`Wishlist add failed: ${res4.status} ${text}`);
+    let lastError = null;
+    
+    for (const opt of options) {
+      try {
+        const { url = base, ...fetchOpts } = opt;
+        const res = await fetch(url, {
+          ...fetchOpts,
+          credentials: 'include'
+        });
+
+        if (res.ok) {
+          return await res.json().catch(() => ({}));
+        }
+        
+        // If we get a 4xx error, no need to try other methods
+        if (res.status >= 400 && res.status < 500) {
+          const errorText = await res.text().catch(() => 'Unknown error');
+          throw new Error(`Server rejected request: ${res.status} ${errorText}`);
+        }
+      } catch (error) {
+        lastError = error;
+        console.warn('Wishlist add attempt failed:', error.message);
+      }
     }
-    return res4.json().catch(() => ({}));
+
+    throw lastError || new Error('Failed to add to wishlist: All attempts failed');
   }, []);
 
 
@@ -241,14 +252,46 @@ const CartItem = ({ product }) => {
 
   const saveForWishlist = async () => {
     if (!PID || !userId || isSaving || isRemoving) return;
+    
     setIsSaving(true);
+    
     try {
-      // 1) remove from cart
-      await removeFromCart(PID);
-      // 2) then add to wishlist (try multiple body types)
+      // 1) First try to add to wishlist
       await addToWishlist(userId, PID);
+      
+      // 2) Then remove from cart
+      try {
+        await removeFromCart(PID);
+        // Show success message if toast is available
+        if (typeof window !== 'undefined' && window.toast) {
+          window.toast.success('Moved to wishlist successfully');
+        } else {
+          alert('Item moved to wishlist successfully!');
+        }
+      } catch (cartError) {
+        console.error('Failed to remove from cart:', cartError);
+        // If cart removal fails, still show success since it's in wishlist
+        if (typeof window !== 'undefined' && window.toast) {
+          window.toast.success('Added to wishlist! Please refresh to update cart.');
+        } else {
+          alert('Added to wishlist! Please refresh to update cart.');
+        }
+      }
+      
+      // 3) Force a page refresh to update the UI
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+      
     } catch (error) {
-      console.error('Save for wishlist failed:', error);
+      console.error('Save to wishlist failed:', error);
+      if (typeof window !== 'undefined') {
+        if (window.toast) {
+          window.toast.error('Failed to save to wishlist: ' + (error.message || 'Please try again'));
+        } else {
+          alert('Failed to save to wishlist. Please try again.');
+        }
+      }
     } finally {
       setIsSaving(false);
     }
@@ -439,5 +482,4 @@ const CartItem = ({ product }) => {
     </>
   );
 };
-
 export default CartItem;
