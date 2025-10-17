@@ -1,26 +1,20 @@
 'use client';
-import React, { useMemo, useEffect, useRef } from "react";
+import React, { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useDispatch } from "react-redux";
 import { useSelector } from "react-redux";
-// icons & actions
+// icons
 import { Close, Minus, Plus } from "@/svg";
-import { toggleWishlistItem } from "@/redux/features/wishlist-slice";
 import { selectUserId } from "@/utils/userSelectors";
-import {
-  useUpdateCartItemMutation,
-  useRemoveCartItemMutation,
-} from "@/redux/features/cartApi";
+import { useUpdateCartItemMutation } from "@/redux/features/cartApi";
 
 /* 🔎 add search */
 import useGlobalSearch from "@/hooks/useGlobalSearch";
 import { buildSearchPredicate } from "@/utils/searchMiddleware";
 
-/* ---------- tiny global empty-banner manager (JS only) ---------- */
+/* ---------- empty-banner manager ---------- */
 function useEmptyBanner(listId, rowVisible, emptyText) {
   const rowRef = useRef(null);
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.__listVis = window.__listVis || {};
@@ -49,10 +43,8 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
     };
 
     let prev = rowRef.current ? rowRef.current.__wasVisible : undefined;
-
-    if (prev === undefined) {
-      if (rowVisible) bucket.vis += 1;
-    } else {
+    if (prev === undefined) { if (rowVisible) bucket.vis += 1; }
+    else {
       if (rowVisible && !prev) bucket.vis += 1;
       if (!rowVisible && prev) bucket.vis -= 1;
     }
@@ -75,7 +67,7 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
         const b = ensureBannerExists();
         if (!b.isConnected && tbody.isConnected) tbody.appendChild(b);
       } else if (bucket.banner && bucket.banner.isConnected && bucket.vis > 0) {
-        bucket.banner.remove();
+        banner.remove();
       }
     };
   }, [listId, rowVisible, emptyText]);
@@ -84,15 +76,15 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
 }
 
 const CartItem = ({ product }) => {
-  const dispatch = useDispatch();
   const userId = useSelector(selectUserId);
   const [updateCartItem, { isLoading: isUpdating }] = useUpdateCartItemMutation();
-  const [removeCartItem, { isLoading: isRemoving }] = useRemoveCartItemMutation();
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   /* 🔎 global query */
   const { debounced: q } = useGlobalSearch();
 
-  // normalize fields
+  // Normalize fields (server returns nested product in productId)
   const {
     productId,
     _id,
@@ -107,44 +99,118 @@ const CartItem = ({ product }) => {
     quantity: stockQuantity,
   } = product || {};
 
-  const PID = productId || _id || id;
-  const href = `/fabric/${slug || PID || ""}`;
-  const unit = typeof salesPrice === "number"
-    ? salesPrice
-    : (parseFloat(salesPrice) || price || 0);
+  // If productId is an object, prefer its fields
+  const nested = typeof productId === "object" && productId ? productId : null;
+  const PID = (nested?._id) || (typeof productId === 'string' ? productId : null) || _id || id;
+  const name = nested?.name || title || "Product";
+  const safeSlug = nested?.slug || slug || PID || "";
+  const href = `/fabric/${safeSlug}`;
+
+  // Prices (fallback if server line price not included)
+  const unit = typeof salesPrice === "number" ? salesPrice : (parseFloat(salesPrice) || price || 0);
   const lineTotal = (unit || 0) * (orderQuantity || 0);
 
-  const rawImg = img || image || "";
+  // Image picking
+  const rawImg =
+    nested?.image1 ||
+    nested?.img ||
+    nested?.image ||
+    img ||
+    image ||
+    "";
   const imageUrl = rawImg?.startsWith("http")
     ? rawImg
     : rawImg
     ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${rawImg}`
     : "/images/placeholder-portrait.webp";
 
-  // normalized payload so slice matches by id/_id
-  const normalized = {
-    ...product,
-    _id: PID,
-    id: PID,
-    title,
-    price: unit,
-    quantity: typeof stockQuantity === "number" ? stockQuantity : (product?.quantity ?? 0),
-    img: img || image || "",
-    image: image || img || "",
-  };
+  /* -------------------- API helpers -------------------- */
 
+  // DELETE /shopy/cart/remove/:productId
+  const removeFromCart = useCallback(async (productId) => {
+    const url = `https://test.amrita-fashions.com/shopy/cart/remove/${productId}`;
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: { 'Accept': 'application/json' },
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Cart remove failed: ${res.status} ${text}`);
+    }
+    return res.json().catch(() => ({}));
+  }, []);
+
+  // POST /shopy/wishlist/add  -> try multiple body styles to satisfy server
+  const addToWishlist = useCallback(async (userId, productId) => {
+    const base = `https://test.amrita-fashions.com/shopy/wishlist/add`;
+
+    // 1) application/x-www-form-urlencoded
+    try {
+      const form = new URLSearchParams();
+      form.set('userId', String(userId));
+      form.set('productId', String(productId));
+
+      const res = await fetch(base, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json'
+        },
+        credentials: 'include',
+        body: form.toString(),
+      });
+      if (res.ok) return res.json().catch(() => ({}));
+    } catch(err){console.log("erro:",err)}
+
+    // 2) application/json
+    try {
+      const res = await fetch(base, {
+        method: 'POST',
+        headers: {
+          'Content-Type':'application/json',
+          'Accept':'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ userId, productId }),
+      });
+      if (res.ok) return res.json().catch(() => ({}));
+    } catch(err){ console.log("erro:",err) }
+
+    // 3) multipart/form-data
+    try {
+      const fd = new FormData();
+      fd.append('userId', String(userId));
+      fd.append('productId', String(productId));
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      });
+      if (res.ok) return res.json().catch(() => ({}));
+    } catch(err){console.log("erro:",err)}
+
+    // 4) query string (some servers read req.query instead of req.body)
+    const withQuery = `${base}?userId=${encodeURIComponent(String(userId))}&productId=${encodeURIComponent(String(productId))}`;
+    const res4 = await fetch(withQuery, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+      credentials: 'include',
+    });
+    if (!res4.ok) {
+      const text = await res4.text().catch(() => '');
+      throw new Error(`Wishlist add failed: ${res4.status} ${text}`);
+    }
+    return res4.json().catch(() => ({}));
+  }, []);
+
+
+  /* -------------------- quantity handlers -------------------- */
   const inc = async () => {
     if (!PID || isUpdating) return;
     const newQuantity = (orderQuantity || 0) + 1;
-    console.log('Increasing quantity:', { productId: PID, currentQuantity: orderQuantity, newQuantity });
-    
     try {
-      const result = await updateCartItem({ 
-        productId: PID, 
-        quantity: newQuantity,
-        userId,
-      }).unwrap();
-      console.log('Quantity increased successfully:', result);
+      await updateCartItem({ productId: PID, quantity: newQuantity, userId }).unwrap();
     } catch (error) {
       console.error('Failed to increment quantity:', error);
     }
@@ -153,61 +219,67 @@ const CartItem = ({ product }) => {
   const dec = async () => {
     if (!PID || isUpdating || (orderQuantity || 0) <= 1) return;
     const newQuantity = Math.max(1, (orderQuantity || 0) - 1);
-    console.log('Decreasing quantity:', { productId: PID, currentQuantity: orderQuantity, newQuantity });
-    
     try {
-      const result = await updateCartItem({ 
-        productId: PID, 
-        quantity: newQuantity,
-        userId, 
-      }).unwrap();
-      console.log('Quantity decreased successfully:', result);
+      await updateCartItem({ productId: PID, quantity: newQuantity, userId }).unwrap();
     } catch (error) {
       console.error('Failed to decrement quantity:', error);
     }
   };
 
-  const remove = async () => {
-    if (!PID || isRemoving) return;
+  /* -------------------- remove / save handlers -------------------- */
+  const removeOnly = async () => {
+    if (!PID || isRemoving || isSaving) return;
+    setIsRemoving(true);
     try {
-      // Add to wishlist first (if user is logged in)
-      if (userId) {
-        dispatch(toggleWishlistItem({ userId, productId: PID, product }));
-      }
-      // Then remove from cart
-      await removeCartItem({productId:PID, userId}).unwrap();
+      await removeFromCart(PID);
     } catch (error) {
       console.error('Failed to remove item:', error);
+    } finally {
+      setIsRemoving(false);
     }
   };
 
-  /* 🔎 decide row visibility */
+  const saveForWishlist = async () => {
+    if (!PID || !userId || isSaving || isRemoving) return;
+    setIsSaving(true);
+    try {
+      // 1) remove from cart
+      await removeFromCart(PID);
+      // 2) then add to wishlist (try multiple body types)
+      await addToWishlist(userId, PID);
+    } catch (error) {
+      console.error('Save for wishlist failed:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /* 🔎 visibility for search */
   const rowVisible = useMemo(() => {
     const query = (q || '').trim();
     if (query.length < 2) return true;
     const fields = [
-      () => title || '',
-      () => slug || '',
+      () => name || '',
+      () => safeSlug || '',
       () => String(product?.design || ''),
       () => String(product?.color || ''),
     ];
     const pred = buildSearchPredicate(query, fields, { mode: 'AND', normalize: true });
     return pred(product);
-  }, [q, title, slug, product]);
+  }, [q, product, name, safeSlug]);
 
-  // EMPTY banner manager (cart)
   const { rowRef } = useEmptyBanner('cart', !!rowVisible, 'No product found in cart');
 
   return (
     <>
       <tr className="cart-row" ref={rowRef} style={!rowVisible ? { display: 'none' } : undefined}>
         {/* image */}
-        <td className="col-img">
-          <Link href={href} className="thumb-wrap" aria-label={title}>
+        <td className="col-img" data-label="Product">
+          <Link href={href} className="thumb-wrap" aria-label={name}>
             <span className="thumb">
               <Image
                 src={imageUrl}
-                alt={title}
+                alt={name}
                 width={96}
                 height={96}
                 className="thumb-img"
@@ -217,68 +289,84 @@ const CartItem = ({ product }) => {
         </td>
 
         {/* title */}
-        <td className="col-title">
+        <td className="col-title" data-label="Name">
           <Link href={href} className="title-link">
-            <span className="title-text">{title}</span>
+            <span className="title-text">{name}</span>
           </Link>
         </td>
 
         {/* price */}
-        <td className="col-price">
-          <span className="price">${lineTotal.toFixed(2)}</span>
+        <td className="col-price" data-label="Total">
+          <span className="price">
+            {unit ? `₹${(lineTotal || 0).toFixed(2)}` : '—'}
+          </span>
         </td>
 
         {/* quantity */}
-        <td className="col-qty">
+        <td className="col-qty" data-label="Qty">
           <div className="qty">
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`qty-btn ${isUpdating ? 'loading' : ''}`}
-              onClick={dec} 
+              onClick={dec}
               disabled={isUpdating || (orderQuantity || 0) <= 1}
-              aria-label={`Decrease ${title}`}
+              aria-label={`Decrease ${name}`}
             >
               <Minus />
             </button>
-            <span className="qty-value" aria-live="polite" aria-label={`Quantity of ${title}`}>
+            <span className="qty-value" aria-live="polite" aria-label={`Quantity of ${name}`}>
               {orderQuantity}
             </span>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`qty-btn ${isUpdating ? 'loading' : ''}`}
-              onClick={inc} 
+              onClick={inc}
               disabled={isUpdating}
-              aria-label={`Increase ${title}`}
+              aria-label={`Increase ${name}`}
             >
               <Plus />
             </button>
           </div>
         </td>
 
-        {/* action */}
-        <td className="col-action">
-          <button 
-            type="button" 
-            onClick={remove} 
-            disabled={isRemoving}
-            className={`btn-ghost-invert square ${isRemoving ? 'loading' : ''}`} 
-            title="Remove item"
-          >
-            <Close />
-            <span>{isRemoving ? 'Removing...' : 'Remove'}</span>
-          </button>
+        {/* actions */}
+        <td className="col-action" data-label="Actions">
+          <div className="action-stack">
+            <button
+              type="button"
+              onClick={removeOnly}
+              disabled={isRemoving || isSaving}
+              className={`btn-ghost-invert square ${isRemoving ? 'loading' : ''}`}
+              title="Remove item"
+            >
+              <Close />
+              <span>{isRemoving ? 'Removing…' : 'Remove'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={saveForWishlist}
+              disabled={isSaving || isRemoving || !userId}
+              className={`btn-outline square ${isSaving ? 'loading' : ''}`}
+              title="Save for wishlist"
+            >
+              <span className="heart" aria-hidden>♥</span>
+              <span>{isSaving ? 'Saving…' : 'Save for wishlist'}</span>
+            </button>
+          </div>
         </td>
       </tr>
 
       <style jsx>{`
+        /* ---------- Table row base ---------- */
         .cart-row :global(td){ vertical-align: middle; padding:16px 12px; }
-        .cart-row { border-bottom:1px solid #e5e7eb; }
+        .cart-row { border-bottom:1px solid #e5e7eb; background:#fff; }
 
         .col-img   { width:120px; min-width:120px; }
         .col-title { max-width:620px; }
-        .col-price { width:140px; white-space:nowrap; }
+        .col-price { width:160px; white-space:nowrap; text-align:right; }
         .col-qty   { width:200px; }
-        .col-action{ width:200px; text-align:right; }
+        .col-action{ width:280px; text-align:right; }
 
         .thumb-wrap{ display:inline-block; }
         .thumb{ width:96px; height:96px; border-radius:12px; overflow:hidden; background:#f3f4f6; display:block; }
@@ -297,25 +385,49 @@ const CartItem = ({ product }) => {
         .qty-btn.loading{ opacity:0.7; }
         .qty-value{ min-width:28px; text-align:center; font-weight:700; font-size:16px; color:#0b1220; line-height:1; letter-spacing:.2px; }
 
-        .btn-ghost-invert.square { --navy: #0b1620; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 22px; min-height: 44px; background: var(--navy); color: #fff; font-weight: 600; font-size: 15px; line-height: 1; border: 1px solid var(--navy); border-radius: 0; cursor: pointer; user-select: none; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); transition: background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 120ms ease; }
+        .action-stack{ display:flex; align-items:center; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+        .btn-ghost-invert.square { --navy: #0b1620; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; min-height: 44px; background: var(--navy); color: #fff; font-weight: 600; font-size: 14px; line-height: 1; border: 1px solid var(--navy); border-radius: 8px; cursor: pointer; user-select: none; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); transition: background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 120ms ease; }
         .btn-ghost-invert.square:hover:not(:disabled) { background: #fff; color: var(--navy); border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,.12); transform: translateY(-1px); }
-        .btn-ghost-invert.square:active:not(:disabled) { transform: translateY(0); background: #f8fafc; color: var(--navy); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15); }
+        .btn-ghost-invert.square:active:not(:disabled) { transform: translateY(0); background: #f8fafc; color: var(--navy); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12); }
         .btn-ghost-invert.square:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(11, 22, 32, 0.35); }
         .btn-ghost-invert.square:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-ghost-invert.square.loading { opacity: 0.7; }
 
-        @media (max-width:992px){ .col-title{ max-width:420px; } .col-action{ width:160px; } }
-        @media (max-width:640px){
-          .cart-row :global(td){ padding:12px 8px; }
-          .col-img{ width:100px; min-width:100px; }
-          .thumb{ width:84px; height:84px; }
+        .btn-outline.square { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:10px 16px; min-height:44px; background:#ffffff; color:#0b1620; border:1px solid #0b1620; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer; transition: background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 120ms ease; }
+        .btn-outline.square:hover:not(:disabled){ background:#0b1620; color:#fff; transform: translateY(-1px); }
+        .btn-outline.square:active:not(:disabled){ transform: translateY(0); }
+        .btn-outline.square:disabled{ opacity:.6; cursor:not-allowed; }
+        .btn-outline.square.loading{ opacity:.7; }
+        .btn-outline .heart{ font-size:16px; line-height:1; }
+
+        /* ---------- Responsive table (stacked on mobile) ---------- */
+        @media (max-width:992px){ .col-title{ max-width:420px; } .col-action{ width:240px; } }
+
+        @media (max-width:760px){
+          .cart-row { display:block; padding:12px 10px; }
+          .cart-row :global(td){ display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px dashed #eef0f3; }
+          .cart-row :global(td:last-child){ border-bottom:0; }
+          .col-img { justify-content:flex-start; }
+          .thumb{ width:80px; height:80px; }
           .title-text{ font-size:16px; -webkit-line-clamp:3; }
-          .col-price{ width:110px; }
-          .col-qty{ width:170px; }
-          .qty{ padding:6px 10px; gap:10px; }
-          .qty-btn{ width:28px; height:28px; }
-          .qty-value{ min-width:24px; font-size:15px; }
-          .col-action{ text-align:left; width:auto; }
+
+          .col-price, .col-qty, .col-action { text-align:left; width:auto; }
+          .col-img::before,
+          .col-title::before,
+          .col-price::before,
+          .col-qty::before,
+          .col-action::before{
+            content: attr(data-label);
+            font-size:12px;
+            color:#6b7280;
+            margin-right:12px;
+            min-width:90px;
+            font-weight:600;
+            text-transform:uppercase;
+            letter-spacing:.4px;
+          }
+
+          .action-stack{ justify-content:flex-start; gap:8px; }
         }
 
         /* empty banner row */

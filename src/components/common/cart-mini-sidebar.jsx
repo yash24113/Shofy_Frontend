@@ -25,8 +25,8 @@ import { formatProductForWishlist } from '@/utils/authUtils';
 const pickImg = (p) => {
   // server product object fields
   const candidates = [
-    p?.image1,
     p?.img,
+    p?.image1,
     p?.image2,
     p?.image,
     p?.videoThumbnail,
