@@ -28,9 +28,9 @@ const productKey = (p) => p?._id || p?.id || null;
 const computeDistinctCount = (items = []) =>
   new Set(items.map((it) => productKey(it)).filter(Boolean)).size;
 
-/* ---------------- state (no browser APIs here) ---------------- */
+/* ---------------- state ---------------- */
 const initialState = {
-  cart_products: [],     // rehydrated on client
+  cart_products: [],     // still used in some pages; sidebar uses server data now
   orderQuantity: 1,
   cartMiniOpen: false,
   distinctCount: 0,      // unique products by _id/id
@@ -40,7 +40,7 @@ export const cartSlice = createSlice({
   name: "cart",
   initialState,
   reducers: {
-    /* Rehydrate from localStorage (dispatch once on client) */
+    /* Rehydrate legacy local cart (if you still need it elsewhere) */
     get_cart_products(state) {
       const loaded = safeGet("cart_products") || [];
       state.cart_products = loaded;
