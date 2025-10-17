@@ -1,160 +1,298 @@
 // redux/features/cartSlice.js
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
-/* ---------------- SSR-safe localStorage helpers ---------------- */
-const isBrowser = () => typeof window !== "undefined";
-const safeGet = (key) => {
-  if (!isBrowser()) return null;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-};
-const safeSet = (key, value) => {
-  if (!isBrowser()) return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* ignore */
-  }
-};
+/* ---------------- config ---------------- */
+const API_BASE = "https://test.amrita-fashions.com";
 
 /* ---------------- helpers ---------------- */
-const productKey = (p) => p?._id || p?.id || null;
+const productKey = (p) => p?._id || p?.id || p?.productId || null;
 const computeDistinctCount = (items = []) =>
   new Set(items.map((it) => productKey(it)).filter(Boolean)).size;
 
+/* Normalize API items -> UI-friendly items */
+const normalizeItems = (items = []) =>
+  items.map((it) => {
+    const p = { ...(it?.product || {}), ...it }; // merge nested product if present
+    const pid = productKey(p);
+    return {
+      ...p,
+      _id: pid,
+      id: pid,
+      orderQuantity:
+        typeof p.orderQuantity === "number"
+          ? p.orderQuantity
+          : typeof p.qty === "number"
+          ? p.qty
+          : typeof p.quantity === "number"
+          ? p.quantity
+          : 1,
+      quantity:
+        typeof p.quantity === "number"
+          ? p.quantity
+          : typeof p.stock === "number"
+          ? p.stock
+          : undefined,
+      title: p.title || p.name || "Product",
+      price:
+        typeof p.price === "string" || typeof p.price === "number"
+          ? parseFloat(p.price) || 0
+          : 0,
+      image: p.image || p.imageUrl || p.img || p.thumbnail || "",
+    };
+  });
+
+/* ================================
+   THUNKS (matches your routes)
+=================================== */
+
+/** GET: /api/cart/user/:userId */
+export const fetch_cart_products = createAsyncThunk(
+  "cart/fetch_cart_products",
+  async ({ userId }, { rejectWithValue }) => {
+    try {
+      if (!userId) return rejectWithValue("Missing userId");
+      const res = await fetch(`${API_BASE}/api/cart/user/${userId}`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        return rejectWithValue(`HTTP ${res.status}: ${txt || "Failed to load cart"}`);
+      }
+      const json = await res.json();
+      if (!json?.success) return rejectWithValue(json?.message || "Cart API success=false");
+
+      const items = Array.isArray(json?.data?.items)
+        ? json.data.items
+        : Array.isArray(json?.items)
+        ? json.items
+        : [];
+
+      return normalizeItems(items);
+    } catch (e) {
+      return rejectWithValue(e?.message || "Unknown error fetching cart");
+    }
+  }
+);
+
+/** POST: /api/cart/add  { userId, productId, quantity } */
+export const add_to_cart = createAsyncThunk(
+  "cart/add_to_cart",
+  async ({ userId, productId, quantity = 1 }, { dispatch, rejectWithValue }) => {
+    try {
+      if (!userId || !productId) return rejectWithValue("Missing userId or productId");
+      const res = await fetch(`${API_BASE}/api/cart/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, productId, quantity }),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        return rejectWithValue(`HTTP ${res.status}: ${txt || "Failed to add to cart"}`);
+      }
+      const json = await res.json();
+      if (!json?.success) return rejectWithValue(json?.message || "Add to cart failed");
+      await dispatch(fetch_cart_products({ userId }));
+      return true;
+    } catch (e) {
+      return rejectWithValue(e?.message || "Unknown error adding to cart");
+    }
+  }
+);
+
+/** PUT: /api/cart/update/:productId  { userId, quantity } */
+export const update_cart_item = createAsyncThunk(
+  "cart/update_cart_item",
+  async ({ userId, productId, quantity }, { dispatch, rejectWithValue }) => {
+    try {
+      if (!userId || !productId || typeof quantity !== "number") {
+        return rejectWithValue("Missing userId/productId/quantity");
+      }
+      const res = await fetch(`${API_BASE}/api/cart/update/${productId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, quantity }),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        return rejectWithValue(`HTTP ${res.status}: ${txt || "Failed to update item"}`);
+      }
+      const json = await res.json();
+      if (!json?.success) return rejectWithValue(json?.message || "Update item failed");
+      await dispatch(fetch_cart_products({ userId }));
+      return true;
+    } catch (e) {
+      return rejectWithValue(e?.message || "Unknown error updating item");
+    }
+  }
+);
+
+/** DELETE: /api/cart/remove/:productId  { userId } */
+export const remove_from_cart = createAsyncThunk(
+  "cart/remove_from_cart",
+  async ({ userId, productId }, { dispatch, rejectWithValue }) => {
+    try {
+      if (!userId || !productId) return rejectWithValue("Missing userId/productId");
+      const res = await fetch(`${API_BASE}/api/cart/remove/${productId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        return rejectWithValue(`HTTP ${res.status}: ${txt || "Failed to remove item"}`);
+      }
+      const json = await res.json();
+      if (!json?.success) return rejectWithValue(json?.message || "Remove item failed");
+      await dispatch(fetch_cart_products({ userId }));
+      return true;
+    } catch (e) {
+      return rejectWithValue(e?.message || "Unknown error removing item");
+    }
+  }
+);
+
+/** DELETE: /api/cart/clear  { userId } */
+export const clear_cart_api = createAsyncThunk(
+  "cart/clear_cart_api",
+  async ({ userId }, { dispatch, rejectWithValue }) => {
+    try {
+      if (!userId) return rejectWithValue("Missing userId");
+      const res = await fetch(`${API_BASE}/api/cart/clear`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        return rejectWithValue(`HTTP ${res.status}: ${txt || "Failed to clear cart"}`);
+      }
+      const json = await res.json();
+      if (!json?.success) return rejectWithValue(json?.message || "Clear cart failed");
+      await dispatch(fetch_cart_products({ userId }));
+      return true;
+    } catch (e) {
+      return rejectWithValue(e?.message || "Unknown error clearing cart");
+    }
+  }
+);
+
 /* ---------------- state ---------------- */
 const initialState = {
-  cart_products: [],     // still used in some pages; sidebar uses server data now
-  orderQuantity: 1,
-  cartMiniOpen: false,
-  distinctCount: 0,      // unique products by _id/id
+  cart_products: [],     // always from API
+  orderQuantity: 1,      // PDP qty chooser (local UI)
+  cartMiniOpen: false,   // UI flag
+  distinctCount: 0,      // derived from cart_products
+  loading: false,
+  error: null,
 };
 
 export const cartSlice = createSlice({
   name: "cart",
   initialState,
   reducers: {
-    /* Rehydrate legacy local cart (if you still need it elsewhere) */
-    get_cart_products(state) {
-      const loaded = safeGet("cart_products") || [];
-      state.cart_products = loaded;
-      state.distinctCount = computeDistinctCount(loaded);
-    },
-
-    add_cart_product(state, { payload }) {
-      const pid = productKey(payload);
-      if (!pid) return;
-
-      const idx = state.cart_products.findIndex((it) => productKey(it) === pid);
-
-      if (idx === -1) {
-        const newItem = {
-          ...payload,
-          _id: pid,
-          id: pid,
-          orderQuantity: state.orderQuantity || 1,
-          quantity:
-            typeof payload?.quantity === "number" && payload.quantity > 0
-              ? payload.quantity
-              : 1,
-          title: payload?.title || payload?.name || "Product",
-          price:
-            typeof payload?.price === "string" || typeof payload?.price === "number"
-              ? parseFloat(payload.price) || 0
-              : 0,
-          image: payload?.image || payload?.imageUrl || payload?.img || "",
-        };
-        state.cart_products.push(newItem);
-      } else {
-        const item = state.cart_products[idx];
-        const addQty = state.orderQuantity || 1;
-        const nextQty = (item.orderQuantity || 1) + addQty;
-
-        if (
-          typeof item.quantity === "number" &&
-          item.quantity > 0 &&
-          nextQty > item.quantity
-        ) {
-          // exceed stock → ignore
-        } else {
-          item.orderQuantity = nextQty;
-        }
-      }
-
-      state.distinctCount = computeDistinctCount(state.cart_products);
-      safeSet("cart_products", state.cart_products);
-    },
-
+    // PDP qty controls (no server call)
     increment(state) {
       state.orderQuantity = (state.orderQuantity || 1) + 1;
     },
-
     decrement(state) {
       state.orderQuantity = state.orderQuantity > 1 ? state.orderQuantity - 1 : 1;
     },
-
-    quantityDecrement(state, { payload }) {
-      const pid = productKey(payload);
-      state.cart_products = state.cart_products.map((item) => {
-        if (productKey(item) === pid && (item.orderQuantity || 1) > 1) {
-          return { ...item, orderQuantity: (item.orderQuantity || 1) - 1 };
-        }
-        return item;
-      });
-      state.distinctCount = computeDistinctCount(state.cart_products);
-      safeSet("cart_products", state.cart_products);
-    },
-
-    remove_product(state, { payload }) {
-      const pid = productKey(payload) || payload?.id;
-      state.cart_products = state.cart_products.filter(
-        (item) => productKey(item) !== pid
-      );
-      state.distinctCount = computeDistinctCount(state.cart_products);
-      safeSet("cart_products", state.cart_products);
-    },
-
     initialOrderQuantity(state) {
       state.orderQuantity = 1;
     },
 
-    clearCart(state) {
-      state.cart_products = [];
-      state.distinctCount = 0;
-      safeSet("cart_products", state.cart_products);
-    },
-
+    // Mini-cart toggles (UI only). Call fetch_cart_products when opening in your component.
     openCartMini(state) {
       state.cartMiniOpen = true;
     },
     closeCartMini(state) {
       state.cartMiniOpen = false;
     },
+
+    // Legacy action names retained as no-ops to avoid big refactors elsewhere
+    get_cart_products() {},
+    add_cart_product() {},
+    quantityDecrement() {},
+    remove_product() {},
+    clearCart() {},
+  },
+
+  extraReducers: (builder) => {
+    // FETCH
+    builder
+      .addCase(fetch_cart_products.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetch_cart_products.fulfilled, (state, { payload }) => {
+        state.loading = false;
+        state.cart_products = Array.isArray(payload) ? payload : [];
+        state.distinctCount = computeDistinctCount(state.cart_products);
+      })
+      .addCase(fetch_cart_products.rejected, (state, { payload, error }) => {
+        state.loading = false;
+        state.error = (typeof payload === "string" && payload) || error?.message || "Failed to load cart";
+      });
+
+    // ADD
+    builder
+      .addCase(add_to_cart.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(add_to_cart.rejected, (state, { payload, error }) => {
+        state.error = (typeof payload === "string" && payload) || error?.message || "Failed to add to cart";
+      });
+
+    // UPDATE
+    builder
+      .addCase(update_cart_item.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(update_cart_item.rejected, (state, { payload, error }) => {
+        state.error = (typeof payload === "string" && payload) || error?.message || "Failed to update cart item";
+      });
+
+    // REMOVE
+    builder
+      .addCase(remove_from_cart.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(remove_from_cart.rejected, (state, { payload, error }) => {
+        state.error = (typeof payload === "string" && payload) || error?.message || "Failed to remove cart item";
+      });
+
+    // CLEAR
+    builder
+      .addCase(clear_cart_api.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(clear_cart_api.rejected, (state, { payload, error }) => {
+        state.error = (typeof payload === "string" && payload) || error?.message || "Failed to clear cart";
+      });
   },
 });
 
+/* -------- actions -------- */
 export const {
-  add_cart_product,
   increment,
   decrement,
-  get_cart_products,
-  remove_product,
-  quantityDecrement,
   initialOrderQuantity,
-  clearCart,
-  closeCartMini,
   openCartMini,
+  closeCartMini,
+  // legacy no-ops (kept for compatibility with existing imports/dispatches)
+  get_cart_products,
+  add_cart_product,
+  quantityDecrement,
+  remove_product,
+  clearCart,
 } = cartSlice.actions;
 
-/* ---------------- selectors ---------------- */
+/* -------- selectors -------- */
 export const selectCartDistinctCount = (state) =>
-  state.cart?.distinctCount ??
-  computeDistinctCount(state.cart?.cart_products || []);
+  state.cart?.distinctCount ?? computeDistinctCount(state.cart?.cart_products || []);
+export const selectCartLoading = (state) => state.cart?.loading || false;
+export const selectCartError = (state) => state.cart?.error || null;
 
 export default cartSlice.reducer;

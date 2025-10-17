@@ -8,8 +8,8 @@ import { useRouter } from "next/navigation";
 import { Close, Minus, Plus } from "@/svg";
 import { selectUserId } from "@/utils/userSelectors";
 import { useUpdateCartItemMutation } from "@/redux/features/cartApi";
-/* refresh cart after mutations */
-import { get_cart_products } from "@/redux/features/cartSlice";
+/* refresh cart after mutations — SERVER ONLY */
+import { fetch_cart_products } from "@/redux/features/cartSlice";
 /* search */
 import useGlobalSearch from "@/hooks/useGlobalSearch";
 import { buildSearchPredicate } from "@/utils/searchMiddleware";
@@ -82,7 +82,7 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
         const b = ensureBannerExists();
         if (!b.isConnected && tbody.isConnected) tbody.appendChild(b);
       } else if (bucket.banner && bucket.banner.isConnected && bucket.vis > 0) {
-        banner.remove();
+        bucket.banner.remove();
       }
     };
   }, [listId, rowVisible, emptyText]);
@@ -207,8 +207,9 @@ const CartItem = ({ product }) => {
 
     for (const opt of options) {
       try {
-        const { url, ...fetchOpts } = opt.url ? { url: opt.url, ...opt } : { url: base, ...opt };
-        const res = await fetch(url, { ...fetchOpts, credentials: "include" });
+        const target = opt.url ? opt.url : base;
+        const { url: _ignored, ...fetchOpts } = opt;
+        const res = await fetch(target, { ...fetchOpts, credentials: "include" });
         if (res.ok) {
           await res.json().catch(() => ({}));
           return;
@@ -225,13 +226,18 @@ const CartItem = ({ product }) => {
     throw lastError || new Error("Failed to add to wishlist: All attempts failed");
   }, []);
 
-  /* -------------------- qty handlers -------------------- */
+  /* -------------------- qty handlers (SERVER REFRESH) -------------------- */
+  const refreshCartFromServer = useCallback(() => {
+    if (!userId) return;
+    dispatch(fetch_cart_products({ userId }));
+  }, [dispatch, userId]);
+
   const inc = async () => {
     if (!PID || isUpdating) return;
     const newQuantity = (orderQuantity || 0) + 1;
     try {
       await updateCartItem({ productId: PID, quantity: newQuantity, userId }).unwrap();
-      dispatch(get_cart_products());
+      refreshCartFromServer();
       router.refresh();
     } catch (error) {
       console.error("Failed to increment quantity:", error);
@@ -243,21 +249,21 @@ const CartItem = ({ product }) => {
     const newQuantity = Math.max(1, (orderQuantity || 0) - 1);
     try {
       await updateCartItem({ productId: PID, quantity: newQuantity, userId }).unwrap();
-      dispatch(get_cart_products());
+      refreshCartFromServer();
       router.refresh();
     } catch (error) {
       console.error("Failed to decrement quantity:", error);
     }
   };
 
-  /* -------------------- remove / save handlers -------------------- */
+  /* -------------------- remove / save handlers (SERVER REFRESH) -------------------- */
   const removeOnly = async () => {
     if (!PID || isRemoving || isSaving) return;
     setIsRemoving(true);
     try {
       await removeFromCart(PID);
       setIsGone(true);                 // optimistic hide
-      dispatch(get_cart_products());   // sync Redux
+      refreshCartFromServer();         // sync Redux from server
       router.refresh();                // update SSR data
       if (typeof window !== "undefined" && window.toast) {
         window.toast.success("Removed from cart");
@@ -278,7 +284,7 @@ const CartItem = ({ product }) => {
       await addToWishlist(userId, PID);
       await removeFromCart(PID);
       setIsGone(true);
-      dispatch(get_cart_products());
+      refreshCartFromServer();
       router.refresh();
       if (typeof window !== "undefined" && window.toast) {
         window.toast.success("Moved to wishlist");

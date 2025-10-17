@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { usePathname } from 'next/navigation';
 import useSticky from '@/hooks/use-sticky';
-import useCartInfo from '@/hooks/use-cart-info';
+import useCartInfo from '@/hooks/use-cart-info'; // keep if you still need other info it provides
 import {
   openCartMini,
-  get_cart_products,
-  selectCartDistinctCount
+  selectCartDistinctCount,
+  fetch_cart_products,
 } from '@/redux/features/cartSlice';
 import CartMiniSidebar from '@/components/common/cart-mini-sidebar';
 import OffCanvas from '@/components/common/off-canvas';
@@ -19,9 +19,21 @@ import { FaHeart, FaUser } from 'react-icons/fa';
 import { FiMenu } from 'react-icons/fi';
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 
+/* =========================
+   Small helpers
+========================= */
 const PAGE_SIZE = 20;
 const MAX_LIMIT = 200;
 const nonEmpty = (v) => v !== undefined && v !== null && String(v).trim() !== '';
+
+/** Try to read userId from Redux first, then fallback to localStorage */
+const selectUserIdFromStore = (state) =>
+  state?.auth?.user?._id ||
+  state?.auth?.user?.id ||
+  state?.auth?.userInfo?._id ||
+  state?.auth?.userInfo?.id ||
+  state?.user?.user?._id ||
+  null;
 
 function normalizeProduct(p) {
   const id = p._id || p.id || p.slug || String(Math.random());
@@ -64,13 +76,31 @@ const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
 
+  // ===== user / wishlist =====
+  const reduxUserId = useSelector(selectUserIdFromStore);
+  const [fallbackUserId, setFallbackUserId] = useState(null);
+  useEffect(() => {
+    // fallback to localStorage if Redux isn’t populated yet
+    if (typeof window !== 'undefined') {
+      const uid = window.localStorage.getItem('userId');
+      if (uid) setFallbackUserId(uid);
+    }
+  }, []);
+  const userId = reduxUserId || fallbackUserId || null;
+
   const { wishlist } = useSelector((s) => s.wishlist || { wishlist: [] });
   const wishlistCount = Array.isArray(wishlist) ? wishlist.length : 0;
 
-  useCartInfo();
+  // ===== cart count (server-derived) =====
+  useCartInfo(); // keep if you rely on it elsewhere; harmless here
   const distinctCount = useSelector(selectCartDistinctCount) ?? 0;
 
-  useEffect(() => { dispatch(get_cart_products()); }, [dispatch]);
+  // Initial cart fetch when we have a userId
+  useEffect(() => {
+    if (userId) {
+      dispatch(fetch_cart_products({ userId }));
+    }
+  }, [dispatch, userId]);
 
   const [isOffCanvasOpen, setIsCanvasOpen] = useState(false);
 
@@ -168,7 +198,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     }
   };
 
-  // ✅ This exists (fixes the lint error)
+  // ✅ Keyboard handler exists
   const onSearchKeyDown = (e) => {
     if (!searchOpen) return;
     if (e.key === 'ArrowDown') {
@@ -178,7 +208,7 @@ const HeaderTwo = ({ style_2 = false }) => {
       e.preventDefault();
       setSelIndex((i) => Math.max(-1, i - 1));
     }
-    // Enter key is handled by form submit
+    // Enter handled by form submit
   };
 
   // ===== Session & user dropdown =====
@@ -252,6 +282,17 @@ const HeaderTwo = ({ style_2 = false }) => {
     }
   };
 
+  /** When user clicks the cart icon:
+   *  1) open the mini cart
+   *  2) refresh from server for the current user
+   */
+  const onOpenCart = () => {
+    dispatch(openCartMini());
+    if (userId) {
+      dispatch(fetch_cart_products({ userId }));
+    }
+  };
+
   return (
     <>
       <header>
@@ -313,6 +354,41 @@ const HeaderTwo = ({ style_2 = false }) => {
                           />
                           <button type="submit" aria-label="Search"><Search /></button>
                         </form>
+
+                        {/* dropdown results */}
+                        {searchOpen && (query || '').trim().length >= 2 && (
+                          <div
+                            ref={dropRef}
+                            className="search-dropdown"
+                            role="listbox"
+                            aria-label="Search results"
+                          >
+                            {loading && <div className="search-item muted">Searching…</div>}
+                            {!loading && results.length === 0 && (
+                              <div className="search-item muted">No results</div>
+                            )}
+                            {results.map((p, i) => {
+                              const href = p.slug ? `/product-details/${p.slug}` : `/product-details?id=${encodeURIComponent(p.id)}`;
+                              const active = i === selIndex;
+                              return (
+                                <button
+                                  key={`${p.id}-${i}`}
+                                  type="button"
+                                  className={`search-item ${active ? 'active' : ''}`}
+                                  onMouseEnter={() => setSelIndex(i)}
+                                  onClick={() => {
+                                    setSelIndex(i);
+                                    go(href);
+                                  }}
+                                >
+                                  <span className="search-name">{p.name}</span>
+                                  {p.price != null && <span className="search-price">₹{String(p.price)}</span>}
+                                </button>
+                              );
+                            })}
+                            {loadingMore && <div className="search-item muted">Loading more…</div>}
+                          </div>
+                        )}
                       </div>
 
                       {/* Actions */}
@@ -377,7 +453,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                         {hasSession && (
                           <div className="tp-header-action-item me-2">
                             <button
-                              onClick={() => dispatch(openCartMini())}
+                              onClick={onOpenCart}
                               className="tp-header-action-btn cartmini-open-btn"
                               aria-label="Open cart"
                               type="button"
@@ -419,6 +495,38 @@ const HeaderTwo = ({ style_2 = false }) => {
         .tp-header-search-2 form { position: relative; }
         .tp-header-search-2 input { padding-right: 44px; }
         .tp-header-search-2 button { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: 0; display: inline-flex; align-items: center; }
+
+        .search-dropdown{
+          position:absolute;
+          margin-top:8px;
+          width:480px;
+          max-height:420px;
+          overflow:auto;
+          background:#fff;
+          border:1px solid #e5e7eb;
+          border-radius:12px;
+          box-shadow: 0 18px 40px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
+          padding:6px;
+          z-index: 50;
+        }
+        .search-item{
+          width:100%;
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:12px;
+          padding:10px 12px;
+          border-radius:8px;
+          background:#fff;
+          color:#0f172a;
+          border:0;
+          text-align:left;
+          cursor:pointer;
+        }
+        .search-item:hover, .search-item.active{ background:#eef2ff; }
+        .search-item.muted{ color:#6b7280; cursor:default; }
+        .search-name{ font-weight:600; }
+        .search-price{ font-weight:600; color:#0b1620; }
 
         /* ===== Full-width gradient underline (sticks & thins on scroll) ===== */
         .brand-underline-full{

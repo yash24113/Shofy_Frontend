@@ -5,7 +5,14 @@ import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Close } from "@/svg";
-import { add_cart_product } from "@/redux/features/cartSlice";
+
+/* cart (API-only) — import thunks + ui actions directly from the slice file */
+import {
+  add_to_cart,
+  fetch_cart_products,
+  openCartMini,
+} from "@/redux/features/cartSlice";
+
 import { removeWishlistItem, fetchWishlist } from "@/redux/features/wishlist-slice";
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
@@ -107,7 +114,7 @@ const WishlistItem = ({ product }) => {
 
   const dispatch = useDispatch();
 
-  // cart slice
+  // cart slice (server data)
   const { cart_products } = useSelector((s) => s.cart) || {};
 
   // wishlist manager (provides userId, wishlist, loading)
@@ -117,7 +124,14 @@ const WishlistItem = ({ product }) => {
   const wlLoading = useSelector((s) => s.wishlist?.loading) ?? false;
 
   // Normalize id early
-  const _id = product?._id || product?.id || product?.product?._id || product?.productId || product?.product || null;
+  const _id =
+    product?._id ||
+    product?.id ||
+    product?.product?._id ||
+    product?.productId ||
+    product?.product ||
+    null;
+
   const isInCart = cart_products?.find?.((item) => String(item?._id) === String(_id));
 
   const [moving, setMoving] = useState(false);
@@ -207,69 +221,38 @@ const WishlistItem = ({ product }) => {
   }, [pushAuthQuery]);
 
   /* ---------- Actions (server-backed) ---------- */
-  const handleAddProduct = async (prd) => {
+  const handleAddProduct = async () => {
     if (!userId) { openLogin(); return; }
+    if (!_id) return;
+
+    // Debug: ensure we actually imported the thunk (helps if the path resolves to a different file)
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.log("cart thunks loaded?", { add_to_cart: typeof add_to_cart, fetch_cart_products: typeof fetch_cart_products });
+    }
+
     try {
       setMoving(true);
-      // 1) Call Add to Cart API
-      const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
-      const url = `${base}/cart/add`;
-      try {
-        await fetch(url, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, productId: String(_id), quantity: 1 }),
-        });
-      } catch(_) { /* proceed to local update regardless */ }
 
-      // 2) Optimistically update local cart slice (and persist to localStorage)
-      const priceRaw = pick(
-        prd?.salesPrice,
-        prd?.price,
-        prd?.product?.salesPrice,
-        prd?.product?.price
-      );
-      const normalizedCartItem = {
-        ...prd,
-        _id,
-        id: _id,
-        title: (() => {
-          // Use the same logic as getDisplayTitle to avoid IDs
-          const nameOptions = [
-            prd?.title,
-            prd?.name,
-            prd?.product?.name,
-            prd?.productname,
-            prd?.productTitle,
-            prd?.seoTitle,
-            prd?.groupcode?.name,
-            prd?.fabricType,
-            prd?.content,
-            prd?.design,
-          ].filter(Boolean);
-          
-          const actualName = nameOptions.find(name => {
-            if (!name) return false;
-            const nameStr = String(name).trim();
-            return nameStr.length > 0 && !/^[a-f0-9]{24}$/i.test(nameStr);
-          });
-          
-          return actualName ? toText(actualName) : 'Product';
-        })(),
-        price: Number(priceRaw || 0),
-        image: prd?.image || prd?.img || prd?.image1 || prd?.product?.img || '',
-        quantity: 1, // default quantity 1
-      };
-      dispatch(add_cart_product(normalizedCartItem));
+      // 1) Server add
+      await dispatch(
+        add_to_cart({ userId, productId: String(_id), quantity: 1 })
+      ).unwrap?.();
 
-      // 3) Remove from wishlist on server and refresh
+      // 2) Refresh cart (safety)
+      await dispatch(fetch_cart_products({ userId }));
+
+      // 3) Open mini cart (optional)
+      dispatch(openCartMini());
+
+      // 4) Remove from wishlist + refresh wishlist
       await dispatch(
         removeWishlistItem({ userId, productId: String(_id), title: getDisplayTitle })
-      ).unwrap();
+      ).unwrap?.();
       dispatch(fetchWishlist(userId));
     } catch (e) {
       console.error("Move to cart failed", e);
+      alert(typeof e === "string" ? e : "Failed to move item to cart.");
     } finally {
       setTimeout(() => setMoving(false), 250);
     }
@@ -280,7 +263,7 @@ const WishlistItem = ({ product }) => {
     try {
       await dispatch(
         removeWishlistItem({ userId, productId: String(prd?.id || prd?._id), title: getDisplayTitle })
-      ).unwrap();
+      ).unwrap?.();
       dispatch(fetchWishlist(userId));
     } catch (e) {
       console.error("Remove failed", e);
@@ -291,7 +274,6 @@ const WishlistItem = ({ product }) => {
   /* ---------- presentation ---------- */
   const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
   const fallbackCdn = (process.env.NEXT_PUBLIC_CDN_BASE || 'https://test.amrita-fashions.com/shopy').replace(/\/+$/, "");
-  // Image resolution with robust cleaning similar to ProductItem
   const valueToUrlString = (v) => {
     if (!v) return '';
     if (typeof v === 'string') return v.trim();
@@ -316,24 +298,7 @@ const WishlistItem = ({ product }) => {
         : `${(apiBase || fallbackCdn)}/uploads/${clean(rawImg)}`)
     : '';
 
-  // Title and slug fallbacks - prioritize actual names over IDs
   const getDisplayTitle = useMemo(() => {
-    // Debug: Log all available name options
-    console.log('Wishlist Item - Product Data:', {
-      id: _id,
-      title: product?.title,
-      name: product?.name,
-      productName: product?.product?.name,
-      productname: product?.productname,
-      productTitle: product?.productTitle,
-      seoTitle: product?.seoTitle,
-      groupcodeName: product?.groupcode?.name,
-      fabricType: product?.fabricType,
-      content: product?.content,
-      design: product?.design,
-    });
-    
-    // First try to get actual product names/titles
     const nameOptions = [
       product?.title,
       product?.name,
@@ -346,50 +311,36 @@ const WishlistItem = ({ product }) => {
       product?.content,
       product?.design,
     ].filter(Boolean);
-    
-    // If we have actual names, use the first one
-    const actualName = nameOptions.find(name => {
-      if (!name) return false;
-      const nameStr = String(name).trim();
-      // Don't use IDs (long alphanumeric strings) as names
+
+    const actualName = nameOptions.find((name) => {
+      const nameStr = String(name || "").trim();
       return nameStr.length > 0 && !/^[a-f0-9]{24}$/i.test(nameStr);
     });
-    
-    if (actualName) {
-      console.log('Wishlist Item - Using actual name:', actualName);
-      return toText(actualName);
-    }
-    
-    // Fallback to any available text (but not IDs)
-    const fallback = nameOptions.find(name => {
-      const nameStr = String(name).trim();
-      return nameStr.length > 0 && nameStr.length < 50; // Reasonable length for a name
+
+    if (actualName) return toText(actualName);
+
+    const fallback = nameOptions.find((name) => {
+      const nameStr = String(name || "").trim();
+      return nameStr.length > 0 && nameStr.length < 50;
     });
-    
-    // If still no good name, try to build one from fabric details
+
     if (!fallback) {
-      const fabricParts = [
+      const parts = [
         product?.color || product?.colorName,
         product?.content || product?.contentName,
         product?.fabricType,
         product?.design || product?.designName,
-      ].filter(Boolean).map(part => toText(part));
-      
-      if (fabricParts.length > 0) {
-        const builtName = fabricParts.join(' ') + ' Fabric';
-        console.log('Wishlist Item - Built name from parts:', builtName);
-        return builtName;
-      }
+      ].filter(Boolean).map((x) => toText(x));
+      if (parts.length > 0) return parts.join(" ") + " Fabric";
     }
-    
-    const result = fallback ? toText(fallback) : 'Product';
-    console.log('Wishlist Item - Final title:', result);
-    return result;
+
+    return fallback ? toText(fallback) : "Product";
   }, [product, _id]);
+
   const slug = product?.slug || product?.product?.slug || _id;
 
   const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
-  const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type)); // no default
+  const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type));
   const contentVal = toText(pick(product?.content, product?.contentName, product?.content_label));
   const weightVal =
     isFinite(gsm) && gsm > 0 ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz` : toText(product?.weight);
@@ -403,7 +354,6 @@ const WishlistItem = ({ product }) => {
   const finishVal = toText(pick(product?.finish, product?.subfinish?.name, product?.finishName));
   const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName));
 
-  // Build top details only when available
   const allDetails = [
     fabricTypeVal,
     contentVal,
@@ -437,7 +387,7 @@ const WishlistItem = ({ product }) => {
                 width={70}
                 height={100}
                 className="wishlist-img"
-                priority={false}
+                loading="lazy"
               />
             )}
           </Link>
@@ -485,7 +435,7 @@ const WishlistItem = ({ product }) => {
         {/* add to cart */}
         <td className="tp-cart-add-to-cart wishlist-cell wishlist-cell-center">
           <button
-            onClick={() => handleAddProduct(product)}
+            onClick={handleAddProduct}
             type="button"
             className={`btn-ghost-invert square ${moving ? "is-loading" : ""}`}
             aria-busy={moving ? "true" : "false"}
