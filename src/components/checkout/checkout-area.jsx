@@ -1,84 +1,1045 @@
 'use client';
-import { useEffect } from "react";
-import { useSelector } from "react-redux";
-import { useRouter } from "next/navigation";
-import Cookies from "js-cookie";
-import Link from "next/link";
-// internal
-import CheckoutBillingArea from "./checkout-billing-area";
-import CheckoutCoupon from "./checkout-coupon";
-import CheckoutLogin from "./checkout-login";
-import CheckoutOrderArea from "./checkout-order-area";
-import useCheckoutSubmit from "@/hooks/use-checkout-submit";
+
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useSelector } from 'react-redux';
+import { useRouter } from 'next/navigation';
+import Cookies from 'js-cookie';
+import { toast } from 'react-toastify';
+import { FaCheck } from 'react-icons/fa';
+import { useGetCartDataQuery } from '@/redux/features/cartApi';
+import { selectUserId } from '@/utils/userSelectors';
+import { useGetUserQuery } from '@/redux/features/userApi';
 
 const CheckoutArea = () => {
   const router = useRouter();
+  const userId = useSelector(selectUserId);
+
+  // UI / form state
+  const [activeStep] = useState(2); // 1: cart, 2: checkout, 3: complete
+  const [shippingMethod, setShippingMethod] = useState('free'); // 'free' | 'flat' | 'local'
+  const [shippingCost, setShippingCost] = useState(0);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponDiscount, setCouponDiscount] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    companyName: '',
+    country: 'United States (US)',
+    streetAddress: '',
+    apartment: '',
+    city: '',
+    state: '',
+    postcode: '',
+    phone: '',
+    email: '',
+    orderNotes: '',
+    createAccount: false,
+    shipToDifferentAddress: false,
+    paymentMethod: 'direct_bank_transfer', // 'direct_bank_transfer' | 'cod' | 'paypal'
+  });
+
+  // Fetch user data
+  const { data: userData } = useGetUserQuery(userId, { skip: !userId });
+
+  // Fetch cart data
+  const { data: cartData, isLoading, error, refetch } = useGetCartDataQuery(userId, {
+    skip: !userId,
+  });
+
+  // Normalize cart items
+  const cart_products = useMemo(() => cartData?.data?.items ?? [], [cartData]);
+
+  // Subtotal from cart
+  const subtotal = useMemo(
+    () =>
+      cart_products.reduce((sum, item) => {
+        const price = Number(item?.productId?.price ?? 0);
+        const qty = Number(item?.quantity ?? 1);
+        return sum + price * qty;
+      }, 0),
+    [cart_products]
+  );
+
+  const total = useMemo(() => {
+    const t = subtotal + shippingCost - couponDiscount;
+    return t < 0 ? 0 : t;
+  }, [subtotal, shippingCost, couponDiscount]);
+
+  // Prefill form with user data when available
   useEffect(() => {
-    const isAuthenticate = Cookies.get("userInfo");
-    if (!isAuthenticate) {
-      router.push("/login");
+    if (userData?.data) {
+      const { firstName, lastName, email, phone, address } = userData.data;
+      setFormData((prev) => ({
+        ...prev,
+        firstName: firstName || '',
+        lastName: lastName || '',
+        email: email || '',
+        phone: phone || '',
+        streetAddress: address?.street || '',
+        city: address?.city || '',
+        state: address?.state || '',
+        country: address?.country || 'United States (US)',
+        postcode: address?.postcode || '',
+      }));
+    }
+  }, [userData]);
+
+  // Auth guard
+  useEffect(() => {
+    const isAuthenticated = Cookies.get('userInfo');
+    if (!isAuthenticated) {
+      router.push('/login?redirect=/checkout');
     }
   }, [router]);
 
-  const checkoutData = useCheckoutSubmit();
-  const {
-    handleSubmit,
-    submitHandler,
-    register,
-    errors,
-    handleCouponCode,
-    couponRef,
-    couponApplyMsg,
-  } = checkoutData;
+  // Handlers
+  const handleInputChange = useCallback((e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? Boolean(checked) : value,
+    }));
+  }, []);
 
-  const { cart_products } = useSelector((state) => state.cart);
+  const handleShippingChange = useCallback((e) => {
+    const value = e.target.value; // 'free' | 'flat' | 'local'
+    setShippingMethod(value);
+    const cost = value === 'free' ? 0 : value === 'flat' ? 15 : 8;
+    setShippingCost(cost);
+  }, []);
+
+  const handleApplyCoupon = useCallback(
+    (e) => {
+      e.preventDefault();
+      if (!couponCode.trim()) {
+        setCouponDiscount(0);
+        toast.info('Enter a coupon code');
+        return;
+      }
+      if (couponCode.trim().toLowerCase() === 'welcome10') {
+        setCouponDiscount(10);
+        toast.success('Coupon applied successfully!');
+      } else {
+        setCouponDiscount(0);
+        toast.error('Invalid coupon code');
+      }
+    },
+    [couponCode]
+  );
+
+  const handleSubmitOrder = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (!cart_products.length) {
+        toast.error('Your cart is empty');
+        return;
+      }
+      if (
+        !formData.firstName ||
+        !formData.lastName ||
+        !formData.email ||
+        !formData.phone ||
+        !formData.streetAddress ||
+        !formData.city ||
+        !formData.state ||
+        !formData.postcode
+      ) {
+        toast.error('Please fill all required fields');
+        return;
+      }
+
+      try {
+        setIsProcessing(true);
+
+        const orderData = {
+          user: userId,
+          items: cart_products.map((item) => ({
+            product: item.productId?._id,
+            quantity: item.quantity,
+            price: item.productId?.price,
+            name: item.productId?.name,
+            image:
+              item.productId?.images?.[0]?.url ||
+              item.productId?.img ||
+              item.productId?.image ||
+              null,
+          })),
+        shipping: {
+            address: formData.streetAddress,
+            apartment: formData.apartment,
+            city: formData.city,
+            state: formData.state,
+            country: formData.country,
+            postcode: formData.postcode,
+            method: shippingMethod,
+            cost: shippingCost,
+          },
+          payment: {
+            method: formData.paymentMethod,
+            amount: total,
+          },
+          customer: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            phone: formData.phone,
+            companyName: formData.companyName,
+          },
+          coupon: couponCode || null,
+          discount: couponDiscount,
+          subtotal,
+          total,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+        };
+
+        // TODO: replace with your API call
+        await new Promise((r) => setTimeout(r, 1200));
+
+        toast.success('Order placed successfully!');
+        router.push('/order-confirmation');
+      } catch (err) {
+        console.error('Order submission failed:', err);
+        toast.error('Failed to place order. Please try again.');
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [
+      cart_products,
+      couponCode,
+      couponDiscount,
+      formData.apartment,
+      formData.city,
+      formData.companyName,
+      formData.country,
+      formData.email,
+      formData.firstName,
+      formData.lastName,
+      formData.paymentMethod,
+      formData.phone,
+      formData.postcode,
+      formData.state,
+      formData.streetAddress,
+      router,
+      shippingCost,
+      shippingMethod,
+      subtotal,
+      total,
+      userId,
+    ]
+  );
+
+  // --------- Loading / Error UIs ----------
+  if (isLoading) {
+    return (
+      <div className="loader-wrap">
+        <div className="spinner" />
+        <p>Loading your cart...</p>
+        <style jsx>{`
+          .loader-wrap {
+            min-height: 50vh;
+            display: grid;
+            place-content: center;
+            gap: 16px;
+            color: #253d4e;
+          }
+          .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3bb77e;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+          }
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  if (error) {
+    const message = error?.message ?? 'Please try again later';
+    return (
+      <div className="error-wrap">
+        <div className="msg">Failed to load cart: {message}</div>
+        <button onClick={() => refetch()}>Retry</button>
+        <style jsx>{`
+          .error-wrap {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 30px;
+            background: #fff8f8;
+            border: 1px solid #ffdddd;
+            border-radius: 8px;
+            text-align: center;
+          }
+          .msg {
+            color: #d32f2f;
+            font-size: 16px;
+            margin-bottom: 20px;
+          }
+          button {
+            background: #3bb77e;
+            color: #fff;
+            border: 0;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+          }
+          button:hover {
+            filter: brightness(0.95);
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
-    <>
-      {/* Checkout section layout */}
-      <section
-        className="tp-checkout-area pb-120"
-        style={{ backgroundColor: "#EFF1F5" }}
-      >
-        <div className="container">
-          {/* If cart is empty */}
-          {cart_products.length === 0 && (
-            <div className="text-center pt-50">
-              <h3 className="py-2">No items found in cart to checkout</h3>
-              <Link href="/shop" className="tp-checkout-btn">
-                Return to shop
-              </Link>
-            </div>
-          )}
+    <div className="checkout-page">
+      <div className="container">
+        {/* Header + steps */}
+        <div className="checkout-header">
+          <h1>Checkout</h1>
+          <div className="checkout-steps">
+            {['Shopping Cart', 'Checkout', 'Order Complete'].map((label, idx) => {
+              const step = idx + 1;
+              const active = step <= activeStep;
+              return (
+                <div className="step-wrap" key={label}>
+                  <div className={`step ${active ? 'active' : ''}`}>
+                    <span className="step-number">
+                      {active && step < activeStep ? <FaCheck /> : step}
+                    </span>
+                    <span className="step-text">{label}</span>
+                  </div>
+                  {step < 3 && <div className={`step-connector ${active ? 'active' : ''}`} />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-          {/* If cart has products */}
-          {cart_products.length > 0 && (
-            <div className="row">
-              <div className="col-xl-7 col-lg-7">
-                <div className="tp-checkout-verify">
-                  <CheckoutLogin />
-                  <CheckoutCoupon
-                    handleCouponCode={handleCouponCode}
-                    couponRef={couponRef}
-                    couponApplyMsg={couponApplyMsg}
+        <div className="checkout-content">
+          {/* Left: Billing form */}
+          <div className="checkout-section">
+            <h3>Billing Details</h3>
+
+            <form className="billing-form" onSubmit={(e) => e.preventDefault()}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>
+                    First Name <span className="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="firstName"
+                    className="form-control"
+                    value={formData.firstName}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>
+                    Last Name <span className="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="lastName"
+                    className="form-control"
+                    value={formData.lastName}
+                    onChange={handleInputChange}
+                    required
                   />
                 </div>
               </div>
-              <form onSubmit={handleSubmit(submitHandler)}>
-                <div className="row">
-                  <div className="col-lg-7">
-                    <CheckoutBillingArea register={register} errors={errors} />
-                  </div>
-                  <div className="col-lg-5">
-                    <CheckoutOrderArea checkoutData={checkoutData} />
-                  </div>
+
+              <div className="form-group">
+                <label>Company Name (Optional)</label>
+                <input
+                  type="text"
+                  name="companyName"
+                  className="form-control"
+                  value={formData.companyName}
+                  onChange={handleInputChange}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>
+                  Country / Region <span className="required">*</span>
+                </label>
+                <select
+                  name="country"
+                  className="form-control"
+                  value={formData.country}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option>United States (US)</option>
+                  <option>United Kingdom (UK)</option>
+                  <option>Canada (CA)</option>
+                  <option>Australia (AU)</option>
+                  <option>India (IN)</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  Street Address <span className="required">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="streetAddress"
+                  className="form-control"
+                  placeholder="House number and street name"
+                  value={formData.streetAddress}
+                  onChange={handleInputChange}
+                  required
+                />
+                <input
+                  type="text"
+                  name="apartment"
+                  className="form-control mt-2"
+                  placeholder="Apartment, suite, unit, etc. (optional)"
+                  value={formData.apartment}
+                  onChange={handleInputChange}
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>
+                    Town / City <span className="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="city"
+                    className="form-control"
+                    value={formData.city}
+                    onChange={handleInputChange}
+                    required
+                  />
                 </div>
-              </form>
+                <div className="form-group">
+                  <label>
+                    State / County <span className="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="state"
+                    className="form-control"
+                    value={formData.state}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  ZIP / Postcode <span className="required">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="postcode"
+                  className="form-control"
+                  value={formData.postcode}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>
+                    Phone <span className="required">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    className="form-control"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>
+                    Email Address <span className="required">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    className="form-control"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-check">
+                <input
+                  type="checkbox"
+                  id="create-account"
+                  name="createAccount"
+                  className="form-check-input"
+                  checked={formData.createAccount}
+                  onChange={handleInputChange}
+                />
+                <label htmlFor="create-account" className="form-check-label">
+                  Create an account?
+                </label>
+              </div>
+
+              <div className="form-check mt-3">
+                <input
+                  type="checkbox"
+                  id="ship-different"
+                  name="shipToDifferentAddress"
+                  className="form-check-input"
+                  checked={formData.shipToDifferentAddress}
+                  onChange={handleInputChange}
+                />
+                <label htmlFor="ship-different" className="form-check-label">
+                  Ship to a different address?
+                </label>
+              </div>
+
+              <div className="form-group mt-4">
+                <label>Order Notes (Optional)</label>
+                <textarea
+                  className="form-control"
+                  name="orderNotes"
+                  rows={4}
+                  placeholder="Notes about your order, e.g. special notes for delivery"
+                  value={formData.orderNotes}
+                  onChange={handleInputChange}
+                />
+              </div>
+            </form>
+          </div>
+
+          {/* Right: Order summary */}
+          <div className="order-summary">
+            <div className="order-summary-header">
+              <h3>Your Order</h3>
             </div>
-          )}
+
+            <div className="order-products">
+              {cart_products.map((item) => {
+                const name = item?.productId?.name || 'Product';
+                const qty = Number(item?.quantity ?? 1);
+                const price = Number(item?.productId?.price ?? 0);
+                const line = price * qty;
+                const img =
+                  item?.productId?.images?.[0]?.url ||
+                  item?.productId?.img ||
+                  item?.productId?.image ||
+                  '/images/placeholder.png';
+                return (
+                  <div className="order-product-item" key={item._id || item?.productId?._id}>
+                    <div className="product-info">
+                      <div className="product-image">
+                        <img src={img} alt={name} />
+                      </div>
+                      <div className="product-details">
+                        <h4>{name}</h4>
+                        <div className="product-quantity">× {qty}</div>
+                      </div>
+                    </div>
+                    <div className="product-price">${line.toFixed(2)}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="order-totals">
+              <div className="subtotal">
+                <span>Subtotal</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+
+              <div className="shipping">
+                <span>Shipping</span>
+                <div className="shipping-options">
+                  <label className="shipping-option">
+                    <input
+                      type="radio"
+                      name="shipping"
+                      value="free"
+                      checked={shippingMethod === 'free'}
+                      onChange={handleShippingChange}
+                    />
+                    Free shipping
+                  </label>
+
+                  <label className="shipping-option">
+                    <input
+                      type="radio"
+                      name="shipping"
+                      value="flat"
+                      checked={shippingMethod === 'flat'}
+                      onChange={handleShippingChange}
+                    />
+                    Flat rate: $15.00
+                  </label>
+
+                  <label className="shipping-option">
+                    <input
+                      type="radio"
+                      name="shipping"
+                      value="local"
+                      checked={shippingMethod === 'local'}
+                      onChange={handleShippingChange}
+                    />
+                    Local pickup: $8.00
+                  </label>
+                </div>
+              </div>
+
+              <div className="total">
+                <span>Total</span>
+                <span className="total-amount">${total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Coupon */}
+            <div className="tp-checkout-coupon">
+              <h4>Coupon</h4>
+              <div className="coupon-form">
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Coupon code"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value)}
+                />
+                <button type="button" onClick={handleApplyCoupon}>
+                  Apply
+                </button>
+              </div>
+              {couponDiscount > 0 && (
+                <div className="coupon-applied">Coupon applied! ${couponDiscount.toFixed(2)} off.</div>
+              )}
+            </div>
+
+            {/* Payment */}
+            <div className="tp-checkout-payment">
+              <h4>Payment</h4>
+
+              <label className="payment-method">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="direct_bank_transfer"
+                  checked={formData.paymentMethod === 'direct_bank_transfer'}
+                  onChange={handleInputChange}
+                />
+                Direct Bank Transfer
+              </label>
+              {formData.paymentMethod === 'direct_bank_transfer' && (
+                <div className="payment-details">
+                  Make your payment directly into our bank account. Use your Order ID as the payment
+                  reference. Your order ships after funds clear.
+                </div>
+              )}
+
+              <label className="payment-method">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="cod"
+                  checked={formData.paymentMethod === 'cod'}
+                  onChange={handleInputChange}
+                />
+                Cash on Delivery
+              </label>
+              {formData.paymentMethod === 'cod' && (
+                <div className="payment-details">Pay with cash upon delivery.</div>
+              )}
+
+              <label className="payment-method">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="paypal"
+                  checked={formData.paymentMethod === 'paypal'}
+                  onChange={handleInputChange}
+                />
+                PayPal
+              </label>
+              {formData.paymentMethod === 'paypal' && (
+                <div className="payment-details">
+                  Pay via PayPal; you can pay with your card if you don't have a PayPal account.
+                </div>
+              )}
+
+              <div className="terms-conditions">
+                <label className="form-check">
+                  <input className="form-check-input" type="checkbox" required />{' '}
+                  <span className="form-check-label">
+                    I have read and agree to the website's terms and conditions <span className="required">*</span>
+                  </span>
+                </label>
+              </div>
+
+              <button
+                type="button"
+                className="place-order-btn"
+                onClick={handleSubmitOrder}
+                disabled={isProcessing || cart_products.length === 0}
+              >
+                {isProcessing ? 'Processing…' : 'Place Order'}
+              </button>
+            </div>
+          </div>
         </div>
-      </section>
-    </>
+      </div>
+
+      {/* Styles */}
+      <style jsx>{`
+        .checkout-page {
+          padding: 40px 0;
+          background: #f8f9fa;
+          min-height: 100vh;
+          font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji',
+            'Segoe UI Emoji';
+        }
+        .container {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 0 16px;
+        }
+        .checkout-header {
+          text-align: center;
+          margin-bottom: 32px;
+        }
+        .checkout-header h1 {
+          font-size: 34px;
+          font-weight: 700;
+          color: #253d4e;
+          margin: 0 0 12px;
+        }
+        .checkout-steps {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .step-wrap {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .step {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          color: #b6b6b6;
+        }
+        .step.active {
+          color: #3bb77e;
+        }
+        .step-number {
+          width: 40px;
+          height: 40px;
+          display: grid;
+          place-content: center;
+          border-radius: 999px;
+          background: #f2f3f4;
+          font-weight: 700;
+          margin-bottom: 6px;
+          color: inherit;
+        }
+        .step.active .step-number {
+          background: #3bb77e;
+          color: #fff;
+        }
+        .step-text {
+          font-size: 13px;
+          font-weight: 600;
+        }
+        .step-connector {
+          width: 80px;
+          height: 2px;
+          background: #e0e0e0;
+        }
+        .step-connector.active {
+          background: #3bb77e;
+        }
+
+        .checkout-content {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+        }
+
+        .checkout-section,
+        .order-summary {
+          background: #fff;
+          border-radius: 10px;
+          padding: 24px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .checkout-section h3,
+        .order-summary h3 {
+          font-size: 20px;
+          font-weight: 700;
+          color: #253d4e;
+          margin: 0 0 16px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid #eee;
+        }
+
+        .form-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+        .form-group {
+          margin-bottom: 16px;
+        }
+        .form-group label {
+          display: block;
+          margin-bottom: 6px;
+          font-weight: 600;
+          color: #253d4e;
+        }
+        .form-control {
+          width: 100%;
+          padding: 12px 14px;
+          border: 1px solid #e5e5e5;
+          border-radius: 6px;
+          font-size: 14px;
+          transition: box-shadow 0.2s;
+          border-color :0.2s;
+          background: #fff;
+        }
+        .form-control:focus {
+          border-color:rgb(74, 104, 90);
+          box-shadow: 0 0 0 0.2rem rgba(59, 183, 126, 0.2);
+          outline: none;
+        }
+        select.form-control {
+          appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 12px center;
+          background-size: 16px;
+          padding-right: 36px;
+        }
+        .form-check {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .form-check-input {
+          width: 18px;
+          height: 18px;
+        }
+        .required {
+          color: #dc3545;
+        }
+
+        /* Order summary */
+        .order-summary-header {
+          margin-bottom: 12px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid #eee;
+        }
+        .order-products {
+          margin-bottom: 16px;
+          border-bottom: 1px solid #eee;
+          padding-bottom: 12px;
+        }
+        .order-product-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 12px;
+        }
+        .product-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .product-image {
+          width: 64px;
+          height: 64px;
+          border-radius: 8px;
+          overflow: hidden;
+          border: 1px solid #eee;
+          flex-shrink: 0;
+        }
+        .product-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .product-details h4 {
+          margin: 0 0 2px;
+          font-size: 14px;
+          font-weight: 700;
+          color: #253d4e;
+        }
+        .product-quantity {
+          font-size: 13px;
+          color: #7e7e7e;
+        }
+        .product-price {
+          font-weight: 700;
+          color: #3bb77e;
+        }
+
+        .order-totals {
+          margin: 8px 0 16px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid #eee;
+        }
+        .subtotal,
+        .total {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 10px;
+        }
+        .shipping {
+          margin: 10px 0;
+        }
+        .shipping > span {
+          display: block;
+          font-weight: 700;
+          margin-bottom: 8px;
+        }
+        .shipping-options {
+          display: grid;
+          gap: 8px;
+        }
+        .shipping-option {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          font-size: 14px;
+        }
+        .total {
+          font-size: 18px;
+          font-weight: 800;
+          color: #253d4e;
+          padding-top: 12px;
+          border-top: 1px solid #eee;
+        }
+        .total-amount {
+          color: #3bb77e;
+          font-size: 22px;
+        }
+
+        .tp-checkout-coupon {
+          margin: 16px 0;
+        }
+        .tp-checkout-coupon h4,
+        .tp-checkout-payment h4 {
+          margin: 0 0 10px;
+          font-size: 16px;
+          font-weight: 800;
+          color: #253d4e;
+        }
+        .coupon-form {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 10px;
+        }
+        .coupon-form button {
+          background: transparent;
+          border: 1px solid #3bb77e;
+          color: #3bb77e;
+          padding: 10px 16px;
+          border-radius: 6px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .coupon-form button:hover {
+          background: #3bb77e;
+          color: #fff;
+        }
+        .coupon-applied {
+          margin-top: 8px;
+          background: #edf9f3;
+          border: 1px solid #c0ebd7;
+          color: #2b6e54;
+          padding: 8px 10px;
+          border-radius: 6px;
+          font-size: 13px;
+        }
+
+        .tp-checkout-payment .payment-method {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px;
+          border: 1px solid #eee;
+          border-radius: 8px;
+          margin: 8px 0;
+          font-weight: 600;
+        }
+        .payment-details {
+          margin: 6px 0 12px 28px;
+          font-size: 13px;
+          color: #666;
+          background: #f9f9f9;
+          border-radius: 6px;
+          padding: 10px;
+        }
+        .terms-conditions {
+          margin-top: 12px;
+          padding: 12px;
+          background: #f9f9f9;
+          border-radius: 8px;
+        }
+        .place-order-btn {
+          width: 100%;
+          background: #3bb77e;
+          color: #fff;
+          border: 0;
+          border-radius: 8px;
+          padding: 14px;
+          font-size: 16px;
+          font-weight: 800;
+          cursor: pointer;
+          transition: filter 0.2s;
+           transform 0.1s;
+        }
+        .place-order-btn:hover {
+          filter: brightness(0.96);
+        }
+        .place-order-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        @media (max-width: 991px) {
+          .checkout-content {
+            grid-template-columns: 1fr;
+          }
+          .form-row {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+    </div>
   );
 };
 
