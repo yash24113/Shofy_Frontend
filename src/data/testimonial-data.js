@@ -1,60 +1,50 @@
-import user_1 from '@assets/img/users/user-1.jpg';
-import user_2 from '@assets/img/users/user-2.jpg';
-import user_3 from '@assets/img/users/user-3.jpg';
-import user_4 from '@assets/img/users/user-4.jpg';
-
-// fashion_testi_data
 export const fashion_testi_data = [
   {
-    id:1,
-    review:4,
-    desc:'“ How you use the city or town name is up to you. All results may be freely used in any work.”',
-    user:user_2,
-    name:'Theodore Handle',
-    designation:'CO Founder'
+    id: 1,
+    review: 4.5,
+    desc: "On-time dispatch for 10K+ meters/month with stable hand-feel on peach finish poplin. Shade lots stayed consistent across repeats.",
+    industry: "Garment Exporter",
+    location: "Tirupur, TN",
+    tags: ["On-time Delivery", "Peach Finish", "Bulk Orders", "Shade Match"]
   },
   {
-    id:2,
-    review:5,
-    desc:'“Very happy with our choice to take our daughter to Brave care. The entire team was great! Thank you!”',
-    user:user_3,
-    name:'John Smith',
-    designation:'UI/UX Designer'
+    id: 2,
+    review: 5,
+    desc: "Uniform shirting quality is predictable. GSM and shrinkage are under control which reduced our returns dramatically.",
+    industry: "Uniform Manufacturer",
+    location: "Ludhiana, Punjab",
+    tags: ["GSM Control", "Shrinkage", "Low Returns", "Uniforms"]
   },
   {
-    id:3,
-    review:3,
-    desc:'“Thanks for all your efforts and teamwork over the last several months!  Thank you so much”',
-    user:user_4,
-    name:'Salim Rana',
-    designation:'Web Developer'
-  },
-]
-
-// beauty testimonial data 
-export const beauty_testi_data = [
-  {
-    id:1,
-    review:4,
-    desc:'Suscipit tellus mauris a diam maecenas. Ut faucibus pulvinar elementum integer enim neque volutpat ac. Auctor urna nunc id cursus. Scelerisque purus semper eget duis at. Pharetra vel turpis nunc eget.',
-    user:user_1,
-    name:'Jake Weary',
-    designation:'CO Founder'
+    id: 3,
+    review: 4.5,
+    desc: "Fast lab dips and 50+ shade support helped us launch a new line quickly. Lead times were met even in peak season.",
+    industry: "Private Label Brand",
+    location: "Mumbai, MH",
+    tags: ["Lab Dips", "Shade Range", "Lead Time", "Seasonal"]
   },
   {
-    id:2,
-    review:3.5,
-    desc:'Suscipit tellus mauris a diam maecenas. Ut faucibus pulvinar elementum integer enim neque volutpat ac. Auctor urna nunc id cursus. Scelerisque purus semper eget duis at. Pharetra vel turpis nunc eget.',
-    user:user_2,
-    name:'Salim Rana',
-    designation:'Web Developer'
+    id: 4,
+    review: 5,
+    desc: "Carbon/peach finishes matched our tech pack. Lot-to-lot variance stayed minimal and packing was export-grade.",
+    industry: "Textile Buying House",
+    location: "Delhi NCR",
+    tags: ["Laffer/Peach", "QC", "Export Packing", "Consistency"]
   },
   {
-    id:3,
-    review:5,
-    desc:'Suscipit tellus mauris a diam maecenas. Ut faucibus pulvinar elementum integer enim neque volutpat ac. Auctor urna nunc id cursus. Scelerisque purus semper eget duis at. Pharetra vel turpis nunc eget.',
-    user:user_3,
-    name:'Selina Gomz',
-    designation:'CO Founder'
+    id: 5,
+    review: 4.5,
+    desc: "Poplin and twill supply remained steady with helpful MoQs. PO changes were handled smoothly by the team.",
+    industry: "Corporate Procurement",
+    location: "Bengaluru, KA",
+    tags: ["MoQ Flex", "Poplin/Twill", "PO Support", "Service"]
   },
-]
+  {
+    id: 6,
+    review: 5,
+    desc: "Fabric inspection reports and test certificates provided on request. Helped us pass third-party audits without issues.",
+    industry: "Export Compliance Partner",
+    location: "Jaipur, RJ",
+    tags: ["Reports", "Certificates", "Compliance", "Audits"]
+  }
+];

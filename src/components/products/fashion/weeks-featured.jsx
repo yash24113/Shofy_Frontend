@@ -1,16 +1,13 @@
 'use client';
 import React from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation } from 'swiper/modules';
-// If not loaded globally, uncomment:
+import { Pagination } from 'swiper/modules';
 // import 'swiper/css';
-// import 'swiper/css/navigation';
+// import 'swiper/css/pagination';
 
-import { Rating } from 'react-simple-star-rating';
 import Link from 'next/link';
-
 import { useGetTopRatedQuery } from '@/redux/features/newProductApi';
-import { ArrowRightLong, NextLongArr, PrevLongArr, TextShapeLine } from '@/svg';
+import { ArrowRightLong, TextShapeLine } from '@/svg';
 import ErrorMsg from '@/components/common/error-msg';
 import { HomeTwoFeaturedPrdLoader } from '@/components/loader';
 
@@ -18,8 +15,7 @@ import { HomeTwoFeaturedPrdLoader } from '@/components/loader';
 const slider_setting = {
   slidesPerView: 3,
   spaceBetween: 10,
-  // ✅ Use selectors; do NOT call destroy/init or set navigation: true
-  navigation: { enabled: true, prevEl: '.tp-nav-prev', nextEl: '.tp-nav-next' },
+  pagination: { el: '.tp-featured-pagination', clickable: true }, // ✅ dots only
   breakpoints: {
     1200: { slidesPerView: 3 },
     992:  { slidesPerView: 3 },
@@ -38,22 +34,24 @@ const pickUrlDeep = function pick(v) {
     const s = v.trim().replace(/\s+/g, '');
     return s.startsWith('//') ? `https:${s}` : s;
   }
-  if (Array.isArray(v)) { for (const x of v) { const got = pick(x); if (got) return got; } return ''; }
-  if (typeof v === 'object') {
-    const direct = v.secure_url || v.url || v.path || v.key || v.src || v.publicUrl || v.imageUrl;
-    const fromDirect = pick(direct); if (fromDirect) return fromDirect;
-    for (const val of Object.values(v)) { const got = pick(val); if (got) return got; }
-    return '';
-  }
+  if (Array.isArray(v)) for (const x of v) { const got = pickUrlDeep(x); if (got) return got; }
+  if (typeof v === 'object')
+    for (const val of Object.values(v || {})) {
+      const got = pickUrlDeep(val);
+      if (got) return got;
+    }
   return '';
 };
+
 function absoluteUrlFromAnything(src) {
   const raw = pickUrlDeep(src);
-  if (!raw) return ''; if (isAbsUrl(raw)) return raw;
+  if (!raw) return '';
+  if (isAbsUrl(raw)) return raw;
   const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
   const clean = String(raw).replace(/^\/+/, '').replace(/^api\/+/, '');
   return base ? `${base}/${clean}` : `/${clean}`;
 }
+
 function getImageUrl(item) {
   const p = item?.product || item;
   return (
@@ -71,6 +69,7 @@ function getImageUrl(item) {
   );
 }
 
+/* ---------------- component ---------------- */
 const WeeksFeatured = () => {
   const { data: products, isError, isLoading } = useGetTopRatedQuery();
 
@@ -82,32 +81,40 @@ const WeeksFeatured = () => {
     const items = products.data;
 
     content = (
-      <Swiper {...slider_setting} modules={[Navigation]} className="tp-featured-slider-active">
+      <Swiper {...slider_setting} modules={[Pagination]} className="tp-featured-slider-active">
         {items.map((item, idx) => {
           const p = item?.product || item;
-          const pid = p?._id || item?._id;
-          const title = p?.name || item?.title || 'Product';
-          const price =
-            p?.salesPrice ?? p?.purchasePrice ?? item?.salesPrice ?? item?.purchasePrice ?? item?.price ?? 0;
-
-          const reviews = Array.isArray(p?.reviews) ? p.reviews : Array.isArray(item?.reviews) ? item.reviews : [];
-          const avgRating = reviews.length ? reviews.reduce((a, r) => a + Number(r.rating || 0), 0) / reviews.length : 0;
-
+          const pid = p?._id || idx;
+          const title = p?.name || item?.title || 'Product Name';
           const bg = getImageUrl(item);
-          const productSlug = p?.slug || pid;
-          const detailsHref = `/fabric/${encodeURIComponent(productSlug)}`;
+          const slug = p?.slug || pid;
+          const detailsHref = `/fabric/${encodeURIComponent(slug)}`;
 
           return (
-            <SwiperSlide key={item._id || pid || idx} className="tp-featured-item white-bg p-relative z-index-1">
-              <div className="tp-featured-thumb include-bg" aria-label={title} style={{ backgroundImage: `url(${bg})` }} />
+            <SwiperSlide key={pid} className="tp-featured-item white-bg p-relative z-index-1">
+              {/* Image */}
+              <div
+                className="tp-featured-thumb include-bg"
+                aria-label={title}
+                style={{
+                  backgroundImage: `url(${bg})`,
+                  backgroundSize: 'contain',
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'center',
+                  aspectRatio: '16 / 9',
+                  borderRadius: '16px',
+                  backgroundColor: 'var(--tp-grey-1)',
+                }}
+              />
+
+              {/* Content */}
               <div className="tp-featured-content">
-                <h3 className="tp-featured-title"><Link href={detailsHref}>{title}</Link></h3>
-                <div className="tp-featured-price-wrapper">
-                  <span className="tp-featured-price new-price">${Number(price).toFixed(2)}</span>
-                </div>
-                <div className="tp-product-rating-icon tp-product-rating-icon-2">
-                  <Rating allowFraction size={16} initialValue={avgRating} readonly />
-                </div>
+                <div className="tp-latest-chip">Latest Collection</div>
+                <h3 className="tp-featured-title">
+                  <Link href={detailsHref} className="tp-featured-title-link">
+                    {title}
+                  </Link>
+                </h3>
                 <div className="tp-featured-btn">
                   <Link href={detailsHref} className="tp-btn tp-btn-border tp-btn-border-sm">
                     Shop Now <ArrowRightLong />
@@ -117,12 +124,8 @@ const WeeksFeatured = () => {
             </SwiperSlide>
           );
         })}
-
-        {/* ✅ Custom black arrows placed INSIDE Swiper so they exist at init */}
-        <div className="tp-featured-slider-arrow mt-45">
-          <button className="tp-nav-prev"><PrevLongArr /></button>
-          <button className="tp-nav-next"><NextLongArr /></button>
-        </div>
+        {/* ✅ dots centered below */}
+        <div className="tp-featured-pagination" />
       </Swiper>
     );
   }
@@ -136,10 +139,11 @@ const WeeksFeatured = () => {
               <span className="tp-section-title-pre-2">
                 On-Trend Textures <TextShapeLine />
               </span>
-              <h3 className="tp-section-title-2">The Ultimate Fabric Edit</h3>
+              <h3 className="tp-section-title-2">The Ultimate Fabric Collection</h3>
             </div>
           </div>
         </div>
+
         <div className="row">
           <div className="col-xl-12">
             <div className="tp-featured-slider">{content}</div>
@@ -147,10 +151,68 @@ const WeeksFeatured = () => {
         </div>
       </div>
 
-      {/* Safety: hide default arrows if any CSS injects them */}
       <style jsx global>{`
-        .tp-featured-slider .swiper-button-prev,
-        .tp-featured-slider .swiper-button-next { display: none !important; }
+        /* Card layout */
+        .tp-featured-item {
+          background: var(--tp-common-white);
+          border: 1px solid var(--tp-grey-2);
+          border-radius: 18px;
+          overflow: hidden;
+          transition: box-shadow 0.25s ease, transform 0.25s ease;
+        }
+        .tp-featured-item:hover {
+          box-shadow: 0 10px 24px rgba(17, 35, 56, 0.12);
+          transform: translateY(-2px);
+        }
+
+        .tp-featured-content { padding: 18px 18px 22px; }
+
+        .tp-latest-chip {
+          display: inline-block;
+          font-size: 12px;
+          letter-spacing: .06em;
+          color: var(--tp-common-white);
+          background: var(--tp-theme-primary);
+          padding: 6px 10px;
+          border-radius: 999px;
+          margin-bottom: 10px;
+        }
+
+        .tp-featured-title { margin: 0 0 10px; line-height: 1.25; color: var(--tp-text-1); }
+        .tp-featured-title-link {
+          color: var(--tp-text-1);
+          text-decoration: none;
+          transition: color .2s ease;
+        }
+        .tp-featured-title-link:hover { color: var(--tp-theme-primary); }
+
+        /* Hide arrows entirely */
+        .tp-featured-slider-arrow,
+        .tp-nav-prev,
+        .tp-nav-next { display: none !important; }
+
+        /* ✅ Centered dot pagination */
+        .tp-featured-pagination {
+          margin-top: 28px;
+          text-align: center;
+          position: static;
+        }
+        .tp-featured-pagination .swiper-pagination-bullet {
+          background: var(--tp-grey-7);
+          opacity: 1;
+          width: 10px;
+          height: 10px;
+          margin: 0 6px !important;
+          transition: all 0.3s ease;
+        }
+        .tp-featured-pagination .swiper-pagination-bullet-active {
+          background: var(--tp-theme-primary);
+          width: 24px;
+          border-radius: 6px;
+        }
+
+        /* Section bg */
+        .tp-featured-slider-area.grey-bg-6 { background: var(--tp-grey-1); }
       `}</style>
     </section>
   );
