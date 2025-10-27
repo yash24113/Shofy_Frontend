@@ -84,85 +84,96 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
     price: (order.price || [])[i] ?? 0,
   }));
 
-  // ---- printing without findDOMNode / react-to-print ----
+  // --------- PRINT VIA HIDDEN IFRAME (robust in Next.js/React 19) ----------
+  const buildHeadHTML = () => {
+    // Copy style/link tags to preserve styling
+    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map((l) => `<link rel="stylesheet" href="${l.href}">`)
+      .join('\n');
+
+    const styles = Array.from(document.querySelectorAll('style'))
+      .map((s) => `<style>${s.innerHTML}</style>`)
+      .join('\n');
+
+    return `
+      <meta charset="utf-8">
+      <base href="${typeof window !== 'undefined' ? window.location.origin : '/'}">
+      ${links}
+      ${styles}
+      <style>
+        @media print {
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .tp-invoice-print-wrapper { box-shadow: none !important; }
+          .tp-btn, .invoice__print { display: none !important; }
+        }
+        body { margin: 0; padding: 0; }
+      </style>
+    `;
+  };
+
   const handlePrint = useCallback(() => {
     if (typeof window === 'undefined') return;
     const node = printRef.current;
     if (!node) return;
 
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700');
-    if (!printWindow) return;
+    // Create hidden iframe
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
 
-    const writeHead = () => {
-      const pwDoc = printWindow.document;
-      pwDoc.write('<!doctype html><html><head><meta charSet="utf-8"/>');
-      pwDoc.write(`<base href="${window.location.origin}">`);
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
 
-      const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
-      links.forEach((l) => {
-        pwDoc.write(`<link rel="stylesheet" href="${l.href}">`);
-      });
+    // Write full HTML into iframe
+    doc.open();
+    doc.write(`<!doctype html><html><head>${buildHeadHTML()}</head><body>${node.outerHTML}</body></html>`);
+    doc.close();
 
-      const styles = Array.from(document.querySelectorAll('style'));
-      styles.forEach((s) => pwDoc.write(`<style>${s.innerHTML}</style>`));
-
-      try {
-        const sheets = Array.from(document.styleSheets);
-        sheets.forEach((ss) => {
-          try {
-            const rules = ss.cssRules;
-            if (!rules) return;
-            let cssText = '';
-            for (let i = 0; i < rules.length; i++) {
-              cssText += rules[i].cssText;
-            }
-            if (cssText) pwDoc.write(`<style>${cssText}</style>`);
-          } catch {
-            // ignore cross-origin
-          }
-        });
-      } catch {
-        // ignore
-      }
-
-      pwDoc.write(`
-        <style>
-          @media print {
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .tp-invoice-print-wrapper { box-shadow: none !important; }
-            .tp-btn, .invoice__print { display: none !important; }
-          }
-          body { margin: 0; padding: 0; }
-        </style>
-      `);
-
-      pwDoc.write('</head><body>');
-    };
-
-    const writeBody = () => {
-      const pwDoc = printWindow.document;
-      pwDoc.write(node.outerHTML);
-      pwDoc.write('</body></html>');
-      pwDoc.close();
-    };
-
-    writeHead();
-    writeBody();
-
-    const doPrint = () => {
-      printWindow.focus();
+    const afterResourcesReady = () => {
+      // Small delay so layout calculates before print
       setTimeout(() => {
-        printWindow.print();
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        // Clean up a bit later so print dialog can open
         setTimeout(() => {
-          printWindow.close();
-        }, 50);
-      }, 150);
+          document.body.removeChild(iframe);
+        }, 500);
+      }, 100);
     };
 
-    if (printWindow.document.readyState === 'complete') {
-      doPrint();
+    // Wait for images and fonts to settle (max ~1.5s)
+    const waitForImages = () => {
+      const imgs = Array.from(doc.images || []);
+      if (imgs.length === 0) {
+        afterResourcesReady();
+        return;
+      }
+      let loaded = 0;
+      const done = () => {
+        loaded += 1;
+        if (loaded >= imgs.length) afterResourcesReady();
+      };
+      imgs.forEach((img) => {
+        if (img.complete) {
+          done();
+        } else {
+          img.addEventListener('load', done);
+          img.addEventListener('error', done);
+        }
+      });
+      // Fallback timeout so we don't hang
+      setTimeout(afterResourcesReady, 1500);
+    };
+
+    if (doc.readyState === 'complete') {
+      waitForImages();
     } else {
-      printWindow.onload = doPrint;
+      iframe.onload = waitForImages;
     }
   }, []);
 
