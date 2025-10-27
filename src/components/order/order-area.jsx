@@ -112,7 +112,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                     <div className="row align-items-end">
                       <div className="col-md-4 col-sm-6">
                         <div className="invoice__left">
-                          <img alt="Company Logo" width="140" height="44" sizes="(max-width: 600px) 110px, 140px" class="jsx-e66c4d5b1056d656" src="https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp" style="height: auto; width: auto; max-width: 140px; max-height: 44px;"></img>
+                          <Image alt="Company Logo" width="140" height="44" sizes="(max-width: 600px) 110px, 140px" class="jsx-e66c4d5b1056d656" src="https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp" style="height: auto; width: auto; max-width: 140px; max-height: 44px;"></Image>
                           <h3>Amrita Global Enterprises</h3>
                           <p>
                             4th Floor, Safal Prelude ,<br />
