@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
 import dayjs from 'dayjs';
-import ReactToPrint from 'react-to-print';
 
 import logo from '@assets/img/logo/my_logo.png';
 import ErrorMsg from '@/components/common/error-msg';
@@ -22,7 +21,7 @@ const safeGetLocalUserId = () => {
 };
 
 const OrderArea = ({ orderId, userId: userIdProp }) => {
-  const printRef = useRef();
+  const printRef = useRef(null);
 
   // resolve userId: prop -> localStorage
   const userId = userIdProp || safeGetLocalUserId() || null;
@@ -33,7 +32,11 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
     if (typeof window !== 'undefined') {
       const raw = localStorage.getItem('lastOrder');
       if (raw) {
-        try { setLastOrder(JSON.parse(raw)); } catch(err) {console.warn("err",err)}
+        try {
+          setLastOrder(JSON.parse(raw));
+        } catch (err) {
+          console.warn('err', err);
+        }
       }
     }
   }, []);
@@ -81,6 +84,88 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
     price: (order.price || [])[i] ?? 0,
   }));
 
+  // ---- printing without findDOMNode / react-to-print ----
+  const handlePrint = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const node = printRef.current;
+    if (!node) return;
+
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700');
+    if (!printWindow) return;
+
+    const writeHead = () => {
+      const pwDoc = printWindow.document;
+      pwDoc.write('<!doctype html><html><head><meta charSet="utf-8"/>');
+      pwDoc.write(`<base href="${window.location.origin}">`);
+
+      const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+      links.forEach((l) => {
+        pwDoc.write(`<link rel="stylesheet" href="${l.href}">`);
+      });
+
+      const styles = Array.from(document.querySelectorAll('style'));
+      styles.forEach((s) => pwDoc.write(`<style>${s.innerHTML}</style>`));
+
+      try {
+        const sheets = Array.from(document.styleSheets);
+        sheets.forEach((ss) => {
+          try {
+            const rules = ss.cssRules;
+            if (!rules) return;
+            let cssText = '';
+            for (let i = 0; i < rules.length; i++) {
+              cssText += rules[i].cssText;
+            }
+            if (cssText) pwDoc.write(`<style>${cssText}</style>`);
+          } catch {
+            // ignore cross-origin
+          }
+        });
+      } catch {
+        // ignore
+      }
+
+      pwDoc.write(`
+        <style>
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .tp-invoice-print-wrapper { box-shadow: none !important; }
+            .tp-btn, .invoice__print { display: none !important; }
+          }
+          body { margin: 0; padding: 0; }
+        </style>
+      `);
+
+      pwDoc.write('</head><body>');
+    };
+
+    const writeBody = () => {
+      const pwDoc = printWindow.document;
+      pwDoc.write(node.outerHTML);
+      pwDoc.write('</body></html>');
+      pwDoc.close();
+    };
+
+    writeHead();
+    writeBody();
+
+    const doPrint = () => {
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        setTimeout(() => {
+          printWindow.close();
+        }, 50);
+      }, 150);
+    };
+
+    if (printWindow.document.readyState === 'complete') {
+      doPrint();
+    } else {
+      printWindow.onload = doPrint;
+    }
+  }, []);
+
   // ---- Conditional UIs (no hooks below this line) ----
   if (!lastOrder && !user && isLoading) return <PrdDetailsLoader loading={true} />;
   if (!lastOrder && isError) return <ErrorMsg msg="There was an error loading your details." />;
@@ -112,7 +197,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                     <div className="row align-items-end">
                       <div className="col-md-4 col-sm-6">
                         <div className="invoice__left">
-                          <Image alt="Company Logo" width="140" height="44" sizes="(max-width: 600px) 110px, 140px" class="jsx-e66c4d5b1056d656" src="https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp" style="height: auto; width: auto; max-width: 140px; max-height: 44px;"></Image>
+                          <Image src={logo} alt="logo" width={140} height={45} />
                           <h3>Amrita Global Enterprises</h3>
                           <p>
                             4th Floor, Safal Prelude ,<br />
@@ -126,7 +211,9 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                         <div className="invoice__right mt-15 mt-sm-0 text-sm-end">
                           <h3 className="text-uppercase font-70 mb-20">Invoice</h3>
                           <p className="mb-0"><strong>Order ID:</strong> #{order._id || '—'}</p>
-                          <p className="mb-0"><strong>Date:</strong> {dayjs(order.createdAt).format('MMMM D, YYYY')}</p>
+                          <p className="mb-0">
+                            <strong>Date:</strong> {dayjs(order.createdAt).format('MMMM D, YYYY')}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -140,20 +227,11 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                 <div className="col-md-6 col-sm-8">
                   <div className="invoice__customer-details">
                     <h4 className="mb-10 text-uppercase">{fullName}</h4>
-                    {/* {(order.country || user?.country) && (
-                      <p className="mb-0 text-uppercase">{order.country || user?.country}</p>
-                    )}
-                    {(order.city || order.postcode || user?.city || user?.pincode) && (
-                      <p className="mb-0 text-uppercase">
-                        {(order.city || user?.city) ?? ''} {(order.postcode || user?.pincode) ?? ''}
-                      </p>
-                    )} */}
-                     {(order.phone || user?.phone) && <p className="mb-0">{order.phone || user?.phone}</p>} 
+                    {(order.phone || user?.phone) && <p className="mb-0">{order.phone || user?.phone}</p>}
                     {(order.email || user?.email) && <p className="mb-0">{order.email || user?.email}</p>}
                     {(order.streetAddress || user?.address) && (
                       <p className="mb-0">{order.streetAddress || user?.address}</p>
                     )}
-                   
                   </div>
                 </div>
               </div>
@@ -231,24 +309,23 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
           <div className="invoice__print text-end mt-3">
             <div className="row">
               <div className="col-xl-12">
-                <ReactToPrint
-                  trigger={() => (
-                    <button type="button" className="tp-invoice-print tp-btn tp-btn-black">
-                      <span className="mr-5"><i className="fa-regular fa-print"></i></span> Print
-                    </button>
-                  )}
-                  content={() => printRef.current}
-                  documentTitle={`Invoice-${order._id || 'Order'}`}
-                />
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="tp-invoice-print tp-btn tp-btn-black"
+                >
+                  <span className="mr-5"><i className="fa-regular fa-print"></i></span> Print
+                </button>
               </div>
             </div>
           </div>
         </div>
       </section>
 
+      {/* Keep global print styles active for in-window prints as well */}
       <style jsx global>{`
         @media print {
-          body { -webkit-print-color-adjust: exact; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .tp-invoice-print-wrapper { box-shadow: none !important; }
           .tp-btn, .invoice__print { display: none !important; }
         }
