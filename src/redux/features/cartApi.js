@@ -1,83 +1,97 @@
 import { apiSlice } from "../api/apiSlice";
 
+/**
+ * Make sure apiSlice is created with:  tagTypes: ['Cart']
+ * Example:
+ * export const apiSlice = createApi({
+ *   baseQuery: fetchBaseQuery({ baseUrl: '/api/' }),
+ *   tagTypes: ['Cart'],
+ *   endpoints: () => ({}),
+ * });
+ */
 export const cartApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    // Get cart data for a specific user
+
+    // GET /cart/user/:userId
     getCartData: builder.query({
       query: (userId) => {
-        console.log('Cart API: Fetching cart data for user', { userId });
-        return {
-          url: `cart/user/${userId}`,
-          method: "GET",
-        };
+        console.log("Cart API: Fetching cart data for user", { userId });
+        return { url: `cart/user/${userId}`, method: "GET" };
       },
-      providesTags: ["Cart"],
-      keepUnusedDataFor: 300, // 5 minutes
-      async onQueryStarted(userId, { queryFulfilled, dispatch }) {
+      // ✅ user-scoped tag
+      providesTags: (result, error, userId) => [{ type: "Cart", id: userId ?? "UNKNOWN" }],
+      keepUnusedDataFor: 60,
+      // ✅ if a new subscriber mounts (e.g., opening mini-cart), force a read
+      forceRefetch({ currentArg, previousArg }) {
+        return currentArg === previousArg;
+      },
+      async onQueryStarted(userId, { queryFulfilled }) {
         try {
-          console.log('Cart API: Starting cart fetch for user', { userId });
+          console.log("Cart API: Starting cart fetch for user", { userId });
           const result = await queryFulfilled;
-          console.log('Cart API: Cart fetch successful', { userId, data: result.data });
+          console.log("Cart API: Cart fetch successful", { userId, data: result.data });
         } catch (err) {
           console.error("Cart API: Failed to fetch cart data:", err);
         }
       },
     }),
 
-    // Update cart item quantity
+    // PUT /cart/update/:productId
     updateCartItem: builder.mutation({
       query: ({ productId, quantity, userId }) => {
-        console.log('Cart API: Updating cart item', { productId, quantity, userId });
+        console.log("Cart API: Updating cart item", { productId, quantity, userId });
         return {
           url: `cart/update/${productId}`,
           method: "PUT",
           body: { quantity, userId },
         };
       },
-      invalidatesTags: ["Cart"],
-      async onQueryStarted({ productId, quantity }, { queryFulfilled, dispatch }) {
+      // ✅ invalidate only this user's cart
+      invalidatesTags: (result, error, { userId }) => [{ type: "Cart", id: userId ?? "UNKNOWN" }],
+      async onQueryStarted({ productId, quantity }, { queryFulfilled }) {
         try {
-          console.log('Cart API: Starting update for', { productId, quantity });
+          console.log("Cart API: Starting update for", { productId, quantity });
           const result = await queryFulfilled;
-          console.log('Cart API: Update successful', result);
-          // Optimistic update could be added here if needed
+          console.log("Cart API: Update successful", result);
         } catch (err) {
           console.error("Cart API: Failed to update cart item:", err);
         }
       },
     }),
 
-    // Remove single item from cart
+    // DELETE /cart/remove/:productId
     removeCartItem: builder.mutation({
-      query: ({productId, userId}) => {
-        console.log('Cart API: Removing cart item', { productId, userId });
+      query: ({ productId, userId }) => {
+        console.log("Cart API: Removing cart item", { productId, userId });
         return {
           url: `cart/remove/${productId}`,
           method: "DELETE",
-          body: {userId}
+          body: { userId },
         };
       },
-      invalidatesTags: ["Cart"],
-      async onQueryStarted({productId}, { queryFulfilled, dispatch }) {
+      invalidatesTags: (result, error, { userId }) => [{ type: "Cart", id: userId ?? "UNKNOWN" }],
+      async onQueryStarted({ productId }, { queryFulfilled }) {
         try {
-          console.log('Cart API: Starting removal for', { productId });
+          console.log("Cart API: Starting removal for", { productId });
           const result = await queryFulfilled;
-          console.log('Cart API: Removal successful', result);
+          console.log("Cart API: Removal successful", result);
         } catch (err) {
           console.error("Cart API: Failed to remove cart item:", err);
         }
       },
     }),
 
-    // Clear all items from cart
+    // DELETE /cart/clear
     clearCart: builder.mutation({
-      query: () => ({
+      // accept { userId } so invalidation can be precise
+      query: ({ userId }) => ({
         url: "cart/clear",
         method: "DELETE",
+        body: { userId }, // remove if your API doesn't expect it
       }),
-      invalidatesTags: ["Cart"],
-      async onQueryStarted(arg, { queryFulfilled, dispatch }) {
+      invalidatesTags: (result, error, { userId }) => [{ type: "Cart", id: userId ?? "UNKNOWN" }],
+      async onQueryStarted(arg, { queryFulfilled }) {
         try {
           await queryFulfilled;
         } catch (err) {
@@ -86,22 +100,22 @@ export const cartApi = apiSlice.injectEndpoints({
       },
     }),
 
-    // Add item to cart
+    // POST /cart/add
     addToCart: builder.mutation({
       query: ({ productId, userId, quantity = 1 }) => {
-        console.log('Cart API: Adding item to cart', { productId, userId, quantity });
+        console.log("Cart API: Adding item to cart", { productId, userId, quantity });
         return {
           url: "cart/add",
           method: "POST",
           body: { productId, userId, quantity },
         };
       },
-      invalidatesTags: ["Cart"],
-      async onQueryStarted({ productId, userId, quantity }, { queryFulfilled, dispatch }) {
+      invalidatesTags: (result, error, { userId }) => [{ type: "Cart", id: userId ?? "UNKNOWN" }],
+      async onQueryStarted({ productId, quantity }, { queryFulfilled }) {
         try {
-          console.log('Cart API: Starting add for', { productId, quantity });
+          console.log("Cart API: Starting add for", { productId, quantity });
           const result = await queryFulfilled;
-          console.log('Cart API: Add successful', result);
+          console.log("Cart API: Add successful", result);
         } catch (err) {
           console.error("Cart API: Failed to add item to cart:", err);
         }

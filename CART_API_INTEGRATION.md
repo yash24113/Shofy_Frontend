@@ -102,3 +102,4 @@ await clearCart().unwrap();
 - User must be authenticated (userId required)
 - API endpoints must be properly configured in environment variables
 - Backend must support the specified API endpoints
+

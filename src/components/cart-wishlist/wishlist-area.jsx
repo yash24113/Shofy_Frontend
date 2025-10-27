@@ -1,6 +1,5 @@
 'use client';
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import WishlistItem from './wishlist-item';
 import { Plus } from '@/svg';
@@ -9,7 +8,6 @@ import useWishlistManager from '@/hooks/useWishlistManager';
 const WishlistArea = () => {
   const router = useRouter();
 
-  // Use the wishlist manager hook
   const { userId, wishlist, loading } = useWishlistManager();
 
   /* --------------------------- actions --------------------------- */
@@ -105,16 +103,17 @@ const WishlistArea = () => {
       <style jsx>{`
         .center-left { display:flex; justify-content:center; align-items:center; }
 
+        /* THEME-CONNECTED BUTTON (matches your global tokens) */
         .btn-ghost-invert {
-          --navy: #0b1620;
-          --radius: 10px;
+          --btn-bg: var(--tp-theme-primary);
+          --btn-fg: var(--tp-common-white);
 
           display:inline-flex;
           align-items:center;
           gap:10px;
           min-height:48px;
           padding:12px 22px;
-          border-radius:var(--radius);
+          border-radius:10px;
           text-decoration:none;
           font-weight:600;
           font-size:15px;
@@ -122,11 +121,11 @@ const WishlistArea = () => {
           cursor:pointer;
           user-select:none;
 
-          background:var(--navy);
-          color:#fff;
-          border:1px solid var(--navy);
-          box-shadow:0 6px 18px rgba(0,0,0,0.25);
-          transform:translateZ(0);
+          background: var(--btn-bg);
+          color: var(--btn-fg);
+          border: 1px solid var(--tp-theme-primary);
+          box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+          transform: translateZ(0);
 
           transition:
             background 180ms ease,
@@ -135,25 +134,25 @@ const WishlistArea = () => {
             box-shadow 180ms ease,
             transform 120ms ease;
         }
-
         .btn-ghost-invert.square { border-radius:0; }
 
+        /* Invert hover (brand primary outline) */
         .btn-ghost-invert:hover {
-          background:#fff;
-          color:var(--navy);
-          border-color:var(--navy);
-          box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12);
-          transform:translateY(-1px);
+          background-color: var(--tp-common-white);
+          color: var(--tp-theme-primary);
+          border-color: var(--tp-theme-primary);
+          box-shadow: 0 0 0 1px var(--tp-theme-primary) inset, 0 8px 20px rgba(0,0,0,0.08);
+          transform: translateY(-1px);
         }
         .btn-ghost-invert:active {
-          transform:translateY(0);
-          background:#f8fafc;
-          color:var(--navy);
-          box-shadow:0 3px 10px rgba(0,0,0,0.15);
+          transform: translateY(0);
+          background: color-mix(in srgb, var(--tp-theme-primary) 8%, var(--tp-common-white));
+          color: var(--tp-theme-primary);
+          box-shadow: 0 3px 10px rgba(0,0,0,0.08);
         }
         .btn-ghost-invert:focus-visible {
-          outline:0;
-          box-shadow:0 0 0 3px rgba(11,22,32,0.35);
+          outline: 0;
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--tp-theme-primary) 35%, transparent);
         }
 
         .btn-icon { display:inline-flex; align-items:center; line-height:0; }

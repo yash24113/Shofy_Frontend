@@ -8,7 +8,7 @@ const CheckoutBillingArea = ({ register, errors }) => {
 
   return (
     <div className="tp-checkout-bill-area">
-      <h3 className="tp-checkout-bill-title">Billing Details</h3>
+      <h3 className="tp-checkout-bill-title">Billing </h3>
 
       <div className="tp-checkout-bill-form">
         <div className="tp-checkout-bill-inner">
@@ -46,6 +46,40 @@ const CheckoutBillingArea = ({ register, errors }) => {
                   placeholder="Last Name"
                 />
                 <ErrorMsg msg={errors?.lastName?.message} />
+              </div>
+            </div>
+             <div className="row"></div>
+             <div className="col-md-6">
+              <div className="tp-checkout-input">
+                <label>
+                  Phone <span>*</span>
+                </label>
+                <input
+                  {...register("contactNo", {
+                    required: `ContactNumber is required!`,
+                  })}
+                  name="contactNo"
+                  id="contactNo"
+                  type="text"
+                  placeholder="Phone"
+                />
+                <ErrorMsg msg={errors?.contactNo?.message} />
+              </div>
+            </div>
+            <div className="col-md-6">
+              <div className="tp-checkout-input">
+                <label>
+                  Email address <span>*</span>
+                </label>
+                <input
+                  {...register("email", { required: `Email is required!` })}
+                  name="email"
+                  id="email"
+                  type="email"
+                  placeholder="Email"
+                  defaultValue={user?.email}
+                />
+                <ErrorMsg msg={errors?.email?.message} />
               </div>
             </div>
             <div className="col-md-12">
@@ -102,39 +136,7 @@ const CheckoutBillingArea = ({ register, errors }) => {
                 <ErrorMsg msg={errors?.zipCode?.message} />
               </div>
             </div>
-            <div className="col-md-12">
-              <div className="tp-checkout-input">
-                <label>
-                  Phone <span>*</span>
-                </label>
-                <input
-                  {...register("contactNo", {
-                    required: `ContactNumber is required!`,
-                  })}
-                  name="contactNo"
-                  id="contactNo"
-                  type="text"
-                  placeholder="Phone"
-                />
-                <ErrorMsg msg={errors?.contactNo?.message} />
-              </div>
-            </div>
-            <div className="col-md-12">
-              <div className="tp-checkout-input">
-                <label>
-                  Email address <span>*</span>
-                </label>
-                <input
-                  {...register("email", { required: `Email is required!` })}
-                  name="email"
-                  id="email"
-                  type="email"
-                  placeholder="Email"
-                  defaultValue={user?.email}
-                />
-                <ErrorMsg msg={errors?.email?.message} />
-              </div>
-            </div>
+           
             <div className="col-md-12">
               <div className="tp-checkout-input">
                 <label>Order notes (optional)</label>

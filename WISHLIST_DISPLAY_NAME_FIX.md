@@ -125,3 +125,4 @@ The console will now show:
 5. **Robust Fallbacks**: Multiple strategies for generating display names
 
 The wishlist should now display proper fabric names like "Ivory Solid Dyed 100% Cotton Poplin Fabric" instead of MongoDB ObjectIDs.
+

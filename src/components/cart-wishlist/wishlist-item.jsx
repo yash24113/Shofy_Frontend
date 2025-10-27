@@ -1,37 +1,41 @@
 'use client';
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import Image from "next/image";
 import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Close } from "@/svg";
 
-/* cart (API-only) — import thunks + ui actions directly from the slice file */
-import {
-  add_to_cart,
-  fetch_cart_products,
-  openCartMini,
-} from "@/redux/features/cartSlice";
-
+/* cart thunks */
+import { add_to_cart, fetch_cart_products, openCartMini } from "@/redux/features/cartSlice";
 import { removeWishlistItem, fetchWishlist } from "@/redux/features/wishlist-slice";
+
 import LoginArea from "@/components/login-register/login-area";
 import RegisterArea from "@/components/login-register/register-area";
 import useWishlistManager from "@/hooks/useWishlistManager";
 
 import useGlobalSearch from "@/hooks/useGlobalSearch";
 import { buildSearchPredicate } from "@/utils/searchMiddleware";
+import { useGetSeoByProductQuery } from "@/redux/features/seoApi";
 
 /* ---------- helpers ---------- */
 const nonEmpty = (v) =>
   Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== "";
+
 const pick = (...xs) => xs.find(nonEmpty);
-const toText = (v) => {
+
+const looksLikeId = (s) => /^[a-f0-9]{24}$/i.test(String(s||"")) || /^[0-9a-f-]{8,}$/i.test(String(s||""));
+
+const toLabel = (v) => {
   if (v == null) return "";
-  if (typeof v === "string" || typeof v === "number") return String(v);
-  if (Array.isArray(v)) return v.map(toText).filter(Boolean).join(", ");
-  if (typeof v === "object") return toText(v.name ?? v.value ?? v.title ?? v.label ?? "");
+  if (typeof v === "string" || typeof v === "number") {
+    const s = String(v).trim();
+    return looksLikeId(s) ? "" : s;
+  }
+  if (Array.isArray(v)) return v.map(toLabel).filter(Boolean).join(", ");
+  if (typeof v === "object") return toLabel(v.name ?? v.title ?? v.value ?? v.label ?? "");
   return "";
 };
+
 const round = (n, d = 1) => (isFinite(n) ? Number(n).toFixed(d).replace(/\.0+$/, "") : "");
 const gsmToOz = (gsm) => gsm * 0.0294935;
 const cmToInch = (cm) => cm / 2.54;
@@ -41,7 +45,7 @@ const isNoneish = (s) => {
   return ["none", "na", "none/ na", "none / na", "n/a", "-"].includes(t);
 };
 
-/* ---------- empty-banner manager (DOM only) ---------- */
+/* ---------- empty-banner manager ---------- */
 function useEmptyBanner(listId, rowVisible, emptyText) {
   const rowRef = useRef(null);
 
@@ -106,81 +110,105 @@ function useEmptyBanner(listId, rowVisible, emptyText) {
   return { rowRef };
 }
 
-/* ---------- Component (server is source of truth) ---------- */
+/* ---------- Component ---------- */
 const WishlistItem = ({ product }) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-
   const dispatch = useDispatch();
 
-  // cart slice (server data)
   const { cart_products } = useSelector((s) => s.cart) || {};
-
-  // wishlist manager (provides userId, wishlist, loading)
   const { userId, wishlist, loading } = useWishlistManager();
-
-  // also read slice.loading to know fetch state
   const wlLoading = useSelector((s) => s.wishlist?.loading) ?? false;
 
-  // Normalize id early
   const _id =
-    product?._id ||
-    product?.id ||
-    product?.product?._id ||
-    product?.productId ||
-    product?.product ||
-    null;
+    product?._id || product?.id || product?.product?._id || product?.productId || product?.product || null;
 
   const isInCart = cart_products?.find?.((item) => String(item?._id) === String(_id));
 
   const [moving, setMoving] = useState(false);
   const [authModal, setAuthModal] = useState(null);
 
-  // 🔎 global search
-  const { debounced: globalQuery } = useGlobalSearch(150);
+  /* ---- HYDRATE (to get names instead of IDs) ---- */
+  const [hydrated, setHydrated] = useState(null);
+  const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
 
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      if (!_id) return;
+
+      const hasLabels =
+        product?.content?.name || product?.design?.name || product?.subfinish?.name ||
+        product?.substructure?.name || (Array.isArray(product?.color) && product.color[0]?.name) ||
+        product?.product?.content?.name;
+
+      if (hasLabels) return;
+
+      const slug = product?.slug || product?.product?.slug;
+
+      const endpoints = [
+        `${apiBase}/products/${_id}`,
+        `${apiBase}/product/${_id}`,
+        `${apiBase}/product/single/${_id}`,
+        `${apiBase}/api/products/${_id}`,
+        `${apiBase}/api/product/${_id}`,
+        slug ? `${apiBase}/products/slug/${slug}` : null,
+        slug ? `${apiBase}/product/slug/${slug}` : null,
+        slug ? `${apiBase}/api/products/slug/${slug}` : null,
+      ].filter(Boolean);
+
+      for (const url of endpoints) {
+        try {
+          const res = await fetch(url, { credentials: "include" });
+          if (!res.ok) continue;
+          const json = await res.json();
+          const data = json?.data ?? json;
+          if (data && typeof data === "object" && !ignore) {
+            setHydrated(data);
+            break;
+          }
+        } catch {/*  */}
+      }
+    })();
+    return () => { ignore = true; };
+  }, [_id, product, apiBase]);
+
+  /* SEO fallbacks */
+  const { data: seoResp } = useGetSeoByProductQuery(_id, { skip: !_id });
+  const seoDoc = Array.isArray(seoResp?.data) ? seoResp?.data?.[0] : seoResp?.data;
+
+  // search
+  const { debounced: globalQuery } = useGlobalSearch(150);
   const searchableFields = useMemo(
     () => [
-      (p) => p?.title,
-      (p) => p?.name,
-      (p) => p?._id,
-      (p) => p?.id,
-      (p) => p?.slug,
+      (p) => p?.title, (p) => p?.name, (p) => p?._id, (p) => p?.id, (p) => p?.slug,
       (p) => p?.fabricType || p?.fabric_type,
-      (p) => p?.content || p?.contentName || p?.content_label,
-      (p) => p?.design || p?.designName,
-      (p) => p?.colors || p?.color || p?.colorName,
-      (p) => p?.finish || p?.subfinish?.name || p?.finishName,
-      (p) => p?.structure || p?.substructure?.name || p?.structureName,
+      (p) => toLabel(p?.content ?? hydrated?.content ?? seoDoc?.content),
+      (p) => toLabel(p?.design ?? hydrated?.design ?? seoDoc?.design),
+      (p) => toLabel(p?.subfinish ?? hydrated?.subfinish ?? seoDoc?.finish),
+      (p) => toLabel(p?.substructure ?? hydrated?.substructure ?? seoDoc?.structure),
+      (p) => Array.isArray(p?.color) ? p.color.map((c) => toLabel(c?.name ?? c)).join(", ") : "",
       (p) => p?.widthLabel || p?.width_cm || p?.width,
-      (p) => p?.tags,
-      (p) => p?.sku,
+      (p) => p?.tags, (p) => p?.sku,
     ],
-    []
+    [hydrated, seoDoc]
   );
 
   const matchesQuery = useMemo(() => {
     const q = (globalQuery || "").trim();
     if (q.length < 2) return true;
-    const pred = buildSearchPredicate(q, searchableFields, {
-      mode: "AND",
-      normalize: true,
-      minTokenLen: 2,
-    });
+    const pred = buildSearchPredicate(q, searchableFields, { mode: "AND", normalize: true, minTokenLen: 2 });
     return pred(product);
   }, [globalQuery, product, searchableFields]);
 
-  // Only show if slice says this product is in wishlist
   const showByServer = useMemo(() => {
     if (!Array.isArray(wishlist)) return false;
     return wishlist.some((it) => String(it?._id) === String(_id));
   }, [wishlist, _id]);
 
-  // ✅ Gating without early return: decide visibility at render time
   const wlReady = Array.isArray(wishlist) && !wlLoading && !loading;
-  const hiddenBecauseNotReady = !wlReady;
-  const hidden = hiddenBecauseNotReady || !matchesQuery || !showByServer;
+  const hidden = !wlReady || !matchesQuery || !showByServer;
 
   const { rowRef } = useEmptyBanner("wishlist", !hidden, "No product found in wishlist");
 
@@ -207,48 +235,20 @@ const WishlistItem = ({ product }) => {
     [currentUrlWithQuery, router]
   );
 
-  const closeAuth = useCallback(() => {
-    setAuthModal(null);
-    pushAuthQuery(null);
-  }, [pushAuthQuery]);
-  const openLogin = useCallback(() => {
-    setAuthModal("login");
-    pushAuthQuery("login");
-  }, [pushAuthQuery]);
-  const openRegister = useCallback(() => {
-    setAuthModal("register");
-    pushAuthQuery("register");
-  }, [pushAuthQuery]);
+  const closeAuth = useCallback(() => { setAuthModal(null); pushAuthQuery(null); }, [pushAuthQuery]);
+  const openLogin = useCallback(() => { setAuthModal("login"); pushAuthQuery("login"); }, [pushAuthQuery]);
+  const openRegister = useCallback(() => { setAuthModal("register"); pushAuthQuery("register"); }, [pushAuthQuery]);
 
-  /* ---------- Actions (server-backed) ---------- */
+  /* ---------- actions ---------- */
   const handleAddProduct = async () => {
     if (!userId) { openLogin(); return; }
     if (!_id) return;
-
-    // Debug: ensure we actually imported the thunk (helps if the path resolves to a different file)
-    if (process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
-      console.log("cart thunks loaded?", { add_to_cart: typeof add_to_cart, fetch_cart_products: typeof fetch_cart_products });
-    }
-
     try {
       setMoving(true);
-
-      // 1) Server add
-      await dispatch(
-        add_to_cart({ userId, productId: String(_id), quantity: 1 })
-      ).unwrap?.();
-
-      // 2) Refresh cart (safety)
+      await dispatch(add_to_cart({ userId, productId: String(_id), quantity: 1 })).unwrap?.();
       await dispatch(fetch_cart_products({ userId }));
-
-      // 3) Open mini cart (optional)
       dispatch(openCartMini());
-
-      // 4) Remove from wishlist + refresh wishlist
-      await dispatch(
-        removeWishlistItem({ userId, productId: String(_id), title: getDisplayTitle })
-      ).unwrap?.();
+      await dispatch(removeWishlistItem({ userId, productId: String(_id), title: getDisplayTitle })).unwrap?.();
       dispatch(fetchWishlist(userId));
     } catch (e) {
       console.error("Move to cart failed", e);
@@ -261,9 +261,7 @@ const WishlistItem = ({ product }) => {
   const handleRemovePrd = async (prd) => {
     if (!userId) { openLogin(); return; }
     try {
-      await dispatch(
-        removeWishlistItem({ userId, productId: String(prd?.id || prd?._id), title: getDisplayTitle })
-      ).unwrap?.();
+      await dispatch(removeWishlistItem({ userId, productId: String(prd?.id || prd?._id), title: getDisplayTitle })).unwrap?.();
       dispatch(fetchWishlist(userId));
     } catch (e) {
       console.error("Remove failed", e);
@@ -272,7 +270,6 @@ const WishlistItem = ({ product }) => {
   };
 
   /* ---------- presentation ---------- */
-  const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
   const fallbackCdn = (process.env.NEXT_PUBLIC_CDN_BASE || 'https://test.amrita-fashions.com/shopy').replace(/\/+$/, "");
   const valueToUrlString = (v) => {
     if (!v) return '';
@@ -286,88 +283,53 @@ const WishlistItem = ({ product }) => {
     valueToUrlString(product?.image) ||
     valueToUrlString(product?.image1) ||
     valueToUrlString(product?.image2) ||
-    valueToUrlString(product?.product?.img) || '';
+    valueToUrlString(product?.product?.img) ||
+    valueToUrlString(hydrated?.img) || '';
   const isHttpUrl = (s) => /^https?:\/\//i.test(s || '');
-  const clean = (p) => String(p || '')
-    .replace(/^\/+/, '')
-    .replace(/^api\/uploads\/?/, '')
-    .replace(/^uploads\/?/, '');
-  const imageUrl = rawImg
-    ? (isHttpUrl(rawImg)
-        ? rawImg
-        : `${(apiBase || fallbackCdn)}/uploads/${clean(rawImg)}`)
-    : '';
+  const clean = (p) => String(p || '').replace(/^\/+/, '').replace(/^api\/uploads\/?/, '').replace(/^uploads\/?/, '');
+  const imageUrl = rawImg ? (isHttpUrl(rawImg) ? rawImg : `${(apiBase || fallbackCdn)}/uploads/${clean(rawImg)}`) : '';
 
   const getDisplayTitle = useMemo(() => {
     const nameOptions = [
-      product?.title,
-      product?.name,
-      product?.product?.name,
-      product?.productname,
-      product?.productTitle,
-      product?.seoTitle,
-      product?.groupcode?.name,
-      product?.fabricType,
-      product?.content,
-      product?.design,
+      product?.title, product?.name, product?.product?.name, hydrated?.name, seoDoc?.title,
+      product?.productname, product?.productTitle, product?.seoTitle,
+      product?.groupcode?.name, product?.fabricType, product?.content, product?.design,
     ].filter(Boolean);
 
-    const actualName = nameOptions.find((name) => {
-      const nameStr = String(name || "").trim();
-      return nameStr.length > 0 && !/^[a-f0-9]{24}$/i.test(nameStr);
-    });
+    const firstNice = nameOptions.map(toLabel).find((s) => s && s.length > 0);
+    if (firstNice) return firstNice;
 
-    if (actualName) return toText(actualName);
+    const parts = [
+      toLabel(product?.color || product?.colorName || hydrated?.color),
+      toLabel(product?.content || hydrated?.content),
+      toLabel(product?.fabricType || hydrated?.fabricType),
+      toLabel(product?.design || hydrated?.design),
+    ].filter(Boolean);
+    return parts.length ? parts.join(" ") + " Fabric" : "Product";
+  }, [product, hydrated, seoDoc, _id]);
 
-    const fallback = nameOptions.find((name) => {
-      const nameStr = String(name || "").trim();
-      return nameStr.length > 0 && nameStr.length < 50;
-    });
+  const slug = product?.slug || product?.product?.slug || hydrated?.slug || _id;
 
-    if (!fallback) {
-      const parts = [
-        product?.color || product?.colorName,
-        product?.content || product?.contentName,
-        product?.fabricType,
-        product?.design || product?.designName,
-      ].filter(Boolean).map((x) => toText(x));
-      if (parts.length > 0) return parts.join(" ") + " Fabric";
-    }
+  const src = hydrated || product || product?.product || {};
+  const gsm = Number(src.gsm ?? product?.gsm ?? product?.weightGsm ?? product?.weight_gsm);
+  const widthCm = Number(src.cm ?? src.widthCm ?? src.width_cm ?? src.width ?? product?.widthCm ?? product?.width_cm ?? product?.width);
 
-    return fallback ? toText(fallback) : "Product";
-  }, [product, _id]);
+  const fabricTypeVal = toLabel(pick(src.category?.name, src.fabricType, src.fabric_type)) || "Woven Fabrics";
+  const contentVal    = toLabel(pick(src.content, seoDoc?.content));
+  const designVal     = toLabel(pick(src.design, seoDoc?.design));
+  const finishVal     = toLabel(pick(src.subfinish, seoDoc?.finish));
+  const structureVal  = toLabel(pick(src.substructure, seoDoc?.structure));
+  const colorsVal     = Array.isArray(src.color) ? toLabel(src.color.map((c) => c?.name ?? c)) : toLabel(pick(src.colorName, src.color));
 
-  const slug = product?.slug || product?.product?.slug || _id;
-
-  const gsm = Number(pick(product?.gsm, product?.weightGsm, product?.weight_gsm));
-  const fabricTypeVal = toText(pick(product?.fabricType, product?.fabric_type));
-  const contentVal = toText(pick(product?.content, product?.contentName, product?.content_label));
   const weightVal =
-    isFinite(gsm) && gsm > 0 ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz` : toText(product?.weight);
-  const designVal = toText(pick(product?.design, product?.designName));
-  const colorsVal = toText(pick(product?.colors, product?.color, product?.colorName));
-  const widthCm = Number(pick(product?.widthCm, product?.width_cm, product?.width));
-  const widthVal =
-    isFinite(widthCm) && widthCm > 0
-      ? `${round(widthCm, 0)} cm / ${round(cmToInch(widthCm), 0)} inch`
-      : toText(product?.widthLabel);
-  const finishVal = toText(pick(product?.finish, product?.subfinish?.name, product?.finishName));
-  const structureVal = toText(pick(product?.structure, product?.substructure?.name, product?.structureName));
+    isFinite(gsm) && gsm > 0 ? `${round(gsm)} gsm / ${round(gsmToOz(gsm))} oz` : toLabel(src.weight);
 
-  const allDetails = [
-    fabricTypeVal,
-    contentVal,
-    weightVal,
-    designVal,
-    colorsVal,
-    widthVal,
-    finishVal,
-    structureVal,
-  ].filter((v) => nonEmpty(v) && !isNoneish(v));
-  const topFourDetails = allDetails.slice(0, 4);
-  const mid4 = Math.ceil(topFourDetails.length / 2);
-  const left4 = topFourDetails.slice(0, mid4);
-  const right4 = topFourDetails.slice(mid4);
+  const widthVal =
+    isFinite(widthCm) && widthCm > 0 ? `${round(widthCm, 0)} cm / ${round(cmToInch(widthCm), 0)} inch` : toLabel(src.widthLabel);
+
+  // ROWS: attributes in row 1, metrics in row 2 — joined with " | "
+  const row1Parts = [fabricTypeVal, colorsVal, contentVal, finishVal, structureVal, designVal].filter((v) => nonEmpty(v) && !isNoneish(v));
+  const row2Parts = [weightVal, widthVal].filter((v) => nonEmpty(v) && !isNoneish(v));
 
   return (
     <>
@@ -393,27 +355,28 @@ const WishlistItem = ({ product }) => {
           </Link>
         </td>
 
-        {/* title */}
+        {/* title + compact meta with | separators */}
         <td className="tp-cart-title wishlist-cell">
           <Link href={`/fabric/${slug}`} className="wishlist-title">
-            {getDisplayTitle || 'Product'}
+            {getDisplayTitle || "Product"}
           </Link>
-          {topFourDetails.length ? (
-            <div className="wishlist-specs">
-              <ul className="wishlist-spec-col">
-                {left4.map((v, i) => (
-                  <li key={i} className="wishlist-spec-row" title={v}>
-                    <span className="wishlist-spec-value">{v}</span>
-                  </li>
-                ))}
-              </ul>
-              <ul className="wishlist-spec-col">
-                {right4.map((v, i) => (
-                  <li key={i} className="wishlist-spec-row" title={v}>
-                    <span className="wishlist-spec-value">{v}</span>
-                  </li>
-                ))}
-              </ul>
+
+          {(row1Parts.length || row2Parts.length) ? (
+            <div className="wishlist-meta">
+              {row1Parts.length > 0 && (
+                <div className="meta-row" title={row1Parts.join(" | ")}>
+                  {row1Parts.map((txt, i) => (
+                    <span className="meta-piece" key={`r1-${i}`}>{txt}</span>
+                  ))}
+                </div>
+              )}
+              {row2Parts.length > 0 && (
+                <div className="meta-row subtle" title={row2Parts.join(" | ")}>
+                  {row2Parts.map((txt, i) => (
+                    <span className="meta-piece" key={`r2-${i}`}>{txt}</span>
+                  ))}
+                </div>
+              )}
             </div>
           ) : null}
         </td>
@@ -422,17 +385,16 @@ const WishlistItem = ({ product }) => {
         <td className="tp-cart-price wishlist-cell">
           {(() => {
             const priceRaw = pick(
-              product?.salesPrice,
-              product?.price,
-              product?.product?.salesPrice,
-              product?.product?.price
+              product?.salesPrice, product?.price,
+              product?.product?.salesPrice, product?.product?.price,
+              hydrated?.price
             );
             const price = Number(priceRaw || 0);
             return <span className="wishlist-price">{price.toFixed(2)}</span>;
           })()}
         </td>
 
-        {/* add to cart */}
+        {/* add to cart (keeps your class, colors now from tokens) */}
         <td className="tp-cart-add-to-cart wishlist-cell wishlist-cell-center">
           <button
             onClick={handleAddProduct}
@@ -461,12 +423,8 @@ const WishlistItem = ({ product }) => {
       </tr>
 
       {/* AUTH MODALS */}
-      {authModal === "login" && (
-        <LoginArea onClose={closeAuth} onSwitchToRegister={openRegister} />
-      )}
-      {authModal === "register" && (
-        <RegisterArea onClose={closeAuth} onSwitchToLogin={openLogin} />
-      )}
+      {authModal === "login" && <LoginArea onClose={closeAuth} onSwitchToRegister={openRegister} />}
+      {authModal === "register" && <RegisterArea onClose={closeAuth} onSwitchToLogin={openLogin} />}
 
       <style jsx>{`
         .wishlist-row { border-bottom: 1px solid #eef0f3; transition: background-color 160ms ease, box-shadow 180ms ease; }
@@ -480,17 +438,46 @@ const WishlistItem = ({ product }) => {
         .wishlist-title { display:block; font-weight:600; line-height:1.3; color:#0f172a; text-decoration:none; }
         .wishlist-title:hover { text-decoration: underline; }
         .wishlist-price { font-weight:600; color:#0f172a; }
-        .wishlist-specs{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; margin-top:8px; max-width:620px; margin-left:8px; }
-        .wishlist-spec-col{ list-style:none; margin:0; padding:0; }
-        .wishlist-spec-row{ padding:4px 0; border-bottom:1px dashed rgba(17,24,39,.08); }
-        .wishlist-spec-row:last-child{ border-bottom:0; }
-        .wishlist-spec-value{ font-size:12.5px; font-weight:500; color:#374151; }
-        @media (max-width:640px){ .wishlist-specs{ grid-template-columns:1fr; } }
-        .btn-ghost-invert { --navy:#0b1620; display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 18px; border-radius:0; font-weight:600; font-size:15px; line-height:1; cursor:pointer; user-select:none; background:var(--navy); color:#fff; border:1px solid var(--navy); box-shadow:0 6px 18px rgba(0,0,0,0.22); transition: background .18s, color .18s, border-color .18s, box-shadow .18s, transform .12s; }
-        .btn-ghost-invert:hover { background:#fff; color:var(--navy); border-color:var(--navy); box-shadow:0 0 0 1px var(--navy) inset, 0 8px 20px rgba(0,0,0,0.12); transform: translateY(-1px); }
-        .btn-ghost-invert:active { transform: translateY(0); background:#f8fafc; color:var(--navy); box-shadow:0 3px 10px rgba(0,0,0,0.15); }
-        .btn-ghost-invert:focus-visible { outline:0; box-shadow:0 0 0 3px rgba(11,22,32,0.35); }
+
+        /* NEW: compact pipe-separated meta (matches your first file’s feel) */
+        .wishlist-meta{ margin-top: 8px; display: grid; gap: 4px; max-width: 980px; }
+        .meta-row{
+          font-size: 13.4px; font-weight: 700; color: var(--tp-text-2);
+          line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .meta-row.subtle{ font-weight: 600; opacity: .9; }
+        .meta-piece{ position: relative; padding-inline: 0.25rem 0.4rem; }
+        .meta-piece:not(:last-child)::after{
+          content: " | ";
+          color: color-mix(in lab, var(--tp-theme-secondary) 70%, var(--tp-text-2));
+          font-weight: 800;
+          margin-left: .25rem;
+        }
+        @media (max-width: 980px){ .meta-row{ font-size: 12.8px; } }
+
+        /* BUTTONS: same class names, but colors from your brand tokens + invert hover */
+        .btn-ghost-invert {
+          display:inline-flex; align-items:center; gap:8px;
+          min-height:44px; padding:10px 18px;
+          font-weight:600; font-size:15px; line-height:1;
+          cursor:pointer; user-select:none;
+          background: var(--tp-theme-primary);
+          color: var(--tp-common-white);
+          border: 1px solid var(--tp-theme-primary);
+          box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+          transition: color .18s, background-color .18s, border-color .18s, box-shadow .18s, transform .12s;
+        }
+        .btn-ghost-invert:hover {
+          background-color: var(--tp-common-white);
+          border-color: var(--tp-theme-primary);
+          color: var(--tp-theme-primary);
+          box-shadow: 0 0 0 1px var(--tp-theme-primary) inset, 0 8px 20px rgba(0,0,0,0.08);
+          transform: translateY(-1px);
+        }
+        .btn-ghost-invert:active { transform: translateY(0); background:#f8fafc; color:var(--tp-theme-primary); box-shadow:0 3px 10px rgba(0,0,0,0.08); }
+        .btn-ghost-invert:focus-visible { outline:0; box-shadow:0 0 0 3px color-mix(in srgb, var(--tp-theme-primary) 35%, transparent); }
         .btn-ghost-invert.is-loading { pointer-events:none; opacity:.9; }
+
         @media (max-width: 640px) {
           .wishlist-cell { padding: 10px 8px; }
           .tp-cart-title.wishlist-cell { padding-left: 0; }

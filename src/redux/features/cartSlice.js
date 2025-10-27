@@ -1,5 +1,5 @@
-// redux/features/cartSlice.js
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, isAnyOf } from "@reduxjs/toolkit";
+import { cartApi } from "./cartApi";
 
 /* ---------------- config ---------------- */
 const API_BASE = "https://test.amrita-fashions.com";
@@ -9,10 +9,9 @@ const productKey = (p) => p?._id || p?.id || p?.productId || null;
 const computeDistinctCount = (items = []) =>
   new Set(items.map((it) => productKey(it)).filter(Boolean)).size;
 
-/* Normalize API items -> UI-friendly items */
 const normalizeItems = (items = []) =>
   items.map((it) => {
-    const p = { ...(it?.product || {}), ...it }; // merge nested product if present
+    const p = { ...(it?.product || {}), ...it };
     const pid = productKey(p);
     return {
       ...p,
@@ -42,10 +41,9 @@ const normalizeItems = (items = []) =>
   });
 
 /* ================================
-   THUNKS (matches your routes)
+   THUNKS (classic)
 =================================== */
 
-/** GET: /api/cart/user/:userId */
 export const fetch_cart_products = createAsyncThunk(
   "cart/fetch_cart_products",
   async ({ userId }, { rejectWithValue }) => {
@@ -76,7 +74,6 @@ export const fetch_cart_products = createAsyncThunk(
   }
 );
 
-/** POST: /api/cart/add  { userId, productId, quantity } */
 export const add_to_cart = createAsyncThunk(
   "cart/add_to_cart",
   async ({ userId, productId, quantity = 1 }, { dispatch, rejectWithValue }) => {
@@ -101,7 +98,6 @@ export const add_to_cart = createAsyncThunk(
   }
 );
 
-/** PUT: /api/cart/update/:productId  { userId, quantity } */
 export const update_cart_item = createAsyncThunk(
   "cart/update_cart_item",
   async ({ userId, productId, quantity }, { dispatch, rejectWithValue }) => {
@@ -128,7 +124,6 @@ export const update_cart_item = createAsyncThunk(
   }
 );
 
-/** DELETE: /api/cart/remove/:productId  { userId } */
 export const remove_from_cart = createAsyncThunk(
   "cart/remove_from_cart",
   async ({ userId, productId }, { dispatch, rejectWithValue }) => {
@@ -153,7 +148,6 @@ export const remove_from_cart = createAsyncThunk(
   }
 );
 
-/** DELETE: /api/cart/clear  { userId } */
 export const clear_cart_api = createAsyncThunk(
   "cart/clear_cart_api",
   async ({ userId }, { dispatch, rejectWithValue }) => {
@@ -180,10 +174,10 @@ export const clear_cart_api = createAsyncThunk(
 
 /* ---------------- state ---------------- */
 const initialState = {
-  cart_products: [],     // always from API
-  orderQuantity: 1,      // PDP qty chooser (local UI)
-  cartMiniOpen: false,   // UI flag
-  distinctCount: 0,      // derived from cart_products
+  cart_products: [],
+  orderQuantity: 1,
+  cartMiniOpen: false,
+  distinctCount: 0,
   loading: false,
   error: null,
 };
@@ -192,26 +186,14 @@ export const cartSlice = createSlice({
   name: "cart",
   initialState,
   reducers: {
-    // PDP qty controls (no server call)
-    increment(state) {
-      state.orderQuantity = (state.orderQuantity || 1) + 1;
-    },
-    decrement(state) {
-      state.orderQuantity = state.orderQuantity > 1 ? state.orderQuantity - 1 : 1;
-    },
-    initialOrderQuantity(state) {
-      state.orderQuantity = 1;
-    },
+    increment(state) { state.orderQuantity = (state.orderQuantity || 1) + 1; },
+    decrement(state) { state.orderQuantity = state.orderQuantity > 1 ? state.orderQuantity - 1 : 1; },
+    initialOrderQuantity(state) { state.orderQuantity = 1; },
 
-    // Mini-cart toggles (UI only). Call fetch_cart_products when opening in your component.
-    openCartMini(state) {
-      state.cartMiniOpen = true;
-    },
-    closeCartMini(state) {
-      state.cartMiniOpen = false;
-    },
+    openCartMini(state) { state.cartMiniOpen = true; },
+    closeCartMini(state) { state.cartMiniOpen = false; },
 
-    // Legacy action names retained as no-ops to avoid big refactors elsewhere
+    // legacy no-ops (compat)
     get_cart_products() {},
     add_cart_product() {},
     quantityDecrement() {},
@@ -220,11 +202,10 @@ export const cartSlice = createSlice({
   },
 
   extraReducers: (builder) => {
-    // FETCH
+    // Classic thunk pipeline
     builder
       .addCase(fetch_cart_products.pending, (state) => {
-        state.loading = true;
-        state.error = null;
+        state.loading = true; state.error = null;
       })
       .addCase(fetch_cart_products.fulfilled, (state, { payload }) => {
         state.loading = false;
@@ -236,57 +217,45 @@ export const cartSlice = createSlice({
         state.error = (typeof payload === "string" && payload) || error?.message || "Failed to load cart";
       });
 
-    // ADD
+    // Other thunks errors
     builder
-      .addCase(add_to_cart.pending, (state) => {
-        state.error = null;
-      })
       .addCase(add_to_cart.rejected, (state, { payload, error }) => {
         state.error = (typeof payload === "string" && payload) || error?.message || "Failed to add to cart";
-      });
-
-    // UPDATE
-    builder
-      .addCase(update_cart_item.pending, (state) => {
-        state.error = null;
       })
       .addCase(update_cart_item.rejected, (state, { payload, error }) => {
         state.error = (typeof payload === "string" && payload) || error?.message || "Failed to update cart item";
-      });
-
-    // REMOVE
-    builder
-      .addCase(remove_from_cart.pending, (state) => {
-        state.error = null;
       })
       .addCase(remove_from_cart.rejected, (state, { payload, error }) => {
         state.error = (typeof payload === "string" && payload) || error?.message || "Failed to remove cart item";
-      });
-
-    // CLEAR
-    builder
-      .addCase(clear_cart_api.pending, (state) => {
-        state.error = null;
       })
       .addCase(clear_cart_api.rejected, (state, { payload, error }) => {
         state.error = (typeof payload === "string" && payload) || error?.message || "Failed to clear cart";
       });
+
+    // ✅ Mirror RTK Query getCartData into this slice too
+    builder.addMatcher(
+      isAnyOf(cartApi.endpoints.getCartData.matchFulfilled),
+      (state, { payload }) => {
+        // payload shape may be { success, data: { items: [...] , cartTotal }, ... }
+        const items =
+          (payload?.data && Array.isArray(payload.data.items) && payload.data.items) ||
+          (Array.isArray(payload?.items) && payload.items) ||
+          [];
+        const normalized = normalizeItems(items);
+        state.cart_products = normalized;
+        state.distinctCount = computeDistinctCount(normalized);
+        state.loading = false;
+        state.error = null;
+      }
+    );
   },
 });
 
 /* -------- actions -------- */
 export const {
-  increment,
-  decrement,
-  initialOrderQuantity,
-  openCartMini,
-  closeCartMini,
-  // legacy no-ops (kept for compatibility with existing imports/dispatches)
-  get_cart_products,
-  add_cart_product,
-  quantityDecrement,
-  remove_product,
-  clearCart,
+  increment, decrement, initialOrderQuantity,
+  openCartMini, closeCartMini,
+  get_cart_products, add_cart_product, quantityDecrement, remove_product, clearCart,
 } = cartSlice.actions;
 
 /* -------- selectors -------- */

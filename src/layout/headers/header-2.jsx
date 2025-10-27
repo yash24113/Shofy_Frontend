@@ -16,6 +16,7 @@ import OffCanvas from '@/components/common/off-canvas';
 import Menus from './header-com/menus';
 import { CartTwo, Search } from '@/svg';
 import { FaHeart, FaUser } from 'react-icons/fa';
+import { useGetSessionInfoQuery } from '@/redux/features/auth/authApi';
 import { FiMenu } from 'react-icons/fi';
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 
@@ -214,8 +215,26 @@ const HeaderTwo = ({ style_2 = false }) => {
   // ===== Session & user dropdown =====
   const [hasSession, setHasSession] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [userImage, setUserImage] = useState(null);
   const userBtnRef = useRef(null);
   const userMenuRef = useRef(null);
+  
+  // Fetch user data when userId is available
+  const { data: userData } = useGetSessionInfoQuery(
+    { userId },
+    { skip: !userId, refetchOnMountOrArgChange: true }
+  );
+  
+  // Update user image when user data changes
+  useEffect(() => {
+    if (userData?.user?.userImage) {
+      setUserImage(userData.user.userImage);
+    } else if (userData?.user?.avatar) {
+      setUserImage(userData.user.avatar);
+    } else {
+      setUserImage(null);
+    }
+  }, [userData]);
 
   const currentUrl = useMemo(() => {
     if (typeof window === 'undefined') return '/';
@@ -405,8 +424,26 @@ const HeaderTwo = ({ style_2 = false }) => {
                                 aria-expanded={userOpen}
                                 aria-label="Account menu"
                                 type="button"
+                                style={userImage ? { padding: 0, overflow: 'hidden', borderRadius: '50%' } : {}}
                               >
-                                <FaUser />
+                                {userImage ? (
+                                  <img 
+                                    src={userImage} 
+                                    alt="Profile" 
+                                    style={{
+                                      width: '32px',
+                                      height: '32px',
+                                      objectFit: 'cover',
+                                      borderRadius: '50%',
+                                      border: '1px solid rgba(0,0,0,0.1)'
+                                    }}
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'inline-flex';
+                                    }}
+                                  />
+                                ) : null}
+                                <FaUser style={userImage ? { display: 'none' } : {}} />
                               </button>
 
                               {userOpen && (

@@ -1,67 +1,44 @@
 import { apiSlice } from "../../api/apiSlice";
-import { set_client_secret } from "./orderSlice";
 
-export const authApi = apiSlice.injectEndpoints({
+// Base URL of apiSlice should be: https://test.amrita-fashions.com/shopy
+// so these paths are relative to /shopy
+
+export const orderApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    // createPaymentIntent
-    createPaymentIntent: builder.mutation({
+    // POST /shopy/orders — create order
+    createOrder: builder.mutation({
       query: (data) => ({
-        url: "order/create-payment-intent",
+        url: "/orders",
         method: "POST",
         body: data,
+        credentials: "include",
       }),
-
-      async onQueryStarted(arg, { queryFulfilled, dispatch }) {
-        try {
-          const result = await queryFulfilled;
-          dispatch(set_client_secret(result.data.clientSecret));
-        } catch (err) {
-          // do nothing
-        }
-      },
-
+      invalidatesTags: ["UserOrders"],
     }),
-    // saveOrder
-    saveOrder: builder.mutation({
-      query: (data) => ({
-        url: "order/saveOrder",
-        method: "POST",
-        body: data,
+
+    // GET /shopy/users/:id — profile for invoice
+    getUserById: builder.query({
+      query: (id) => ({
+        url: `/users/${id}`,
+        method: "GET",
+        credentials: "include",
       }),
-      invalidatesTags:['UserOrders'],
-      async onQueryStarted(arg, { queryFulfilled}) {
-        try {
-          const result = await queryFulfilled;
-          if (result) {
-            localStorage.removeItem("couponInfo");
-            localStorage.removeItem("cart_products");
-            localStorage.removeItem("shipping_info");
-          }
-        } catch (err) {
-          // do nothing
-        }
-      },
-
-    }),
-    // getUserOrders
-    getUserOrders: builder.query({
-      query: () => `/user-order`,
-      providesTags:["UserOrders"],
+      providesTags: (result, error, arg) => [{ type: "User", id: arg }],
       keepUnusedDataFor: 600,
     }),
-    // getUserOrders
-    getUserOrderById: builder.query({
-      query: (id) => `/user-order/${id}`,
-      providesTags: (result, error, arg) => [{ type: "UserOrder", id: arg }],
+
+    // Optional: list of user orders (if you add it later)
+    getUserOrders: builder.query({
+      query: () => `/user-order`,
+      providesTags: ["UserOrders"],
       keepUnusedDataFor: 600,
     }),
   }),
 });
 
 export const {
-  useCreatePaymentIntentMutation,
-  useSaveOrderMutation,
-  useGetUserOrderByIdQuery,
+  useCreateOrderMutation,
+  useGetUserByIdQuery,
   useGetUserOrdersQuery,
-} = authApi;
+} = orderApi;

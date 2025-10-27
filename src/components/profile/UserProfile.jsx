@@ -124,7 +124,13 @@ export default function UserProfile() {
 
   // optimistic local user
   const [localUser, setLocalUser] = useState(null);
-  const user = localUser || authUser || sessionData?.session?.user || cookieUser || {};
+  const user = {
+    ...(localUser || authUser || sessionData?.session?.user || cookieUser || {}),
+    // Map userImage to avatar for backward compatibility
+    avatar: (localUser?.userImage || authUser?.userImage || sessionData?.session?.user?.userImage || cookieUser?.userImage) ? 
+      (localUser?.userImage || authUser?.userImage || sessionData?.session?.user?.userImage || cookieUser?.userImage) : 
+      (localUser?.avatar || authUser?.avatar || sessionData?.session?.user?.avatar || cookieUser?.avatar)
+  };
 
   const [logoutUser] = useLogoutUserMutation();
   const [updateProfile, { isLoading: saving }] = useUpdateProfileMutation();
@@ -261,18 +267,23 @@ export default function UserProfile() {
 
   // sync when user changes
   useEffect(() => {
-    reset({
-      name:         user?.name || '',
-      email:        user?.email || '',
-      organisation: user?.organisation || '',
-      phone:        user?.phone || '',
-      address:      user?.address || '',
-      city:         user?.city || '',
-      state:        user?.state || '',
-      country:      user?.country || '',
-      pincode:      user?.pincode || '',
-    });
-    setAvatarPreview(user?.avatarUrl || user?.avatar || null);
+    // reset({
+    //   name:         user?.name || '',
+    //   email:        user?.email || '',
+    //   organisation: user?.organisation || '',
+    //   phone:        user?.phone || '',
+    //   address:      user?.address || '',
+    //   city:         user?.city || '',
+    //   state:        user?.state || '',
+    //   country:      user?.country || '',
+    //   pincode:      user?.pincode || '',
+    // });
+    
+    // Only update avatar preview if it's not a new upload (to prevent flickering)
+    if (!avatarPreview || avatarPreview.startsWith('data:image')) {
+      setAvatarPreview(user?.userImage || user?.avatarUrl || user?.avatar || null);
+    }
+    
     setCountryName(user?.country || '');
     setStateName(user?.state || '');
     setCityName(user?.city || '');
@@ -288,8 +299,29 @@ export default function UserProfile() {
 
   const onPickAvatar = (file) => {
     if (!file) return;
+    // Check file type
+    if (!file.type.match('image.*')) {
+      notifyError('Please select a valid image file');
+      return;
+    }
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      notifyError('Image size should be less than 5MB');
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => setAvatarPreview(reader.result);
+    reader.onload = (e) => {
+      setAvatarPreview(e.target.result);
+      // Also update the local user state to reflect the new avatar immediately
+      setLocalUser(prev => ({
+        ...prev,
+        userImage: e.target.result,
+        avatar: e.target.result
+      }));
+    };
+    reader.onerror = () => {
+      notifyError('Failed to read the image file');
+    };
     reader.readAsDataURL(file);
   };
 
@@ -313,8 +345,21 @@ export default function UserProfile() {
       city: cityName || '',
     };
 
-    if (avatarPreview && avatarPreview !== (user?.avatarUrl || user?.avatar)) {
-      candidate.avatar = avatarPreview;
+    // If we have a new avatar preview, include it in the update
+    if (avatarPreview) {
+      // Check if the preview is different from the current image
+      const currentImage = user?.userImage || user?.avatarUrl || user?.avatar;
+      if (avatarPreview !== currentImage) {
+        // If the preview is a base64 string (new upload), include it directly
+        if (avatarPreview.startsWith('data:image')) {
+          candidate.avatar = avatarPreview;
+          candidate.userImage = avatarPreview;
+        } else {
+          // If it's a URL, just update the reference
+          candidate.avatar = avatarPreview;
+          candidate.userImage = avatarPreview;
+        }
+      }
     }
 
     const changed = diffPayload(
@@ -353,7 +398,18 @@ export default function UserProfile() {
       }
     }
 
-    const updatedUser = updatedResp?.user || updatedResp || { ...user, ...changed };
+    const updatedUser = {
+      ...(updatedResp?.user || updatedResp || { ...user, ...changed }),
+      // Ensure userImage is properly set from the response, fall back to existing if not provided
+      userImage: (updatedResp?.user?.userImage || updatedResp?.userImage || user.userImage || user.avatar),
+      // For backward compatibility, also set avatar
+      avatar: (updatedResp?.user?.userImage || updatedResp?.userImage || user.userImage || user.avatar)
+    };
+    
+    // If we had a new avatar upload, update the preview to the final URL from the response
+    if (updatedUser.userImage && updatedUser.userImage !== avatarPreview) {
+      setAvatarPreview(updatedUser.userImage);
+    }
 
     setLocalUser(updatedUser);
     reset({
@@ -420,8 +476,8 @@ export default function UserProfile() {
       <div className={styles.header}>
         <div className={styles.headerLeft}>
           <div className={styles.bigAvatar}>
-            {(avatarPreview || user?.avatarUrl || user?.avatar) ? (
-              <img className={styles.bigAvatarImg} src={avatarPreview || user?.avatarUrl || user?.avatar} alt="Avatar" />
+            {(avatarPreview || user?.userImage || user?.avatarUrl || user?.avatar) ? (
+              <img className={styles.bigAvatarImg} src={avatarPreview || user?.userImage || user?.avatarUrl || user?.avatar} alt="Avatar" />
             ) : (
               <div className={styles.bigAvatarFallback}>{initials(user?.name)}</div>
             )}
@@ -496,8 +552,8 @@ export default function UserProfile() {
             <form className={styles.form} onSubmit={handleSubmit(onSubmit)}>
               <div className={styles.avatarEditor}>
                 <div className={styles.bigAvatar}>
-                  {(avatarPreview || user?.avatarUrl || user?.avatar) ? (
-                    <img className={styles.bigAvatarImg} src={avatarPreview || user?.avatarUrl || user?.avatar} alt="Avatar" />
+                  {(avatarPreview || user?.userImage || user?.avatarUrl || user?.avatar) ? (
+                    <img className={styles.bigAvatarImg} src={avatarPreview || user?.userImage || user?.avatarUrl || user?.avatar} alt="Avatar" />
                   ) : (
                     <div className={styles.bigAvatarFallback}>{initials(user?.name)}</div>
                   )}
