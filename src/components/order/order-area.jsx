@@ -112,7 +112,8 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                     <div className="row align-items-end">
                       <div className="col-md-4 col-sm-6">
                         <div className="invoice__left">
-                          <Image src={logo} alt="logo" />
+                          <Image src={logo} alt="logo" width="140px" height="45px"/>
+                          <h3>Amrita Global Enterprises</h3>
                           <p>
                             4th Floor, Safal Prelude ,<br />
                             404 Corporate Road, Near YMCA Club, <br />
