@@ -94,7 +94,7 @@ const pdfStyles = PDFStyleSheet.create({
 
   /* title under header */
   docTitleWrap: { marginTop: 8, marginBottom: 10 },
-  docTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  docTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827',textAlign: 'center', letterSpacing: 1 },
 
   /* footer */
   footerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, height: FOOTER_H, paddingHorizontal: 40, justifyContent: 'flex-end', paddingBottom: 12 },
