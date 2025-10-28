@@ -16,7 +16,7 @@ import {
 import ErrorMsg from '@/components/common/error-msg';
 import PrdDetailsLoader from '@/components/loader/prd-details-loader';
 import { useGetUserByIdQuery } from '@/redux/features/order/orderApi';
-import LOGO_WEB_URL from '@/assets/img/logo/my-logo.png';
+import LOGO_WEB_URL from '@/assets/img/logo/my_logo.png';
 
 /* ------------------------------ helpers ------------------------------ */
 const safeGetLocalUserId = () => {
