@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import Image from 'next/image';
 import dayjs from 'dayjs';
 import {
   pdf as pdfRenderer,
@@ -16,6 +17,9 @@ import ErrorMsg from '@/components/common/error-msg';
 import PrdDetailsLoader from '@/components/loader/prd-details-loader';
 import { useGetUserByIdQuery } from '@/redux/features/order/orderApi';
 
+/** ✅ You asked to use this import for the logo */
+import { LOGO_WEB_URL } from '@assets/img/logo/age.jpg';
+
 /* ------------------------------ helpers ------------------------------ */
 const safeGetLocalUserId = () => {
   if (typeof window === 'undefined') return null;
@@ -27,27 +31,16 @@ const safeGetLocalUserId = () => {
   }
 };
 
-// Brand
-const BRAND_BLUE = '#2C4C97';
-const BRAND_YELLOW = '#D6A74B';
-const TEXT_MUTED = '#475569';
-const BORDER = '#e5e7eb';
-const ROW_ALT = '#f8fafc';
-const SOFT = '#f1f5f9';
+/** Handle both cases:
+ *  - LOGO_WEB_URL is a plain string (e.g., '/_next/static/media/age.xxx.jpg')
+ *  - LOGO_WEB_URL is a Next image object with a .src
+ */
+const RESOLVED_LOGO_URL =
+  typeof LOGO_WEB_URL === 'string' ? LOGO_WEB_URL : LOGO_WEB_URL?.src || '';
 
-// Your source logo (WEBP)
-const LOGO_WEB_URL =
-  'https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp';
-
-// Convert any external image to PNG via Cloudinary “fetch” (works without editing your Next config)
-const toPngProxy = (url) =>
-  `https://res.cloudinary.com/demo/image/fetch/f_png/${encodeURIComponent(url)}`;
-
-// Use PNG proxy everywhere to avoid WEBP issues
-const DISPLAY_LOGO_URL = toPngProxy(LOGO_WEB_URL);
-
-// Fetch -> dataURL so React-PDF can embed reliably (handles CORS/WEBP)
+/** Turn URL → dataURL so React-PDF can embed it reliably */
 async function toDataUrl(url) {
+  if (!url) return null;
   try {
     const res = await fetch(url, { cache: 'no-store' });
     const blob = await res.blob();
@@ -60,6 +53,14 @@ async function toDataUrl(url) {
     return null;
   }
 }
+
+// Brand
+const BRAND_BLUE = '#2C4C97';
+const BRAND_YELLOW = '#D6A74B';
+const TEXT_MUTED = '#475569';
+const BORDER = '#e5e7eb';
+const ROW_ALT = '#f8fafc';
+const SOFT = '#f1f5f9';
 
 /* --------------------------- PDF: styles ---------------------------- */
 const HEADER_H = 96;
@@ -248,7 +249,7 @@ function InvoicePDF({ order, fullName, logoSrc }) {
             <PDFText style={pdfStyles.thAmount}>Amount</PDFText>
           </PDFView>
 
-          {(items.length ? items : [{ title: 'No items', qty: 0, price: 0 }]).map((it, i) => (
+        {(items.length ? items : [{ title: 'No items', qty: 0, price: 0 }]).map((it, i) => (
             <PDFView key={i} style={pdfStyles.tr}>
               <PDFText style={pdfStyles.tdSL}>{items.length ? i + 1 : ''}</PDFText>
               <PDFText style={pdfStyles.tdProduct}>{it.title}</PDFText>
@@ -373,7 +374,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
   const handlePrint = useCallback(async () => {
     try {
       // Prepare a PDF-safe logo as dataURL
-      const logoDataUrl = await toDataUrl(DISPLAY_LOGO_URL);
+      const logoDataUrl = await toDataUrl(RESOLVED_LOGO_URL);
 
       const instance = pdfRenderer(
         <InvoicePDF order={order} fullName={fullName} logoSrc={logoDataUrl} />
@@ -424,16 +425,17 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
             className="invoice__wrapper grey-bg-2 pt-40 pb-40 pl-40 pr-40 tp-invoice-print-wrapper"
             style={{ borderRadius: 14, background: '#f8fafc' }}
           >
-            {/* Header with LOGO (PNG proxy to guarantee render) */}
+            {/* Header with LOGO */}
             <div className="invoice__header-wrapper border-2 border-bottom border-white mb-20">
               <div className="row align-items-center">
                 <div className="col-md-7 col-sm-12">
                   <div className="d-flex align-items-center" style={{ gap: 12 }}>
-                    <img
-                      src={DISPLAY_LOGO_URL}
+                    <Image
+                      src={RESOLVED_LOGO_URL}
                       alt="Amrita Global Enterprises"
                       width={140}
                       height={50}
+                      unoptimized
                       style={{ borderRadius: 6, background: '#fff', objectFit: 'contain' }}
                     />
                     <div>
