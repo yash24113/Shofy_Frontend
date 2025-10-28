@@ -1,15 +1,24 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import Image from 'next/image';
+import NextImage from 'next/image';
 import dayjs from 'dayjs';
+import {
+  pdf as pdfRenderer,
+  Document as PDFDocument,
+  Page as PDFPage,
+  Text as PDFText,
+  View as PDFView,
+  StyleSheet as PDFStyleSheet,
+  Image as PDFImage,
+} from '@react-pdf/renderer';
 
 import logo from '@assets/img/logo/my_logo.png';
 import ErrorMsg from '@/components/common/error-msg';
 import PrdDetailsLoader from '@/components/loader/prd-details-loader';
 import { useGetUserByIdQuery } from '@/redux/features/order/orderApi';
 
-// helper to read userId if not passed
+/* ------------------------------ helpers ------------------------------ */
 const safeGetLocalUserId = () => {
   if (typeof window === 'undefined') return null;
   try {
@@ -19,6 +28,187 @@ const safeGetLocalUserId = () => {
     return null;
   }
 };
+
+const BRAND_BLUE = '#2C4C97';
+const BRAND_YELLOW = '#D6A74B';
+
+/* --------------------------- PDF: styles ---------------------------- */
+const HEADER_H = 86;
+const FOOTER_H = 86;
+
+const pdfStyles = PDFStyleSheet.create({
+  page: {
+    fontFamily: 'Helvetica',
+    paddingHorizontal: 40,
+    paddingTop: HEADER_H + 12,
+    paddingBottom: FOOTER_H + 12,
+    fontSize: 11,
+    color: '#0f172a',
+  },
+
+  /* header */
+  headerWrap: { position: 'absolute', left: 0, right: 0, top: 0, height: HEADER_H, paddingHorizontal: 40 },
+  headerCanvas: { position: 'absolute', left: 0, right: 0, top: 58, height: 5 },
+  headerBlueLine: { position: 'absolute', left: 0, right: 0, top: 0, height: 1, backgroundColor: BRAND_BLUE },
+  headerGoldLine: { position: 'absolute', left: 0, right: 0, top: 2, height: 2, backgroundColor: BRAND_YELLOW },
+  headerRow: { position: 'absolute', top: 16, left: 40, right: 40, height: 48, flexDirection: 'row', alignItems: 'center' },
+  headerLogoWrap: { width: 58, height: 58, position: 'absolute', left: -2, top: 0, backgroundColor: '#fff', borderRadius: 29, padding: 6 },
+  headerLogo: { width: '100%', height: '100%' },
+  headerTitleWrap: { position: 'absolute', left: 0, right: 0, top: 10, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 20, color: BRAND_BLUE, fontWeight: 'bold', letterSpacing: 0.5, textAlign: 'center', marginLeft: 110 },
+
+  /* footer */
+  footerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, height: FOOTER_H, paddingHorizontal: 40, justifyContent: 'flex-end', paddingBottom: 12 },
+  footerCanvas: { position: 'absolute', left: 0, right: 0, top: 0, height: 5 },
+  footerBlue: { position: 'absolute', left: 0, right: 0, top: 0, height: 1, backgroundColor: BRAND_BLUE },
+  footerGold: { position: 'absolute', left: 0, right: 0, top: 2, height: 2, backgroundColor: BRAND_YELLOW },
+  footerTextBlock: { textAlign: 'center', color: BRAND_BLUE },
+  footerLine: { fontSize: 9, marginTop: 3, textAlign: 'center', lineHeight: 1.4 },
+
+  /* body */
+  h3: { fontSize: 16, marginBottom: 6, color: '#111827' },
+  small: { fontSize: 10, color: '#334155' },
+  row: { flexDirection: 'row', gap: 12 },
+  col: { flexGrow: 1 },
+  box: { padding: 10, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 12, backgroundColor: '#fff' },
+
+  table: { width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', marginTop: 6 },
+  thead: { flexDirection: 'row', backgroundColor: '#f8fafc', borderBottom: '1px solid #e5e7eb' },
+  th: { flex: 1, padding: 8, fontSize: 11, fontWeight: 'bold' },
+  thSL: { width: 36, padding: 8, fontSize: 11, fontWeight: 'bold' },
+  tr: { flexDirection: 'row', borderBottom: '1px solid #f1f5f9' },
+  td: { flex: 1, padding: 8, fontSize: 11 },
+  tdSL: { width: 36, padding: 8, fontSize: 11, textAlign: 'right' },
+
+  totalsRow: { flexDirection: 'row', gap: 12 },
+  totalsCol: { flexGrow: 1 },
+  totalBox: { padding: 10, border: '1px solid #f1f5f9', borderRadius: 8, backgroundColor: '#f8fff7' },
+  totalLabel: { fontSize: 11, marginBottom: 2 },
+  totalValue: { fontSize: 14, fontWeight: 'bold' },
+});
+
+/* --------------------------- PDF: component --------------------------- */
+function InvoicePDF({ order, fullName }) {
+  const addressLines = [
+    '4th Floor, Safal Prelude,',
+    '404 Corporate Road, Near YMCA Club,',
+    'Prahlad Nagar, Ahmedabad,',
+    'Gujarat, India - 380015',
+  ];
+
+  const lineItems = (order.productId || []).map((pid, i) => ({
+    title: String(pid),
+    qty: (order.quantity || [])[i] ?? 1,
+    price: (order.price || [])[i] ?? 0,
+  }));
+
+  const asMoney = (n) => `$${Number(n || 0).toFixed(2)}`;
+
+  return (
+    <PDFDocument>
+      <PDFPage size="A4" style={pdfStyles.page}>
+        {/* header */}
+        <PDFView style={pdfStyles.headerWrap} fixed>
+          <PDFView style={pdfStyles.headerCanvas}>
+            <PDFView style={pdfStyles.headerBlueLine} />
+            <PDFView style={pdfStyles.headerGoldLine} />
+          </PDFView>
+          <PDFView style={pdfStyles.headerRow}>
+            <PDFView style={pdfStyles.headerLogoWrap}>
+              {/* Next/Image asset isn't available inside the PDF runtime; use a public path */}
+              <PDFImage src="/apple-touch-icon.png" style={pdfStyles.headerLogo} />
+            </PDFView>
+            <PDFView style={pdfStyles.headerTitleWrap}>
+              <PDFText style={pdfStyles.headerTitle}>AMRITA GLOBAL ENTERPRISES</PDFText>
+            </PDFView>
+          </PDFView>
+        </PDFView>
+
+        {/* invoice header */}
+        <PDFView style={pdfStyles.box}>
+          <PDFText style={pdfStyles.h3}>Invoice</PDFText>
+          <PDFView style={pdfStyles.row}>
+            <PDFView style={pdfStyles.col}>
+              <PDFText><PDFText style={{ fontWeight: 'bold' }}>Order ID: </PDFText>#{order._id || '—'}</PDFText>
+              <PDFText><PDFText style={{ fontWeight: 'bold' }}>Date: </PDFText>{dayjs(order.createdAt).format('MMMM D, YYYY')}</PDFText>
+              <PDFText><PDFText style={{ fontWeight: 'bold' }}>Payment: </PDFText>{String(order.payment || '—').toUpperCase()}</PDFText>
+            </PDFView>
+            <PDFView style={pdfStyles.col}>
+              <PDFText style={{ fontWeight: 'bold', marginBottom: 4 }}>{fullName}</PDFText>
+              {order.phone ? <PDFText>{order.phone}</PDFText> : null}
+              {order.email ? <PDFText>{order.email}</PDFText> : null}
+              {order.streetAddress ? <PDFText>{order.streetAddress}</PDFText> : null}
+            </PDFView>
+            <PDFView style={pdfStyles.col}>
+              <PDFText style={{ fontWeight: 'bold', marginBottom: 4 }}>From</PDFText>
+              {addressLines.map((l, i) => <PDFText key={i}>{l}</PDFText>)}
+            </PDFView>
+          </PDFView>
+        </PDFView>
+
+        {/* table */}
+        <PDFView>
+          <PDFView style={pdfStyles.table}>
+            <PDFView style={pdfStyles.thead}>
+              <PDFText style={pdfStyles.thSL}>SL</PDFText>
+              <PDFText style={pdfStyles.th}>Product</PDFText>
+              <PDFText style={pdfStyles.th}>Quantity</PDFText>
+              <PDFText style={pdfStyles.th}>Item Price</PDFText>
+              <PDFText style={pdfStyles.th}>Amount</PDFText>
+            </PDFView>
+            {(lineItems.length ? lineItems : [{ title: 'No items', qty: 0, price: 0 }]).map((li, i) => (
+              <PDFView key={i} style={pdfStyles.tr}>
+                <PDFText style={pdfStyles.tdSL}>{lineItems.length ? i + 1 : ''}</PDFText>
+                <PDFText style={pdfStyles.td}>{li.title}</PDFText>
+                <PDFText style={pdfStyles.td}>{li.qty}</PDFText>
+                <PDFText style={pdfStyles.td}>{asMoney(li.price)}</PDFText>
+                <PDFText style={pdfStyles.td}>{asMoney(Number(li.price) * Number(li.qty))}</PDFText>
+              </PDFView>
+            ))}
+          </PDFView>
+        </PDFView>
+
+        {/* totals */}
+        <PDFView style={{ marginTop: 10 }}>
+          <PDFView style={pdfStyles.totalsRow}>
+            <PDFView style={pdfStyles.totalsCol}>
+              {order.shippingInstructions ? (
+                <PDFView style={pdfStyles.box}>
+                  <PDFText style={{ fontWeight: 'bold', marginBottom: 4 }}>Shipping Instructions</PDFText>
+                  <PDFText style={pdfStyles.small}>{order.shippingInstructions}</PDFText>
+                </PDFView>
+              ) : null}
+            </PDFView>
+            <PDFView style={{ width: 220 }}>
+              <PDFView style={pdfStyles.totalBox}>
+                <PDFText style={pdfStyles.totalLabel}>Shipping Cost</PDFText>
+                <PDFText>{asMoney(order.shippingCost)}</PDFText>
+                <PDFText style={[pdfStyles.totalLabel, { marginTop: 6 }]}>Discount</PDFText>
+                <PDFText>{asMoney(order.discount)}</PDFText>
+                <PDFText style={[pdfStyles.totalLabel, { marginTop: 6 }]}>Total Amount</PDFText>
+                <PDFText style={pdfStyles.totalValue}>{asMoney(order.total)}</PDFText>
+              </PDFView>
+            </PDFView>
+          </PDFView>
+        </PDFView>
+
+        {/* footer */}
+        <PDFView style={pdfStyles.footerWrap} fixed>
+          <PDFView style={pdfStyles.footerCanvas}>
+            <PDFView style={pdfStyles.footerBlue} />
+            <PDFView style={pdfStyles.footerGold} />
+          </PDFView>
+          <PDFView style={pdfStyles.footerTextBlock}>
+            <PDFText style={pdfStyles.footerLine}>404, Safal Prelude, Corporate Rd, Prahlad Nagar, Ahmedabad, Gujarat 380015</PDFText>
+            <PDFText style={pdfStyles.footerLine}>info@amritafashions.com • amrita-fashions.com • +91 98240 03484</PDFText>
+          </PDFView>
+        </PDFView>
+      </PDFPage>
+    </PDFDocument>
+  );
+}
+
+/* =============================== MAIN UI =============================== */
 
 const OrderArea = ({ orderId, userId: userIdProp }) => {
   const printRef = useRef(null);
@@ -42,9 +232,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
   }, []);
 
   // Fetch user profile for invoice header/details (skip if no userId; we'll still render using lastOrder only)
-  const { data: userResp, isError, isLoading } = useGetUserByIdQuery(userId, {
-    skip: !userId,
-  });
+  const { data: userResp, isError, isLoading } = useGetUserByIdQuery(userId, { skip: !userId });
   const user = userResp?.user ?? null;
 
   // ---- Compute renderable order without hooks ----
@@ -84,103 +272,37 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
     price: (order.price || [])[i] ?? 0,
   }));
 
-  // --------- PRINT VIA HIDDEN IFRAME (robust in Next.js/React 19) ----------
-  const buildHeadHTML = () => {
-    // Copy style/link tags to preserve styling
-    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-      .map((l) => `<link rel="stylesheet" href="${l.href}">`)
-      .join('\n');
+  /* ----------------------- PRINT & PDF (A4, header/footer) ----------------------- */
 
-    const styles = Array.from(document.querySelectorAll('style'))
-      .map((s) => `<style>${s.innerHTML}</style>`)
-      .join('\n');
+  const handlePrint = useCallback(async () => {
+    try {
+      const instance = pdfRenderer(<InvoicePDF order={order} fullName={fullName} />);
+      const blob = await instance.toBlob();
+      const url = URL.createObjectURL(blob);
 
-    return `
-      <meta charset="utf-8">
-      <base href="${typeof window !== 'undefined' ? window.location.origin : '/'}">
-      ${links}
-      ${styles}
-      <style>
-        @media print {
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .tp-invoice-print-wrapper { box-shadow: none !important; }
-          .tp-btn, .invoice__print { display: none !important; }
-        }
-        body { margin: 0; padding: 0; }
-      </style>
-    `;
-  };
+      // trigger download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice_${order._id || dayjs().format('YYYYMMDD_HHmmss')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
 
-  const handlePrint = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const node = printRef.current;
-    if (!node) return;
-
-    // Create hidden iframe
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    iframe.style.visibility = 'hidden';
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentDocument || iframe.contentWindow.document;
-
-    // Write full HTML into iframe
-    doc.open();
-    doc.write(`<!doctype html><html><head>${buildHeadHTML()}</head><body>${node.outerHTML}</body></html>`);
-    doc.close();
-
-    const afterResourcesReady = () => {
-      // Small delay so layout calculates before print
-      setTimeout(() => {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        // Clean up a bit later so print dialog can open
-        setTimeout(() => {
-          document.body.removeChild(iframe);
-        }, 500);
-      }, 100);
-    };
-
-    // Wait for images and fonts to settle (max ~1.5s)
-    const waitForImages = () => {
-      const imgs = Array.from(doc.images || []);
-      if (imgs.length === 0) {
-        afterResourcesReady();
-        return;
-      }
-      let loaded = 0;
-      const done = () => {
-        loaded += 1;
-        if (loaded >= imgs.length) afterResourcesReady();
-      };
-      imgs.forEach((img) => {
-        if (img.complete) {
-          done();
-        } else {
-          img.addEventListener('load', done);
-          img.addEventListener('error', done);
-        }
-      });
-      // Fallback timeout so we don't hang
-      setTimeout(afterResourcesReady, 1500);
-    };
-
-    if (doc.readyState === 'complete') {
-      waitForImages();
-    } else {
-      iframe.onload = waitForImages;
+      // also open in a new tab for quick view (optional)
+      window.open(url, '_blank', 'noopener,noreferrer');
+      // revoke later
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e) {
+      console.error('PDF generation failed, falling back to browser print.', e);
+      window.print(); // fallback
     }
-  }, []);
+  }, [order, fullName]);
 
-  // ---- Conditional UIs (no hooks below this line) ----
+  /* ------------------------------ UI states ------------------------------ */
   if (!lastOrder && !user && isLoading) return <PrdDetailsLoader loading={true} />;
   if (!lastOrder && isError) return <ErrorMsg msg="There was an error loading your details." />;
 
+  /* -------------------------------- RENDER -------------------------------- */
   return (
     <>
       <section className="invoice__area pt-120 pb-120">
@@ -208,7 +330,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                     <div className="row align-items-end">
                       <div className="col-md-4 col-sm-6">
                         <div className="invoice__left">
-                          <Image src={logo} alt="logo" width={140} height={45} />
+                          <NextImage src={logo} alt="logo" width={140} height={45} />
                           <h3>Amrita Global Enterprises</h3>
                           <p>
                             4th Floor, Safal Prelude ,<br />
@@ -335,6 +457,10 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
 
       {/* Keep global print styles active for in-window prints as well */}
       <style jsx global>{`
+        @page {
+          size: A4;
+          margin: 16mm;
+        }
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .tp-invoice-print-wrapper { box-shadow: none !important; }
