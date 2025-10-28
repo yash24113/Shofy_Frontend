@@ -417,10 +417,10 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                 {/* On-screen header with Next/Image */}
                 <div className="col-md-7 col-sm-12">
                   <div className="d-flex align-items-center" style={{ gap: 12 }}>
-                    <img
+                    <Image
                       src={LOGO_WEB_URL}
                       alt="Amrita Global Enterprises"
-                      width={120}
+                      width={110}
                       height={50}
                       
                       // style={{ borderRadius: 6, background: '#fff' }}
