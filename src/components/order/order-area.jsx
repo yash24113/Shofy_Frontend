@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import Image from 'next/image';
 import dayjs from 'dayjs';
 import {
   pdf as pdfRenderer,
@@ -17,7 +16,7 @@ import ErrorMsg from '@/components/common/error-msg';
 import PrdDetailsLoader from '@/components/loader/prd-details-loader';
 import { useGetUserByIdQuery } from '@/redux/features/order/orderApi';
 
-/** ✅ You asked to use this import for the logo */
+/** ✅ Use this import exactly as requested */
 import { LOGO_WEB_URL } from '@assets/img/logo/age.jpg';
 
 /* ------------------------------ helpers ------------------------------ */
@@ -33,28 +32,15 @@ const safeGetLocalUserId = () => {
 
 /** Handle both cases:
  *  - LOGO_WEB_URL is a plain string (e.g., '/_next/static/media/age.xxx.jpg')
- *  - LOGO_WEB_URL is a Next image object with a .src
+ *  - LOGO_WEB_URL might be an object with .src (if you've wrapped it)
  */
 const RESOLVED_LOGO_URL =
-  typeof LOGO_WEB_URL === 'string' ? LOGO_WEB_URL : LOGO_WEB_URL?.src || '';
+  typeof LOGO_WEB_URL === 'string' ? LOGO_WEB_URL : (LOGO_WEB_URL && LOGO_WEB_URL.src) || '';
 
-/** Turn URL → dataURL so React-PDF can embed it reliably */
-async function toDataUrl(url) {
-  if (!url) return null;
-  try {
-    const res = await fetch(url, { cache: 'no-store' });
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
+/** API base */
+const API_BASE = 'https://test.amrita-fashions.com';
 
-// Brand
+/* --------------------------- theme tokens ---------------------------- */
 const BRAND_BLUE = '#2C4C97';
 const BRAND_YELLOW = '#D6A74B';
 const TEXT_MUTED = '#475569';
@@ -90,11 +76,30 @@ const pdfStyles = PDFStyleSheet.create({
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
+
   leftHeader: { flexDirection: 'row', alignItems: 'center' },
-  logoBox: { width: 56, height: 56, borderRadius: 8, overflow: 'hidden', backgroundColor: '#fff' },
-  logo: { width: '100%', height: '100%' },
+
+  /* fixed box; image contains within it */
+  logoBox: {
+    width: 140,
+    height: 44,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  /* contain scaling similar to <img> with object-fit: contain */
+  logoContain: {
+    width: 'auto',
+    height: 'auto',
+    maxWidth: 140,
+    maxHeight: 44,
+    objectFit: 'contain',
+  },
+
   brandTextWrap: { marginLeft: 12 },
   brandTitle: { fontSize: 16, color: BRAND_BLUE, fontWeight: 'bold', letterSpacing: 0.2 },
   brandSub: { fontSize: 9, color: TEXT_MUTED, marginTop: 2 },
@@ -157,17 +162,18 @@ function InvoicePDF({ order, fullName, logoSrc }) {
     'Prahlad Nagar, Ahmedabad, Gujarat, India - 380015',
   ];
 
-  const items = (order.productId || []).map((pid, i) => ({
-    title: String(pid),
-    qty: (order.quantity || [])[i] ?? 1,
-    price: (order.price || [])[i] ?? 0,
+  // Map product names from order.productId objects
+  const items = (order?.productId || []).map((prod, i) => ({
+    title: (prod && prod.name) ? prod.name : String(prod?._id ?? '—'),
+    qty: (order?.quantity || [])[i] ?? 1,
+    price: (order?.price || [])[i] ?? 0,
   }));
 
   const money = (n) => `$${Number(n || 0).toFixed(2)}`;
   const subTotal = items.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0);
-  const shipping = Number(order.shippingCost || 0);
-  const discount = Number(order.discount || 0);
-  const grand = Number(order.total || subTotal + shipping - discount);
+  const shipping = Number(order?.shippingCost || 0);
+  const discount = Number(order?.discount || 0);
+  const grand = Number(order?.total || subTotal + shipping - discount);
 
   return (
     <PDFDocument>
@@ -181,7 +187,7 @@ function InvoicePDF({ order, fullName, logoSrc }) {
           <PDFView style={pdfStyles.headerRow}>
             <PDFView style={pdfStyles.leftHeader}>
               <PDFView style={pdfStyles.logoBox}>
-                {logoSrc ? <PDFImage src={logoSrc} style={pdfStyles.logo} /> : null}
+                {logoSrc ? <PDFImage src={logoSrc} style={pdfStyles.logoContain} /> : null}
               </PDFView>
               <PDFView style={pdfStyles.brandTextWrap}>
                 <PDFText style={pdfStyles.brandTitle}>AMRITA GLOBAL ENTERPRISES</PDFText>
@@ -202,16 +208,18 @@ function InvoicePDF({ order, fullName, logoSrc }) {
             <PDFView style={pdfStyles.card}>
               <PDFText style={pdfStyles.label}>Bill To</PDFText>
               <PDFText style={pdfStyles.strong}>{fullName}</PDFText>
-              {order.phone ? <PDFText>{order.phone}</PDFText> : null}
-              {order.email ? <PDFText>{order.email}</PDFText> : null}
-              {order.streetAddress ? <PDFText>{order.streetAddress}</PDFText> : null}
+              {order?.phone ? <PDFText>{order.phone}</PDFText> : null}
+              {order?.email ? <PDFText>{order.email}</PDFText> : null}
+              {order?.streetAddress ? <PDFText>{order.streetAddress}</PDFText> : null}
             </PDFView>
           </PDFView>
           <PDFView style={pdfStyles.col}>
             <PDFView style={pdfStyles.card}>
               <PDFText style={pdfStyles.label}>From</PDFText>
               <PDFText style={pdfStyles.strong}>Amrita Global Enterprises</PDFText>
-              {addressLines.map((l, i) => <PDFText key={i}>{l}</PDFText>)}
+              {addressLines.map((l, i) => (
+                <PDFText key={i}>{l}</PDFText>
+              ))}
               <PDFText>info@amritafashions.com • +91 98240 03484</PDFText>
             </PDFView>
           </PDFView>
@@ -222,19 +230,21 @@ function InvoicePDF({ order, fullName, logoSrc }) {
           <PDFView style={pdfStyles.metaRow}>
             <PDFView style={pdfStyles.metaItem}>
               <PDFText style={pdfStyles.label}>Invoice Number</PDFText>
-              <PDFText style={pdfStyles.strong}>{order._id || '—'}</PDFText>
+              <PDFText style={pdfStyles.strong}>{order?._id || '—'}</PDFText>
             </PDFView>
             <PDFView style={pdfStyles.metaItem}>
               <PDFText style={pdfStyles.label}>Invoice Date</PDFText>
-              <PDFText style={pdfStyles.strong}>{dayjs(order.createdAt).format('MMMM D, YYYY')}</PDFText>
+              <PDFText style={pdfStyles.strong}>
+                {order?.createdAt ? dayjs(order.createdAt).format('MMMM D, YYYY') : dayjs().format('MMMM D, YYYY')}
+              </PDFText>
             </PDFView>
             <PDFView style={pdfStyles.metaItem}>
               <PDFText style={pdfStyles.label}>Payment</PDFText>
-              <PDFText style={pdfStyles.strong}>{String(order.payment || '—').toUpperCase()}</PDFText>
+              <PDFText style={pdfStyles.strong}>{String(order?.payment || '—').toUpperCase()}</PDFText>
             </PDFView>
             <PDFView style={pdfStyles.metaItem}>
               <PDFText style={pdfStyles.label}>Shipping</PDFText>
-              <PDFText style={pdfStyles.strong}>{String(order.shipping || '—').toUpperCase()}</PDFText>
+              <PDFText style={pdfStyles.strong}>{String(order?.shipping || '—').toUpperCase()}</PDFText>
             </PDFView>
           </PDFView>
         </PDFView>
@@ -249,7 +259,7 @@ function InvoicePDF({ order, fullName, logoSrc }) {
             <PDFText style={pdfStyles.thAmount}>Amount</PDFText>
           </PDFView>
 
-        {(items.length ? items : [{ title: 'No items', qty: 0, price: 0 }]).map((it, i) => (
+          {(items.length ? items : [{ title: 'No items', qty: 0, price: 0 }]).map((it, i) => (
             <PDFView key={i} style={pdfStyles.tr}>
               <PDFText style={pdfStyles.tdSL}>{items.length ? i + 1 : ''}</PDFText>
               <PDFText style={pdfStyles.tdProduct}>{it.title}</PDFText>
@@ -284,7 +294,7 @@ function InvoicePDF({ order, fullName, logoSrc }) {
         </PDFView>
 
         {/* Notes */}
-        {order.shippingInstructions ? (
+        {order?.shippingInstructions ? (
           <PDFView style={[pdfStyles.card, { marginTop: 10 }]}>
             <PDFText style={pdfStyles.label}>Notes / Shipping Instructions</PDFText>
             <PDFText>{order.shippingInstructions}</PDFText>
@@ -315,69 +325,98 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
   // resolve userId: prop -> localStorage
   const userId = userIdProp || safeGetLocalUserId() || null;
 
-  // Load last created order from localStorage (set by Checkout flow)
-  const [lastOrder, setLastOrder] = useState(null);
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const raw = localStorage.getItem('lastOrder');
-      if (raw) {
-        try {
-          setLastOrder(JSON.parse(raw));
-        } catch (err) {
-          console.warn('err', err);
-        }
-      }
-    }
-  }, []);
+  // Order state from API
+  const [order, setOrder] = useState(null);
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [orderError, setOrderError] = useState(null);
 
-  // Fetch user profile for invoice header/details
-  const { data: userResp, isError, isLoading } = useGetUserByIdQuery(userId, { skip: !userId });
+  // Fetch user profile (for display name etc.)
+  const { data: userResp, isError: userErr, isLoading: userLoading } = useGetUserByIdQuery(userId, {
+    skip: !userId,
+  });
   const user = userResp?.user ?? null;
 
-  // Fallback order
-  const fallbackOrder = {
-    _id: orderId,
-    firstName: user?.name?.split(' ')?.[0] || '',
-    lastName: user?.name?.split(' ')?.slice(1).join(' ') || '',
-    country: user?.country || '',
-    streetAddress: user?.address || '',
-    city: user?.city || '',
-    postcode: user?.pincode || '',
-    phone: user?.phone || '',
-    email: user?.email || '',
-    shippingInstructions: '',
-    total: 0,
-    payment: 'cod',
-    discount: 0,
-    shipping: 'standard',
-    shippingCost: 0,
-    userId: user?._id || userId || '',
-    productId: [],
-    quantity: [],
-    price: [],
-    createdAt: new Date().toISOString(),
-  };
+  // Fetch latest order for userId from API
+  useEffect(() => {
+    const run = async () => {
+      if (!userId) return;
+      setOrderLoading(true);
+      setOrderError(null);
+      try {
+        const res = await fetch(`${API_BASE}/shopy/orders/user/${encodeURIComponent(userId)}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
 
-  const order = lastOrder || fallbackOrder;
+        // API shape: { status, results, data: { orders: [...] } }
+        const all = Array.isArray(data?.data?.orders) ? data.data.orders : [];
 
+        // Filter for orders that belong to this exact userId (compare to nested userId._id)
+        const mine = all.filter(o => String(o?.userId?._id || '') === String(userId));
+
+        // Pick latest by createdAt; if none matched, fall back to latest overall
+        const chooseLatest = (arr) =>
+          (arr || [])
+            .slice()
+            .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))[0] || null;
+
+        const latest = chooseLatest(mine) || chooseLatest(all);
+
+        // Fallback if none at all
+        setOrder(
+          latest || {
+            _id: orderId || '—',
+            firstName: user?.name?.split(' ')?.[0] || '',
+            lastName: user?.name?.split(' ')?.slice(1).join(' ') || '',
+            country: user?.country || '',
+            streetAddress: user?.address || '',
+            city: user?.city || '',
+            postcode: user?.pincode || '',
+            phone: user?.phone || '',
+            email: user?.email || '',
+            shippingInstructions: '',
+            total: 0,
+            payment: 'cod',
+            discount: 0,
+            shipping: 'standard',
+            shippingCost: 0,
+            userId: user?._id || userId || '',
+            productId: [],
+            quantity: [],
+            price: [],
+            createdAt: new Date().toISOString(),
+          }
+        );
+      } catch (e) {
+        setOrderError((e && e.message) || 'Failed to load order.');
+      } finally {
+        setOrderLoading(false);
+      }
+    };
+    run();
+  }, [userId, orderId, user]);
+
+  // Prefer order name fields; fallback to order.userId.name; then API user
   const fullName =
-    `${order.firstName || ''} ${order.lastName || ''}`.trim() ||
+    `${(order && order.firstName) || ''} ${(order && order.lastName) || ''}`.trim() ||
+    (order?.userId && order.userId.name) ||
     (user?.name ?? 'Customer');
 
-  const lineItems = (order.productId || []).map((pid, i) => ({
-    title: String(pid),
-    qty: (order.quantity || [])[i] ?? 1,
-    price: (order.price || [])[i] ?? 0,
+  // Build line items with product names from productId array
+  const lineItems = (order?.productId || []).map((prod, i) => ({
+    title: (prod && prod.name) ? prod.name : String(prod?._id ?? '—'),
+    qty: (order?.quantity || [])[i] ?? 1,
+    price: (order?.price || [])[i] ?? 0,
   }));
 
   /* ----------------------- PRINT -> PDF (A4, header/footer) ----------------------- */
   const handlePrint = useCallback(async () => {
     try {
-      // Prepare a PDF-safe logo as dataURL
-      const logoDataUrl = await toDataUrl(RESOLVED_LOGO_URL);
-
       const instance = pdfRenderer(
-        <InvoicePDF order={order} fullName={fullName} logoSrc={logoDataUrl} />
+        <InvoicePDF order={order} fullName={fullName} logoSrc={RESOLVED_LOGO_URL} />
       );
       const blob = await instance.toBlob();
       const url = URL.createObjectURL(blob);
@@ -385,7 +424,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
       // download
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Invoice_${order._id || dayjs().format('YYYYMMDD_HHmmss')}.pdf`;
+      a.download = `Invoice_${(order && order._id) || dayjs().format('YYYYMMDD_HHmmss')}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -400,8 +439,9 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
   }, [order, fullName]);
 
   /* ------------------------------ UI states ------------------------------ */
-  if (!lastOrder && !user && isLoading) return <PrdDetailsLoader loading={true} />;
-  if (!lastOrder && isError) return <ErrorMsg msg="There was an error loading your details." />;
+  if (!userId) return <ErrorMsg msg="No user detected. Please sign in first." />;
+  if (orderLoading || (!order && userLoading)) return <PrdDetailsLoader loading={true} />;
+  if (orderError) return <ErrorMsg msg={`Error loading order: ${orderError}`} />;
 
   /* -------------------------------- RENDER -------------------------------- */
   return (
@@ -425,18 +465,18 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
             className="invoice__wrapper grey-bg-2 pt-40 pb-40 pl-40 pr-40 tp-invoice-print-wrapper"
             style={{ borderRadius: 14, background: '#f8fafc' }}
           >
-            {/* Header with LOGO */}
+            {/* Header with LOGO (screen) */}
             <div className="invoice__header-wrapper border-2 border-bottom border-white mb-20">
               <div className="row align-items-center">
                 <div className="col-md-7 col-sm-12">
                   <div className="d-flex align-items-center" style={{ gap: 12 }}>
-                    <Image
+                    <img
                       src={RESOLVED_LOGO_URL}
-                      alt="Amrita Global Enterprises"
+                      alt="Company Logo"
                       width={140}
-                      height={50}
-                      unoptimized
-                      style={{ borderRadius: 6, background: '#fff', objectFit: 'contain' }}
+                      height={44}
+                      style={{ height: 'auto', width: 'auto', maxWidth: '140px', maxHeight: '44px' }}
+                      sizes="(max-width: 600px) 110px, 140px"
                     />
                     <div>
                       <h3 className="mb-5" style={{ color: BRAND_BLUE, marginBottom: 0 }}>
@@ -453,7 +493,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
 
             {/* Title BELOW header */}
             <div className="mb-20">
-              <h2 className="text-uppercase" style={{ fontWeight: 800, letterSpacing: 1, color: BRAND_BLUE }}>
+              <h2 className="text-uppercase" style={{ fontWeight: 800, letterSpacing: 1, color: BRAND_BLUE, textAlign: 'center' }}>
                 INVOICE
               </h2>
             </div>
@@ -466,9 +506,15 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                     Bill To
                   </div>
                   <div style={{ fontWeight: 600 }}>{fullName}</div>
-                  {(order.phone || user?.phone) && <div>{order.phone || user?.phone}</div>}
-                  {(order.email || user?.email) && <div>{order.email || user?.email}</div>}
-                  {(order.streetAddress || user?.address) && <div>{order.streetAddress || user?.address}</div>}
+                  {(order?.phone || order?.userId?.phone || user?.phone) && (
+                    <div>{order?.phone || order?.userId?.phone || user?.phone}</div>
+                  )}
+                  {(order?.email || order?.userId?.email || user?.email) && (
+                    <div>{order?.email || order?.userId?.email || user?.email}</div>
+                  )}
+                  {(order?.streetAddress || order?.userId?.address || user?.address) && (
+                    <div>{order?.streetAddress || order?.userId?.address || user?.address}</div>
+                  )}
                 </div>
               </div>
               <div className="col-md-6">
@@ -489,30 +535,32 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
               <div className="col-md-3">
                 <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
                   <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Invoice Number</div>
-                  <div style={{ fontWeight: 600 }}>{order._id || '—'}</div>
+                  <div style={{ fontWeight: 600 }}>{order?._id || '—'}</div>
                 </div>
               </div>
               <div className="col-md-3">
                 <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
                   <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Invoice Date</div>
-                  <div style={{ fontWeight: 600 }}>{dayjs(order.createdAt).format('MMMM D, YYYY')}</div>
+                  <div style={{ fontWeight: 600 }}>
+                    {order?.createdAt ? dayjs(order.createdAt).format('MMMM D, YYYY') : dayjs().format('MMMM D, YYYY')}
+                  </div>
                 </div>
               </div>
               <div className="col-md-3">
                 <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
                   <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Payment</div>
-                  <div style={{ fontWeight: 600 }}>{String(order.payment || '—').toUpperCase()}</div>
+                  <div style={{ fontWeight: 600 }}>{String(order?.payment || '—').toUpperCase()}</div>
                 </div>
               </div>
               <div className="col-md-3">
                 <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
                   <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Shipping</div>
-                  <div style={{ fontWeight: 600 }}>{String(order.shipping || '—').toUpperCase()}</div>
+                  <div style={{ fontWeight: 600 }}>{String(order?.shipping || '—').toUpperCase()}</div>
                 </div>
               </div>
             </div>
 
-            {/* Items */}
+            {/* Items (uses product names) */}
             <div
               className="pt-20 pb-20 pl-40 pr-40 bg-white mb-30"
               style={{ border: '1px solid #e5e7eb', borderRadius: 12 }}
@@ -556,21 +604,30 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                     <div className="d-flex justify-content-between mb-2" style={{ color: '#64748b' }}>
                       <span>Subtotal</span>
                       <span>
-                        ${lineItems.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0).toFixed(2)}
+                        $
+                        {lineItems
+                          .reduce((s, it) => s + Number(it.qty) * Number(it.price), 0)
+                          .toFixed(2)}
                       </span>
                     </div>
                     <div className="d-flex justify-content-between mb-2" style={{ color: '#64748b' }}>
                       <span>Shipping</span>
-                      <span>${Number(order.shippingCost || 0).toFixed(2)}</span>
+                      <span>${Number(order?.shippingCost || 0).toFixed(2)}</span>
                     </div>
                     <div className="d-flex justify-content-between mb-2" style={{ color: '#64748b' }}>
                       <span>Discount</span>
-                      <span>${Number(order.discount || 0).toFixed(2)}</span>
+                      <span>${Number(order?.discount || 0).toFixed(2)}</span>
                     </div>
                     <div className="d-flex justify-content-between pt-2 mt-2" style={{ borderTop: '1px solid #e5e7eb', fontWeight: 700 }}>
                       <span>Total</span>
                       <span>
-                        ${Number(order.total || (lineItems.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0) + Number(order.shippingCost || 0) - Number(order.discount || 0))).toFixed(2)}
+                        $
+                        {Number(
+                          order?.total ??
+                            (lineItems.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0) +
+                              Number(order?.shippingCost || 0) -
+                              Number(order?.discount || 0))
+                        ).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -578,9 +635,9 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
               </div>
             </div>
 
-            {order.shippingInstructions ? (
+            {order?.shippingInstructions ? (
               <div className="pl-40 pr-40 mb-20">
-                <strong>Notes:</strong> {order.shippingInstructions}
+                <strong>Notes / Shipping Instructions :</strong> {order.shippingInstructions}
               </div>
             ) : null}
           </div>
