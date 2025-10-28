@@ -16,6 +16,7 @@ import {
 import ErrorMsg from '@/components/common/error-msg';
 import PrdDetailsLoader from '@/components/loader/prd-details-loader';
 import { useGetUserByIdQuery } from '@/redux/features/order/orderApi';
+import LOGO_WEB_URL from '@/assets/img/logo/my-logo.png';
 
 /* ------------------------------ helpers ------------------------------ */
 const safeGetLocalUserId = () => {
@@ -37,8 +38,8 @@ const ROW_ALT = '#f8fafc';
 const SOFT = '#f1f5f9';
 
 // Your logo (WEBP). React-PDF can’t render WEBP reliably, so we proxy to PNG.
-const LOGO_WEB_URL =
-  'https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp';
+// const LOGO_WEB_URL =
+//   'https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp';
 
 // Convert any image URL to a PNG via Cloudinary “fetch” (no account needed for demo domain).
 // If you have your own Cloudinary cloud, replace `demo` with your cloud name.
@@ -416,7 +417,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                 {/* On-screen header with Next/Image */}
                 <div className="col-md-7 col-sm-12">
                   <div className="d-flex align-items-center" style={{ gap: 12 }}>
-                    <img
+                    <Image
                       src={LOGO_WEB_URL}
                       alt="Amrita Global Enterprises"
                       width={160}
