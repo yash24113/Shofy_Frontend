@@ -459,6 +459,33 @@ export default function UserProfile() {
 
   /* ---------------- PDF generator ---------------- */
 const generateInvoicePdf = async (order) => {
+  // ---------- helpers ----------
+  const fmtINR = (n) => {
+    const val = Number(n || 0);
+    return `₹${val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const sum = (xs) => xs.reduce((a, b) => a + (Number(b) || 0), 0);
+
+  // Build line items safely
+  const lines = (order?.productId || []).map((p, idx) => {
+    const qty   = Array.isArray(order.quantity) ? (Number(order.quantity[idx]) || 0) : 0;
+    const price = Array.isArray(order.price)    ? (Number(order.price[idx])    || 0) : 0;
+    const amount = qty * price;
+    return {
+      name: p?.name || '—',
+      qty,
+      price,
+      amount,
+      _id: p?._id || String(idx),
+    };
+  });
+
+  const calcSubtotal = sum(lines.map(l => l.amount));
+  const shipping = Number(order?.shippingCost || 0);
+  const discount = Number(order?.discount || 0);
+  const grandTotal = calcSubtotal + shipping - discount;
+
   const company = {
     name: 'AMRITA GLOBAL ENTERPRISES',
     tagline: 'Textiles & Fabrics • B2B',
@@ -469,142 +496,206 @@ const generateInvoicePdf = async (order) => {
   };
 
   const billTo = {
-    name: `${order.firstName || ''} ${order.lastName || ''}`.trim() || order?.userId?.name || '',
-    phone: order.phone || order?.userId?.phone || '',
-    email: order.email || order?.userId?.email || '',
-    address: order.streetAddress || order?.userId?.address || '',
-    city: order.city || order?.userId?.city || '',
-    postcode: order.postcode || order?.userId?.pincode || '',
-    country: order.country || order?.userId?.country || ''
+    name: `${order?.firstName || ''} ${order?.lastName || ''}`.trim() || order?.userId?.name || '',
+    phone: order?.phone || order?.userId?.phone || '',
+    email: order?.email || order?.userId?.email || '',
+    address: order?.streetAddress || order?.userId?.address || '',
+    city: order?.city || order?.userId?.city || '',
+    postcode: order?.postcode || order?.userId?.pincode || '',
+    country: order?.country || order?.userId?.country || ''
   };
 
-  const created = dayjs(order.createdAt).format('MMMM DD, YYYY');
-  const orderNo = String(order._id);
+  const created = dayjs(order?.createdAt).format('MMMM DD, YYYY');
+  const orderNo = String(order?._id || '');
 
-  // ✅ all borders rewritten for react-pdf
-  const pdfStyles = PDFStyleSheet.create({
-    page: { paddingTop: 28, paddingBottom: 28, paddingHorizontal: 36, fontSize: 10, color: '#1F2A44' },
-    h1: { fontSize: 14, textAlign: 'center', marginBottom: 12, fontWeight: 700 },
-    bar: { height: 2, backgroundColor: '#D6A74B', marginVertical: 8 },
-    sectionCard: { borderWidth: 1, borderColor: '#E5E7EB', borderStyle: 'solid', borderRadius: 6, padding: 10 },
+  // ---------- styles (react-pdf compliant) ----------
+  const BLUE = '#2C4C97';
+  const GOLD = '#D6A74B';
+  const TEXT = '#1F2A44';
+  const MUTED = '#6B7280';
+  const BORDER = '#E5E7EB';
+  const SOFT_BG = '#F8FAFC';
+  const HEAD_BG = '#F3F4F6';
+  const TOTAL_BG = '#EEF2FF';
+
+  const S = PDFStyleSheet.create({
+    page: { paddingTop: 28, paddingBottom: 28, paddingHorizontal: 36, fontSize: 10, color: TEXT },
+    headerBrand: { textAlign: 'center', fontSize: 14, fontWeight: 700, color: BLUE },
+    headerTag: { textAlign: 'center', fontSize: 9, color: MUTED, marginTop: 2 },
+    goldRule: { height: 2, backgroundColor: GOLD, marginTop: 8, marginBottom: 14 },
+    title: { textAlign: 'center', fontSize: 13, fontWeight: 700, color: BLUE, marginBottom: 10 },
+
     row: { flexDirection: 'row', gap: 10 },
     col: { flex: 1 },
-    label: { fontSize: 8, color: '#6B7280', marginBottom: 2 },
-    value: { fontSize: 10, color: '#111827' },
+
+    card: {
+      backgroundColor: SOFT_BG,
+      borderWidth: 1, borderColor: BORDER, borderStyle: 'solid',
+      borderRadius: 8, padding: 10
+    },
+    label: { fontSize: 8, color: MUTED, marginBottom: 2, letterSpacing: 0.2 },
+    value: { fontSize: 10, color: TEXT, lineHeight: 1.25 },
+
     metaRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
-    metaItem: { flex: 1, borderWidth: 1, borderColor: '#E5E7EB', borderStyle: 'solid', borderRadius: 6, padding: 8 },
-    table: { marginTop: 12, borderRadius: 6, borderWidth: 1, borderColor: '#E5E7EB', borderStyle: 'solid' },
-    thead: { backgroundColor: '#F3F4F6', flexDirection: 'row' },
-    th: { flex: 1, padding: 8, fontWeight: 700, fontSize: 9 },
-    tdRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#E5E7EB', borderTopStyle: 'solid' },
-    td: { flex: 1, padding: 8, fontSize: 9 },
+    metaItem: {
+      flex: 1, backgroundColor: SOFT_BG,
+      borderWidth: 1, borderColor: BORDER, borderStyle: 'solid',
+      borderRadius: 8, padding: 8
+    },
+    metaVal: { fontSize: 10, fontWeight: 700, color: TEXT },
+
+    tableWrap: {
+      marginTop: 12,
+      borderWidth: 1, borderColor: BORDER, borderStyle: 'solid',
+      borderRadius: 8, overflow: 'hidden'
+    },
+    thead: { backgroundColor: HEAD_BG, flexDirection: 'row' },
+    th: { padding: 8, fontSize: 9, fontWeight: 700 },
+    cellNum: { width: 24, textAlign: 'left' },
+    cellName: { flex: 1 },
+    cellQty: { width: 50, textAlign: 'right' },
+    cellPrice: { width: 70, textAlign: 'right' },
+    cellAmt: { width: 80, textAlign: 'right' },
+
+    tr: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: BORDER, borderTopStyle: 'solid', backgroundColor: '#FFFFFF' },
+    td: { padding: 8, fontSize: 9 },
+
+    // limit product name to 2 lines with decent readability
+    nameText: { fontSize: 9, lineHeight: 1.2 },
+
     totalsBox: {
       marginTop: 12,
       width: 240,
       alignSelf: 'flex-end',
-      borderWidth: 1,
-      borderColor: '#E5E7EB',
-      borderStyle: 'solid',
-      borderRadius: 6
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1, borderColor: BORDER, borderStyle: 'solid',
+      borderRadius: 8, overflow: 'hidden'
     },
-    totalsRow: {
-      flexDirection: 'row',
-      borderTopWidth: 1,
-      borderTopColor: '#E5E7EB',
-      borderTopStyle: 'solid'
-    },
-    totalsCellL: { flex: 1, padding: 6, fontSize: 9 },
-    totalsCellR: { width: 80, padding: 6, fontSize: 9, textAlign: 'right' },
-    totalsHead: { backgroundColor: '#EEF2FF', fontWeight: 700 },
-    footer: { marginTop: 22, textAlign: 'center', fontSize: 8, color: '#6B7280' },
+    totalsRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: BORDER, borderTopStyle: 'solid' },
+    totalsCellL: { flex: 1, padding: 8, fontSize: 9 },
+    totalsCellR: { width: 100, padding: 8, fontSize: 9, textAlign: 'right' },
+    totalsHead: { backgroundColor: TOTAL_BG, fontWeight: 700 },
+
+    footerGoldRule: { height: 2, backgroundColor: GOLD, marginTop: 24, marginBottom: 6 },
+    footer: { textAlign: 'center', fontSize: 8, color: MUTED, lineHeight: 1.3 },
   });
 
+  // ---------- document ----------
   const doc = (
     <PDFDocument>
-      <PDFPage size="A4" style={pdfStyles.page}>
-        <PDFText style={pdfStyles.h1}>{company.name}</PDFText>
-        <PDFText style={{ textAlign: 'center', fontSize: 8, color: '#6B7280' }}>{company.tagline}</PDFText>
-        <PDFView style={pdfStyles.bar} />
+      <PDFPage size="A4" style={S.page}>
+        {/* Brand header */}
+        <PDFText style={S.headerBrand}>{company.name}</PDFText>
+        <PDFText style={S.headerTag}>{company.tagline}</PDFText>
+        <PDFView style={S.goldRule} />
 
-        <PDFText style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, marginVertical: 8 }}>INVOICE</PDFText>
+        {/* Title */}
+        <PDFText style={S.title}>INVOICE</PDFText>
 
-        <PDFView style={[pdfStyles.row, { marginTop: 6 }]}>
-          <PDFView style={[pdfStyles.col, pdfStyles.sectionCard]}>
-            <PDFText style={pdfStyles.label}>BILL TO</PDFText>
-            <PDFText style={pdfStyles.value}>{billTo.name}</PDFText>
-            {billTo.phone ? <PDFText style={pdfStyles.tiny}>{billTo.phone}</PDFText> : null}
-            {billTo.email ? <PDFText style={pdfStyles.tiny}>{billTo.email}</PDFText> : null}
-            {billTo.address ? <PDFText style={pdfStyles.tiny}>{billTo.address}</PDFText> : null}
-            <PDFText style={pdfStyles.tiny}>
+        {/* Bill To / From cards */}
+        <PDFView style={[S.row, { marginBottom: 4 }]}>
+          {/* Bill To */}
+          <PDFView style={[S.col, S.card]}>
+            <PDFText style={S.label}>BILL TO</PDFText>
+            <PDFText style={S.value}>{billTo.name || '—'}</PDFText>
+            {billTo.phone ? <PDFText style={{ fontSize: 8, color: MUTED }}>{billTo.phone}</PDFText> : null}
+            {billTo.email ? <PDFText style={{ fontSize: 8, color: MUTED }}>{billTo.email}</PDFText> : null}
+            {billTo.address ? <PDFText style={{ fontSize: 8, color: MUTED }}>{billTo.address}</PDFText> : null}
+            <PDFText style={{ fontSize: 8, color: MUTED }}>
               {[billTo.city, billTo.country, billTo.postcode].filter(Boolean).join(', ')}
             </PDFText>
           </PDFView>
 
-          <PDFView style={[pdfStyles.col, pdfStyles.sectionCard]}>
-            <PDFText style={pdfStyles.label}>FROM</PDFText>
-            <PDFText style={pdfStyles.value}>{company.name}</PDFText>
-            <PDFText style={pdfStyles.tiny}>{company.addr1}</PDFText>
-            <PDFText style={pdfStyles.tiny}>{company.addr2}</PDFText>
-            <PDFText style={pdfStyles.tiny}>{company.email} • {company.phone}</PDFText>
+          {/* From */}
+          <PDFView style={[S.col, S.card]}>
+            <PDFText style={S.label}>FROM</PDFText>
+            <PDFText style={S.value}>Amrita Global Enterprises</PDFText>
+            <PDFText style={{ fontSize: 8, color: MUTED }}>{company.addr1}</PDFText>
+            <PDFText style={{ fontSize: 8, color: MUTED }}>{company.addr2}</PDFText>
+            <PDFText style={{ fontSize: 8, color: MUTED }}>{company.email}   •   {company.phone}</PDFText>
           </PDFView>
         </PDFView>
 
-        {/* table header */}
-        <PDFView style={pdfStyles.table}>
-          <PDFView style={pdfStyles.thead}>
-            <PDFText style={[pdfStyles.th, { flex: 0.2 }]}>#</PDFText>
-            <PDFText style={[pdfStyles.th, { flex: 2.3 }]}>Product</PDFText>
-            <PDFText style={[pdfStyles.th, { flex: 0.5, textAlign: 'right' }]}>Qty</PDFText>
-            <PDFText style={[pdfStyles.th, { flex: 0.7, textAlign: 'right' }]}>Price</PDFText>
-            <PDFText style={[pdfStyles.th, { flex: 0.8, textAlign: 'right' }]}>Amount</PDFText>
+        {/* Meta cards */}
+        <PDFView style={S.metaRow}>
+          <PDFView style={S.metaItem}>
+            <PDFText style={S.label}>INVOICE NUMBER</PDFText>
+            <PDFText style={S.metaVal}>{orderNo}</PDFText>
+          </PDFView>
+          <PDFView style={S.metaItem}>
+            <PDFText style={S.label}>INVOICE DATE</PDFText>
+            <PDFText style={S.metaVal}>{created}</PDFText>
+          </PDFView>
+          <PDFView style={S.metaItem}>
+            <PDFText style={S.label}>PAYMENT</PDFText>
+            <PDFText style={S.metaVal}>{String(order?.payment || 'ONLINE').toUpperCase()}</PDFText>
+          </PDFView>
+          <PDFView style={S.metaItem}>
+            <PDFText style={S.label}>SHIPPING</PDFText>
+            <PDFText style={S.metaVal}>{String(order?.shipping || 'STANDARD').toUpperCase()}</PDFText>
+          </PDFView>
+        </PDFView>
+
+        {/* Items table */}
+        <PDFView style={S.tableWrap}>
+          {/* head */}
+          <PDFView style={S.thead}>
+            <PDFText style={[S.th, S.cellNum]}>#</PDFText>
+            <PDFText style={[S.th, S.cellName]}>Product</PDFText>
+            <PDFText style={[S.th, S.cellQty]}>Qty</PDFText>
+            <PDFText style={[S.th, S.cellPrice]}>Price</PDFText>
+            <PDFText style={[S.th, S.cellAmt]}>Amount</PDFText>
           </PDFView>
 
-          {(order.productId || []).map((p, idx) => {
-            const qty = Array.isArray(order.quantity) ? order.quantity[idx] || 0 : 0;
-            const price = Array.isArray(order.price) ? order.price[idx] || 0 : 0;
-            const amount = (Number(qty) || 0) * (Number(price) || 0);
-            return (
-              <PDFView key={p?._id || idx} style={pdfStyles.tdRow}>
-                <PDFText style={[pdfStyles.td, { flex: 0.2 }]}>{idx + 1}</PDFText>
-                <PDFText style={[pdfStyles.td, { flex: 2.3 }]}>{p?.name || '—'}</PDFText>
-                <PDFText style={[pdfStyles.td, { flex: 0.5, textAlign: 'right' }]}>{qty}</PDFText>
-                <PDFText style={[pdfStyles.td, { flex: 0.7, textAlign: 'right' }]}>₹{Number(price).toFixed(2)}</PDFText>
-                <PDFText style={[pdfStyles.td, { flex: 0.8, textAlign: 'right' }]}>₹{Number(amount).toFixed(2)}</PDFText>
+          {/* rows */}
+          {lines.map((l, i) => (
+            <PDFView key={l._id} style={S.tr}>
+              <PDFText style={[S.td, S.cellNum]}>{i + 1}</PDFText>
+
+              {/* Product name: wrap to two lines visually by constraining height */}
+              <PDFView style={[S.td, S.cellName]}>
+                <PDFText style={S.nameText} wrap>
+                  {l.name}
+                </PDFText>
               </PDFView>
-            );
-          })}
+
+              <PDFText style={[S.td, S.cellQty]}>{l.qty}</PDFText>
+              <PDFText style={[S.td, S.cellPrice]}>{fmtINR(l.price)}</PDFText>
+              <PDFText style={[S.td, S.cellAmt]}>{fmtINR(l.amount)}</PDFText>
+            </PDFView>
+          ))}
         </PDFView>
 
-        <PDFView style={pdfStyles.totalsBox}>
-          <PDFView style={pdfStyles.totalsRow}>
-            <PDFText style={pdfStyles.totalsCellL}>Subtotal</PDFText>
-            <PDFText style={pdfStyles.totalsCellR}>₹{Number(order.total || 0).toFixed(2)}</PDFText>
+        {/* Totals card */}
+        <PDFView style={S.totalsBox}>
+          <PDFView style={S.totalsRow}>
+            <PDFText style={S.totalsCellL}>Subtotal</PDFText>
+            <PDFText style={S.totalsCellR}>{fmtINR(calcSubtotal)}</PDFText>
           </PDFView>
-          <PDFView style={pdfStyles.totalsRow}>
-            <PDFText style={pdfStyles.totalsCellL}>Shipping</PDFText>
-            <PDFText style={pdfStyles.totalsCellR}>₹{Number(order.shippingCost || 0).toFixed(2)}</PDFText>
+          <PDFView style={S.totalsRow}>
+            <PDFText style={S.totalsCellL}>Shipping</PDFText>
+            <PDFText style={S.totalsCellR}>{fmtINR(shipping)}</PDFText>
           </PDFView>
-          <PDFView style={pdfStyles.totalsRow}>
-            <PDFText style={pdfStyles.totalsCellL}>Discount</PDFText>
-            <PDFText style={pdfStyles.totalsCellR}>₹{Number(order.discount || 0).toFixed(2)}</PDFText>
+          <PDFView style={S.totalsRow}>
+            <PDFText style={S.totalsCellL}>Discount</PDFText>
+            <PDFText style={S.totalsCellR}>{fmtINR(discount)}</PDFText>
           </PDFView>
-          <PDFView style={[pdfStyles.totalsRow, pdfStyles.totalsHead]}>
-            <PDFText style={pdfStyles.totalsCellL}>Total</PDFText>
-            <PDFText style={pdfStyles.totalsCellR}>
-              ₹{(Number(order.total || 0) + Number(order.shippingCost || 0) - Number(order.discount || 0)).toFixed(2)}
-            </PDFText>
+          <PDFView style={[S.totalsRow, S.totalsHead]}>
+            <PDFText style={S.totalsCellL}>Total</PDFText>
+            <PDFText style={[S.totalsCellR, { fontWeight: 700 }]}>{fmtINR(grandTotal)}</PDFText>
           </PDFView>
         </PDFView>
 
-        <PDFView style={pdfStyles.footer}>
-          <PDFText>
-            404, Safal Prelude, Corporate Rd, Prahlad Nagar, Ahmedabad, Gujarat 380015 • info@amritafashions.com • amrita-fashions.com • +91 98240 03484
-          </PDFText>
-        </PDFView>
+        {/* Footer */}
+        <PDFView style={S.footerGoldRule} />
+        <PDFText style={S.footer}>
+          404, Safal Prelude, Corporate Rd, Prahlad Nagar, Ahmedabad, Gujarat 380015 • {company.email} • amrita-fashions.com • {company.phone}
+        </PDFText>
       </PDFPage>
     </PDFDocument>
   );
 
+  // ---------- render & download ----------
   const blob = await pdfRenderer(doc).toBlob();
   const fname = `AGE-Invoice-${orderNo}.pdf`;
   const url = URL.createObjectURL(blob);
@@ -617,7 +708,6 @@ const generateInvoicePdf = async (order) => {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 };
-
 
   /* ---------------- UI ---------------- */
   return (
