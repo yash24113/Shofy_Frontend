@@ -13,7 +13,6 @@ import {
   Image as PDFImage,
 } from '@react-pdf/renderer';
 
-import logo from '@assets/img/logo/my_logo.png';
 import ErrorMsg from '@/components/common/error-msg';
 import PrdDetailsLoader from '@/components/loader/prd-details-loader';
 import { useGetUserByIdQuery } from '@/redux/features/order/orderApi';
@@ -31,9 +30,14 @@ const safeGetLocalUserId = () => {
 
 const BRAND_BLUE = '#2C4C97';
 const BRAND_YELLOW = '#D6A74B';
+const TEXT_MUTED = '#475569';
+const BORDER = '#e5e7eb';
+const ROW_ALT = '#f8fafc';
+const SOFT = '#f1f5f9';
+const LOGO_URL = 'https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp';
 
 /* --------------------------- PDF: styles ---------------------------- */
-const HEADER_H = 86;
+const HEADER_H = 96;
 const FOOTER_H = 86;
 
 const pdfStyles = PDFStyleSheet.create({
@@ -48,14 +52,29 @@ const pdfStyles = PDFStyleSheet.create({
 
   /* header */
   headerWrap: { position: 'absolute', left: 0, right: 0, top: 0, height: HEADER_H, paddingHorizontal: 40 },
-  headerCanvas: { position: 'absolute', left: 0, right: 0, top: 58, height: 5 },
+  headerCanvas: { position: 'absolute', left: 0, right: 0, top: 70, height: 5 },
   headerBlueLine: { position: 'absolute', left: 0, right: 0, top: 0, height: 1, backgroundColor: BRAND_BLUE },
   headerGoldLine: { position: 'absolute', left: 0, right: 0, top: 2, height: 2, backgroundColor: BRAND_YELLOW },
-  headerRow: { position: 'absolute', top: 16, left: 40, right: 40, height: 48, flexDirection: 'row', alignItems: 'center' },
-  headerLogoWrap: { width: 58, height: 58, position: 'absolute', left: -2, top: 0, backgroundColor: '#fff', borderRadius: 29, padding: 6 },
-  headerLogo: { width: '100%', height: '100%' },
-  headerTitleWrap: { position: 'absolute', left: 0, right: 0, top: 10, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 20, color: BRAND_BLUE, fontWeight: 'bold', letterSpacing: 0.5, textAlign: 'center', marginLeft: 110 },
+
+  headerRow: {
+    position: 'absolute',
+    top: 18,
+    left: 40,
+    right: 40,
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  logoBox: { width: 56, height: 56, borderRadius: 8, overflow: 'hidden', backgroundColor: '#fff' },
+  logo: { width: '100%', height: '100%' },
+  brandTextWrap: { marginLeft: 12 },
+  brandTitle: { fontSize: 16, color: BRAND_BLUE, fontWeight: 'bold', letterSpacing: 0.2 },
+  brandSub: { fontSize: 9, color: TEXT_MUTED, marginTop: 2 },
+
+  titleRight: { alignItems: 'flex-end' },
+  docTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
 
   /* footer */
   footerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, height: FOOTER_H, paddingHorizontal: 40, justifyContent: 'flex-end', paddingBottom: 12 },
@@ -65,44 +84,65 @@ const pdfStyles = PDFStyleSheet.create({
   footerTextBlock: { textAlign: 'center', color: BRAND_BLUE },
   footerLine: { fontSize: 9, marginTop: 3, textAlign: 'center', lineHeight: 1.4 },
 
-  /* body */
-  h3: { fontSize: 16, marginBottom: 6, color: '#111827' },
-  small: { fontSize: 10, color: '#334155' },
-  row: { flexDirection: 'row', gap: 12 },
-  col: { flexGrow: 1 },
-  box: { padding: 10, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 12, backgroundColor: '#fff' },
+  /* blocks */
+  card: { padding: 12, border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: '#fff', marginBottom: 10 },
+  light: { backgroundColor: '#ffffff' },
+  label: { fontSize: 9, color: TEXT_MUTED, marginBottom: 4, textTransform: 'uppercase' },
+  strong: { fontSize: 11, fontWeight: 'bold' },
 
-  table: { width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', marginTop: 6 },
-  thead: { flexDirection: 'row', backgroundColor: '#f8fafc', borderBottom: '1px solid #e5e7eb' },
-  th: { flex: 1, padding: 8, fontSize: 11, fontWeight: 'bold' },
-  thSL: { width: 36, padding: 8, fontSize: 11, fontWeight: 'bold' },
-  tr: { flexDirection: 'row', borderBottom: '1px solid #f1f5f9' },
-  td: { flex: 1, padding: 8, fontSize: 11 },
-  tdSL: { width: 36, padding: 8, fontSize: 11, textAlign: 'right' },
+  twoCol: { flexDirection: 'row', gap: 12 },
+  col: { flex: 1 },
 
-  totalsRow: { flexDirection: 'row', gap: 12 },
-  totalsCol: { flexGrow: 1 },
-  totalBox: { padding: 10, border: '1px solid #f1f5f9', borderRadius: 8, backgroundColor: '#f8fff7' },
-  totalLabel: { fontSize: 11, marginBottom: 2 },
-  totalValue: { fontSize: 14, fontWeight: 'bold' },
+  /* invoice meta row */
+  metaRow: { flexDirection: 'row', gap: 12, marginTop: 6 },
+  metaItem: { flex: 1 },
+
+  /* table */
+  table: { width: '100%', borderRadius: 8, border: `1px solid ${BORDER}`, overflow: 'hidden', marginTop: 6 },
+  thead: { flexDirection: 'row', backgroundColor: ROW_ALT, borderBottom: `1px solid ${BORDER}` },
+  thSL: { width: 28, padding: 8, fontSize: 10, fontWeight: 'bold', color: TEXT_MUTED, textAlign: 'center' },
+  thProduct: { flexGrow: 1, padding: 8, fontSize: 10, fontWeight: 'bold', color: TEXT_MUTED },
+  thQty: { width: 60, padding: 8, fontSize: 10, fontWeight: 'bold', color: TEXT_MUTED, textAlign: 'right' },
+  thPrice: { width: 80, padding: 8, fontSize: 10, fontWeight: 'bold', color: TEXT_MUTED, textAlign: 'right' },
+  thAmount: { width: 90, padding: 8, fontSize: 10, fontWeight: 'bold', color: TEXT_MUTED, textAlign: 'right' },
+
+  tr: { flexDirection: 'row', borderBottom: `1px solid ${SOFT}` },
+  tdSL: { width: 28, padding: 8, fontSize: 11, textAlign: 'center' },
+  tdProduct: { flexGrow: 1, padding: 8, fontSize: 11 },
+  tdQty: { width: 60, padding: 8, fontSize: 11, textAlign: 'right' },
+  tdPrice: { width: 80, padding: 8, fontSize: 11, textAlign: 'right' },
+  tdAmount: { width: 90, padding: 8, fontSize: 11, textAlign: 'right' },
+
+  /* totals area */
+  totalsWrap: { flexDirection: 'row', marginTop: 10 },
+  totalsSpacer: { flex: 1 },
+  totalsBox: { width: 260, borderRadius: 8, border: `1px solid ${BORDER}`, backgroundColor: '#ffffff' },
+  totalsRow: { flexDirection: 'row', paddingVertical: 8, paddingHorizontal: 10, borderBottom: `1px solid ${SOFT}` },
+  totalsCellLabel: { flex: 1, fontSize: 11, color: TEXT_MUTED },
+  totalsCellValue: { width: 100, textAlign: 'right', fontSize: 11 },
+  grandRow: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 10, backgroundColor: ROW_ALT },
+  grandLabel: { flex: 1, fontSize: 12, fontWeight: 'bold' },
+  grandValue: { width: 100, textAlign: 'right', fontSize: 12, fontWeight: 'bold' },
 });
 
 /* --------------------------- PDF: component --------------------------- */
 function InvoicePDF({ order, fullName }) {
   const addressLines = [
-    '4th Floor, Safal Prelude,',
-    '404 Corporate Road, Near YMCA Club,',
-    'Prahlad Nagar, Ahmedabad,',
-    'Gujarat, India - 380015',
+    '4th Floor, Safal Prelude, 404 Corporate Road, Near YMCA Club,',
+    'Prahlad Nagar, Ahmedabad, Gujarat, India - 380015',
   ];
 
-  const lineItems = (order.productId || []).map((pid, i) => ({
+  const items = (order.productId || []).map((pid, i) => ({
     title: String(pid),
     qty: (order.quantity || [])[i] ?? 1,
     price: (order.price || [])[i] ?? 0,
   }));
 
-  const asMoney = (n) => `$${Number(n || 0).toFixed(2)}`;
+  const money = (n) => `$${Number(n || 0).toFixed(2)}`;
+  const subTotal = items.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0);
+  const shipping = Number(order.shippingCost || 0);
+  const discount = Number(order.discount || 0);
+  const grand = Number(order.total || subTotal + shipping - discount);
 
   return (
     <PDFDocument>
@@ -114,83 +154,115 @@ function InvoicePDF({ order, fullName }) {
             <PDFView style={pdfStyles.headerGoldLine} />
           </PDFView>
           <PDFView style={pdfStyles.headerRow}>
-            <PDFView style={pdfStyles.headerLogoWrap}>
-              {/* Next/Image asset isn't available inside the PDF runtime; use a public path */}
-              <PDFImage src="/apple-touch-icon.png" style={pdfStyles.headerLogo} />
+            <PDFView style={pdfStyles.headerLeft}>
+              <PDFView style={pdfStyles.logoBox}>
+                <PDFImage src={LOGO_URL} style={pdfStyles.logo} />
+              </PDFView>
+              <PDFView style={pdfStyles.brandTextWrap}>
+                <PDFText style={pdfStyles.brandTitle}>AMRITA GLOBAL ENTERPRISES</PDFText>
+                <PDFText style={pdfStyles.brandSub}>Textiles & Fabrics • B2B</PDFText>
+              </PDFView>
             </PDFView>
-            <PDFView style={pdfStyles.headerTitleWrap}>
-              <PDFText style={pdfStyles.headerTitle}>AMRITA GLOBAL ENTERPRISES</PDFText>
+            <PDFView style={pdfStyles.titleRight}>
+              <PDFText style={pdfStyles.docTitle}>INVOICE</PDFText>
             </PDFView>
           </PDFView>
         </PDFView>
 
-        {/* invoice header */}
-        <PDFView style={pdfStyles.box}>
-          <PDFText style={pdfStyles.h3}>Invoice</PDFText>
-          <PDFView style={pdfStyles.row}>
-            <PDFView style={pdfStyles.col}>
-              <PDFText><PDFText style={{ fontWeight: 'bold' }}>Order ID: </PDFText>#{order._id || '—'}</PDFText>
-              <PDFText><PDFText style={{ fontWeight: 'bold' }}>Date: </PDFText>{dayjs(order.createdAt).format('MMMM D, YYYY')}</PDFText>
-              <PDFText><PDFText style={{ fontWeight: 'bold' }}>Payment: </PDFText>{String(order.payment || '—').toUpperCase()}</PDFText>
-            </PDFView>
-            <PDFView style={pdfStyles.col}>
-              <PDFText style={{ fontWeight: 'bold', marginBottom: 4 }}>{fullName}</PDFText>
+        {/* Bill To / From + Meta */}
+        <PDFView style={pdfStyles.twoCol}>
+          <PDFView style={pdfStyles.col}>
+            <PDFView style={[pdfStyles.card, pdfStyles.light]}>
+              <PDFText style={pdfStyles.label}>Bill To</PDFText>
+              <PDFText style={pdfStyles.strong}>{fullName}</PDFText>
               {order.phone ? <PDFText>{order.phone}</PDFText> : null}
               {order.email ? <PDFText>{order.email}</PDFText> : null}
               {order.streetAddress ? <PDFText>{order.streetAddress}</PDFText> : null}
             </PDFView>
-            <PDFView style={pdfStyles.col}>
-              <PDFText style={{ fontWeight: 'bold', marginBottom: 4 }}>From</PDFText>
+          </PDFView>
+
+          <PDFView style={pdfStyles.col}>
+            <PDFView style={[pdfStyles.card, pdfStyles.light]}>
+              <PDFText style={pdfStyles.label}>From</PDFText>
+              <PDFText style={pdfStyles.strong}>Amrita Global Enterprises</PDFText>
               {addressLines.map((l, i) => <PDFText key={i}>{l}</PDFText>)}
+              <PDFText>info@amritafashions.com • +91 98240 03484</PDFText>
             </PDFView>
           </PDFView>
         </PDFView>
 
-        {/* table */}
-        <PDFView>
-          <PDFView style={pdfStyles.table}>
-            <PDFView style={pdfStyles.thead}>
-              <PDFText style={pdfStyles.thSL}>SL</PDFText>
-              <PDFText style={pdfStyles.th}>Product</PDFText>
-              <PDFText style={pdfStyles.th}>Quantity</PDFText>
-              <PDFText style={pdfStyles.th}>Item Price</PDFText>
-              <PDFText style={pdfStyles.th}>Amount</PDFText>
+        <PDFView style={[pdfStyles.card, pdfStyles.light]}>
+          <PDFView style={pdfStyles.metaRow}>
+            <PDFView style={pdfStyles.metaItem}>
+              <PDFText style={pdfStyles.label}>Invoice #</PDFText>
+              <PDFText style={pdfStyles.strong}>{order._id || '—'}</PDFText>
             </PDFView>
-            {(lineItems.length ? lineItems : [{ title: 'No items', qty: 0, price: 0 }]).map((li, i) => (
-              <PDFView key={i} style={pdfStyles.tr}>
-                <PDFText style={pdfStyles.tdSL}>{lineItems.length ? i + 1 : ''}</PDFText>
-                <PDFText style={pdfStyles.td}>{li.title}</PDFText>
-                <PDFText style={pdfStyles.td}>{li.qty}</PDFText>
-                <PDFText style={pdfStyles.td}>{asMoney(li.price)}</PDFText>
-                <PDFText style={pdfStyles.td}>{asMoney(Number(li.price) * Number(li.qty))}</PDFText>
-              </PDFView>
-            ))}
+            <PDFView style={pdfStyles.metaItem}>
+              <PDFText style={pdfStyles.label}>Date</PDFText>
+              <PDFText style={pdfStyles.strong}>{dayjs(order.createdAt).format('MMMM D, YYYY')}</PDFText>
+            </PDFView>
+            <PDFView style={pdfStyles.metaItem}>
+              <PDFText style={pdfStyles.label}>Payment</PDFText>
+              <PDFText style={pdfStyles.strong}>{String(order.payment || '—').toUpperCase()}</PDFText>
+            </PDFView>
+            <PDFView style={pdfStyles.metaItem}>
+              <PDFText style={pdfStyles.label}>Shipping</PDFText>
+              <PDFText style={pdfStyles.strong}>{String(order.shipping || '—').toUpperCase()}</PDFText>
+            </PDFView>
           </PDFView>
         </PDFView>
 
-        {/* totals */}
-        <PDFView style={{ marginTop: 10 }}>
-          <PDFView style={pdfStyles.totalsRow}>
-            <PDFView style={pdfStyles.totalsCol}>
-              {order.shippingInstructions ? (
-                <PDFView style={pdfStyles.box}>
-                  <PDFText style={{ fontWeight: 'bold', marginBottom: 4 }}>Shipping Instructions</PDFText>
-                  <PDFText style={pdfStyles.small}>{order.shippingInstructions}</PDFText>
-                </PDFView>
-              ) : null}
+        {/* Items table */}
+        <PDFView style={pdfStyles.table}>
+          <PDFView style={pdfStyles.thead}>
+            <PDFText style={pdfStyles.thSL}>#</PDFText>
+            <PDFText style={pdfStyles.thProduct}>Product</PDFText>
+            <PDFText style={pdfStyles.thQty}>Qty</PDFText>
+            <PDFText style={pdfStyles.thPrice}>Price</PDFText>
+            <PDFText style={pdfStyles.thAmount}>Amount</PDFText>
+          </PDFView>
+
+          {(items.length ? items : [{ title: 'No items', qty: 0, price: 0 }]).map((it, i) => (
+            <PDFView key={i} style={pdfStyles.tr}>
+              <PDFText style={pdfStyles.tdSL}>{items.length ? i + 1 : ''}</PDFText>
+              <PDFText style={pdfStyles.tdProduct}>{it.title}</PDFText>
+              <PDFText style={pdfStyles.tdQty}>{it.qty}</PDFText>
+              <PDFText style={pdfStyles.tdPrice}>{money(it.price)}</PDFText>
+              <PDFText style={pdfStyles.tdAmount}>{money(Number(it.price) * Number(it.qty))}</PDFText>
             </PDFView>
-            <PDFView style={{ width: 220 }}>
-              <PDFView style={pdfStyles.totalBox}>
-                <PDFText style={pdfStyles.totalLabel}>Shipping Cost</PDFText>
-                <PDFText>{asMoney(order.shippingCost)}</PDFText>
-                <PDFText style={[pdfStyles.totalLabel, { marginTop: 6 }]}>Discount</PDFText>
-                <PDFText>{asMoney(order.discount)}</PDFText>
-                <PDFText style={[pdfStyles.totalLabel, { marginTop: 6 }]}>Total Amount</PDFText>
-                <PDFText style={pdfStyles.totalValue}>{asMoney(order.total)}</PDFText>
-              </PDFView>
+          ))}
+        </PDFView>
+
+        {/* Totals */}
+        <PDFView style={pdfStyles.totalsWrap}>
+          <PDFView style={pdfStyles.totalsSpacer} />
+          <PDFView style={pdfStyles.totalsBox}>
+            <PDFView style={pdfStyles.totalsRow}>
+              <PDFText style={pdfStyles.totalsCellLabel}>Subtotal</PDFText>
+              <PDFText style={pdfStyles.totalsCellValue}>{money(subTotal)}</PDFText>
+            </PDFView>
+            <PDFView style={pdfStyles.totalsRow}>
+              <PDFText style={pdfStyles.totalsCellLabel}>Shipping</PDFText>
+              <PDFText style={pdfStyles.totalsCellValue}>{money(shipping)}</PDFText>
+            </PDFView>
+            <PDFView style={pdfStyles.totalsRow}>
+              <PDFText style={pdfStyles.totalsCellLabel}>Discount</PDFText>
+              <PDFText style={pdfStyles.totalsCellValue}>{money(discount)}</PDFText>
+            </PDFView>
+            <PDFView style={pdfStyles.grandRow}>
+              <PDFText style={pdfStyles.grandLabel}>Total</PDFText>
+              <PDFText style={pdfStyles.grandValue}>{money(grand)}</PDFText>
             </PDFView>
           </PDFView>
         </PDFView>
+
+        {/* Notes */}
+        {order.shippingInstructions ? (
+          <PDFView style={[pdfStyles.card, { marginTop: 10 }]}>
+            <PDFText style={pdfStyles.label}>Notes / Shipping Instructions</PDFText>
+            <PDFText>{order.shippingInstructions}</PDFText>
+          </PDFView>
+        ) : null}
 
         {/* footer */}
         <PDFView style={pdfStyles.footerWrap} fixed>
@@ -265,22 +337,20 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
     `${order.firstName || ''} ${order.lastName || ''}`.trim() ||
     (user?.name ?? 'Customer');
 
-  // Build table rows from arrays (fallback names are product IDs since this endpoint doesn’t send names)
   const lineItems = (order.productId || []).map((pid, i) => ({
     title: String(pid),
     qty: (order.quantity || [])[i] ?? 1,
     price: (order.price || [])[i] ?? 0,
   }));
 
-  /* ----------------------- PRINT & PDF (A4, header/footer) ----------------------- */
-
+  /* ----------------------- PRINT -> PDF (A4, header/footer) ----------------------- */
   const handlePrint = useCallback(async () => {
     try {
       const instance = pdfRenderer(<InvoicePDF order={order} fullName={fullName} />);
       const blob = await instance.toBlob();
       const url = URL.createObjectURL(blob);
 
-      // trigger download
+      // download
       const a = document.createElement('a');
       a.href = url;
       a.download = `Invoice_${order._id || dayjs().format('YYYYMMDD_HHmmss')}.pdf`;
@@ -288,13 +358,12 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
       a.click();
       a.remove();
 
-      // also open in a new tab for quick view (optional)
+      // preview tab (optional)
       window.open(url, '_blank', 'noopener,noreferrer');
-      // revoke later
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } catch (e) {
       console.error('PDF generation failed, falling back to browser print.', e);
-      window.print(); // fallback
+      window.print();
     }
   }, [order, fullName]);
 
@@ -328,25 +397,40 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                 <div className="col-xl-12">
                   <div className="invoice__header pb-20">
                     <div className="row align-items-end">
-                      <div className="col-md-4 col-sm-6">
-                        <div className="invoice__left">
-                          <NextImage src={logo} alt="logo" width={140} height={45} />
-                          <h3>Amrita Global Enterprises</h3>
-                          <p>
-                            4th Floor, Safal Prelude ,<br />
-                            404 Corporate Road, Near YMCA Club, <br />
-                            Prahlad Nagar, Ahmedabad, <br />
-                            Gujarat,India - 380015
-                          </p>
+                      <div className="col-md-6 col-sm-6">
+                        <div className="invoice__left" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <NextImage src={LOGO_URL} alt="logo" width={140} height={45} />
+                          <div>
+                            <h3 className="mb-5">Amrita Global Enterprises</h3>
+                            <p className="mb-0" style={{ color: '#475569' }}>Textiles & Fabrics • B2B</p>
+                          </div>
                         </div>
                       </div>
-                      <div className="col-md-8 col-sm-6">
+                      <div className="col-md-6 col-sm-6">
                         <div className="invoice__right mt-15 mt-sm-0 text-sm-end">
-                          <h3 className="text-uppercase font-70 mb-20">Invoice</h3>
+                          <h3 className="text-uppercase font-70 mb-10">Invoice</h3>
                           <p className="mb-0"><strong>Order ID:</strong> #{order._id || '—'}</p>
-                          <p className="mb-0">
-                            <strong>Date:</strong> {dayjs(order.createdAt).format('MMMM D, YYYY')}
-                          </p>
+                          <p className="mb-0"><strong>Date:</strong> {dayjs(order.createdAt).format('MMMM D, YYYY')}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="row mt-20">
+                      <div className="col-md-6">
+                        <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
+                          <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Bill To</div>
+                          <div style={{ fontWeight: 600 }}>{fullName}</div>
+                          {(order.phone || user?.phone) && <div>{order.phone || user?.phone}</div>}
+                          {(order.email || user?.email) && <div>{order.email || user?.email}</div>}
+                          {(order.streetAddress || user?.address) && <div>{order.streetAddress || user?.address}</div>}
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
+                          <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>From</div>
+                          <div style={{ fontWeight: 600 }}>Amrita Global Enterprises</div>
+                          <div>4th Floor, Safal Prelude, 404 Corporate Road, Near YMCA Club,</div>
+                          <div>Prahlad Nagar, Ahmedabad, Gujarat, India - 380015</div>
+                          <div>info@amritafashions.com • +91 98240 03484</div>
                         </div>
                       </div>
                     </div>
@@ -355,41 +439,27 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
               </div>
             </div>
 
-            <div className="invoice__customer mb-30">
-              <div className="row">
-                <div className="col-md-6 col-sm-8">
-                  <div className="invoice__customer-details">
-                    <h4 className="mb-10 text-uppercase">{fullName}</h4>
-                    {(order.phone || user?.phone) && <p className="mb-0">{order.phone || user?.phone}</p>}
-                    {(order.email || user?.email) && <p className="mb-0">{order.email || user?.email}</p>}
-                    {(order.streetAddress || user?.address) && (
-                      <p className="mb-0">{order.streetAddress || user?.address}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="invoice__order-table pt-30 pb-30 pl-40 pr-40 bg-white mb-30">
-              <table className="table">
+            {/* items */}
+            <div className="invoice__order-table pt-20 pb-20 pl-40 pr-40 bg-white mb-30" style={{ border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              <table className="table" style={{ marginBottom: 0 }}>
                 <thead className="table-light">
                   <tr>
-                    <th scope="col">SL</th>
-                    <th scope="col">Product</th>
-                    <th scope="col">Quantity</th>
-                    <th scope="col">Item Price</th>
-                    <th scope="col">Amount</th>
+                    <th style={{ width: 40, textAlign: 'center' }}>#</th>
+                    <th>Product</th>
+                    <th style={{ width: 80, textAlign: 'right' }}>Qty</th>
+                    <th style={{ width: 110, textAlign: 'right' }}>Price</th>
+                    <th style={{ width: 120, textAlign: 'right' }}>Amount</th>
                   </tr>
                 </thead>
                 <tbody className="table-group-divider">
                   {lineItems.length ? (
                     lineItems.map((li, i) => (
                       <tr key={i}>
-                        <td>{i + 1}</td>
+                        <td style={{ textAlign: 'center' }}>{i + 1}</td>
                         <td>{li.title}</td>
-                        <td>{li.qty}</td>
-                        <td>${Number(li.price).toFixed(2)}</td>
-                        <td>${(Number(li.price) * Number(li.qty)).toFixed(2)}</td>
+                        <td style={{ textAlign: 'right' }}>{li.qty}</td>
+                        <td style={{ textAlign: 'right' }}>${Number(li.price).toFixed(2)}</td>
+                        <td style={{ textAlign: 'right' }}>${(Number(li.price) * Number(li.qty)).toFixed(2)}</td>
                       </tr>
                     ))
                   ) : (
@@ -401,32 +471,32 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
               </table>
             </div>
 
-            <div className="invoice__total pt-40 pb-10 alert-success pl-40 pr-40 mb-30">
+            {/* totals */}
+            <div className="pl-40 pr-40 mb-30">
               <div className="row">
-                <div className="col-lg-3 col-md-4">
-                  <div className="invoice__payment-method mb-30">
-                    <h5 className="mb-0">Payment Method</h5>
-                    <p className="tp-font-medium text-uppercase">{order.payment}</p>
-                  </div>
-                </div>
-                <div className="col-lg-3 col-md-4">
-                  <div className="invoice__shippint-cost mb-30">
-                    <h5 className="mb-0">Shipping Cost</h5>
-                    <p className="tp-font-medium">${Number(order.shippingCost || 0).toFixed(2)}</p>
-                  </div>
-                </div>
-                <div className="col-lg-3 col-md-4">
-                  <div className="invoice__discount-cost mb-30">
-                    <h5 className="mb-0">Discount</h5>
-                    <p className="tp-font-medium">${Number(order.discount || 0).toFixed(2)}</p>
-                  </div>
-                </div>
-                <div className="col-lg-3 col-md-4">
-                  <div className="invoice__total-ammount mb-30">
-                    <h5 className="mb-0">Total Amount</h5>
-                    <p className="tp-font-medium text-danger">
-                      <strong>${Number(order.total || 0).toFixed(2)}</strong>
-                    </p>
+                <div className="col-lg-7"></div>
+                <div className="col-lg-5">
+                  <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
+                    <div className="d-flex justify-content-between mb-2" style={{ color: '#64748b' }}>
+                      <span>Subtotal</span>
+                      <span>
+                        ${
+                          lineItems.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0).toFixed(2)
+                        }
+                      </span>
+                    </div>
+                    <div className="d-flex justify-content-between mb-2" style={{ color: '#64748b' }}>
+                      <span>Shipping</span>
+                      <span>${Number(order.shippingCost || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="d-flex justify-content-between mb-2" style={{ color: '#64748b' }}>
+                      <span>Discount</span>
+                      <span>${Number(order.discount || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="d-flex justify-content-between pt-2 mt-2" style={{ borderTop: '1px solid #e5e7eb', fontWeight: 700 }}>
+                      <span>Total</span>
+                      <span>${Number(order.total || (lineItems.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0) + Number(order.shippingCost || 0) - Number(order.discount || 0))).toFixed(2)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -434,7 +504,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
 
             {order.shippingInstructions ? (
               <div className="pl-40 pr-40 mb-20">
-                <strong>Shipping Instructions:</strong> {order.shippingInstructions}
+                <strong>Notes:</strong> {order.shippingInstructions}
               </div>
             ) : null}
           </div>
@@ -455,16 +525,14 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
         </div>
       </section>
 
-      {/* Keep global print styles active for in-window prints as well */}
+      {/* Global print hints if user uses native browser print */}
       <style jsx global>{`
-        @page {
-          size: A4;
-          margin: 16mm;
-        }
+        @page { size: A4; margin: 16mm; }
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .tp-invoice-print-wrapper { box-shadow: none !important; }
           .tp-btn, .invoice__print { display: none !important; }
+          table.table thead th { background: #f8fafc !important; }
         }
       `}</style>
     </>
