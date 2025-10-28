@@ -38,8 +38,7 @@ const ROW_ALT = '#f8fafc';
 const SOFT = '#f1f5f9';
 
 // Your logo (WEBP). React-PDF can’t render WEBP reliably, so we proxy to PNG.
- const LOGO_WEB_URL =
-   'https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp';
+ const LOGO_WEB_URL ='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJM0g6DS-JDkn7VvBDb6KfRzbS8ZiZfnuHJQ&s'
 
 // Convert any image URL to a PNG via Cloudinary “fetch” (no account needed for demo domain).
 // If you have your own Cloudinary cloud, replace `demo` with your cloud name.
@@ -418,7 +417,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                 <div className="col-md-7 col-sm-12">
                   <div className="d-flex align-items-center" style={{ gap: 12 }}>
                     <img
-                      src={LOGO_WEB_URL}
+                      src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJM0g6DS-JDkn7VvBDb6KfRzbS8ZiZfnuHJQ&s"
                       alt="Amrita Global Enterprises"
                       width={110}
                       height={50}
