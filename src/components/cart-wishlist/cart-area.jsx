@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 
@@ -12,23 +12,9 @@ import {
   useClearCartMutation
 } from '@/redux/features/cartApi';
 
-/* helper to safely read local userId */
-const getLocalUserId = () => {
-  try {
-    if (typeof window !== 'undefined') {
-      const id = localStorage.getItem('userId');
-      return id && id.trim() ? id.trim() : null;
-    }
-  } catch (err) {
-    console.log("Error accessing localStorage for userId:", err);
-  }
-  return null;
-};
-
 const CartArea = () => {
-  const reduxUserId = useSelector(selectUserId);
+  const userId = useSelector(selectUserId);
   const router = useRouter();
-  const footerRef = useRef(null);
   const [isFooterVisible, setIsFooterVisible] = useState(false);
   const [isProceeding, setIsProceeding] = useState(false);
 
@@ -37,7 +23,7 @@ const CartArea = () => {
     isLoading,
     error,
     refetch
-  } = useGetCartDataQuery(reduxUserId, { skip: !reduxUserId });
+  } = useGetCartDataQuery(userId, { skip: !userId });
 
   const [clearCart, { isLoading: isClearing }] = useClearCartMutation();
 
@@ -66,52 +52,27 @@ const CartArea = () => {
     }
   };
 
+  // ✅ Proceed only navigates – no API calls here
   const handleCheckout = async () => {
     if (isProceeding) return;
     setIsProceeding(true);
-
-    const uid = getLocalUserId();
-    if (uid) {
-      const url = `https://test.amrita-fashions.com/shopy/cart/clear/${uid}`;
-      try {
-        let res = await fetch(url, {
-          method: 'DELETE',
-          headers: { Accept: 'application/json' },
-          cache: 'no-store',
-        });
-
-        if (!res.ok && (res.status === 405 || res.status === 404)) {
-          res = await fetch(url, {
-            method: 'POST',
-            headers: { Accept: 'application/json' },
-            cache: 'no-store',
-          });
-        }
-
-        if (!res.ok) {
-          console.warn('Clear cart before checkout did not succeed:', res.status);
-        }
-      } catch (err) {
-        console.warn('Clear cart request failed (proceeding anyway):', err);
-      }
+    try {
+      router.push('/checkout');
+    } finally {
+      setIsProceeding(false);
     }
-
-    router.push('/checkout');
-    setIsProceeding(false);
   };
 
-  // Detect when footer enters view to hide sticky buttons
+  // Hide sticky bar when footer is in view
   useEffect(() => {
     const footerEl = document.querySelector('footer');
     if (!footerEl) return;
-
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => setIsFooterVisible(entry.isIntersecting));
       },
       { threshold: 0.1 }
     );
-
     observer.observe(footerEl);
     return () => observer.disconnect();
   }, []);
@@ -238,116 +199,48 @@ const CartArea = () => {
       )}
 
       <style jsx>{`
-        .tp-cart-table {
-          width: 100%;
-          table-layout: fixed;
-        }
+        .tp-cart-table { width: 100%; table-layout: fixed; }
+        thead th { font-weight: 700; color: #0f172a; padding: 10px 12px; }
+        .text-right { text-align: right; }
 
-        thead th {
-          font-weight: 700;
-          color: #0f172a;
-          padding: 10px 12px;
-        }
-        .text-right {
-          text-align: right;
-        }
-
-        /* === BUTTON STYLE === */
         .btn-ghost-invert {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          min-height: 44px;
-          padding: 10px 18px;
-          font-weight: 600;
-          font-size: 15px;
-          line-height: 1;
-          cursor: pointer;
-          user-select: none;
-          background: var(--tp-theme-primary);
-          color: var(--tp-common-white);
+          display: inline-flex; align-items: center; gap: 8px;
+          min-height: 44px; padding: 10px 18px; font-weight: 600; font-size: 15px; line-height: 1;
+          cursor: pointer; user-select: none;
+          background: var(--tp-theme-primary); color: var(--tp-common-white);
           border: 1px solid var(--tp-theme-primary);
-          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+          box-shadow: 0 6px 18px rgba(0,0,0,0.12);
           transition: all 0.18s ease;
         }
-
-        .btn-ghost-invert.square {
-          border-radius: 0;
-        }
-
+        .btn-ghost-invert.square { border-radius: 0; }
         .btn-ghost-invert:hover {
-          background-color: var(--tp-common-white);
+          background: var(--tp-common-white);
           border-color: var(--tp-theme-primary);
           color: var(--tp-theme-primary);
-          box-shadow: 0 0 0 1px var(--tp-theme-primary) inset, 0 8px 20px rgba(0, 0, 0, 0.08);
+          box-shadow: 0 0 0 1px var(--tp-theme-primary) inset, 0 8px 20px rgba(0,0,0,0.08);
           transform: translateY(-1px);
         }
+        .btn-ghost-invert.is-loading, .btn-ghost-invert:disabled { pointer-events: none; opacity: 0.85; }
+        .btn-icon { display: inline-flex; line-height: 0; }
+        .btn-label { white-space: nowrap; }
 
-        .btn-ghost-invert.is-loading,
-        .btn-ghost-invert:disabled {
-          pointer-events: none;
-          opacity: 0.85;
-        }
-
-        .btn-icon {
-          display: inline-flex;
-          line-height: 0;
-        }
-
-        .btn-label {
-          white-space: nowrap;
-        }
-
-        /* === Sticky Bottom Bar === */
         .sticky-action-bar {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          width: 100%;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          background: #ffffff;
-          padding: 12px 24px;
-          box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
-          z-index: 1000;
-          transition: transform 0.3s ease, opacity 0.3s ease;
+          position: fixed; bottom: 0; left: 0; width: 100%;
+          display: flex; justify-content: space-between; align-items: center;
+          background: #ffffff; padding: 12px 24px;
+          box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+          z-index: 1000; transition: transform .3s ease, opacity .3s ease;
         }
+        .sticky-action-bar.hide { transform: translateY(100%); opacity: 0; pointer-events: none; }
 
-        .sticky-action-bar.hide {
-          transform: translateY(100%);
-          opacity: 0;
-          pointer-events: none;
-        }
+        .left-actions, .right-actions { display: flex; align-items: center; gap: 12px; }
 
-        .left-actions,
-        .right-actions {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .proceed-btn {
-          background: var(--tp-theme-secondary, #0f172a);
-          border-color: var(--tp-theme-secondary, #0f172a);
-        }
-
-        .proceed-btn:hover {
-          background: var(--tp-common-white);
-          color: var(--tp-theme-secondary, #0f172a);
-        }
+        .proceed-btn { background: var(--tp-theme-secondary, #0f172a); border-color: var(--tp-theme-secondary, #0f172a); }
+        .proceed-btn:hover { background: var(--tp-common-white); color: var(--tp-theme-secondary, #0f172a); }
 
         @media (max-width: 640px) {
-          .sticky-action-bar {
-            flex-direction: column;
-            gap: 10px;
-            align-items: stretch;
-          }
-          .left-actions,
-          .right-actions {
-            justify-content: space-between;
-            width: 100%;
-          }
+          .sticky-action-bar { flex-direction: column; gap: 10px; align-items: stretch; }
+          .left-actions, .right-actions { justify-content: space-between; width: 100%; }
         }
       `}</style>
     </>
