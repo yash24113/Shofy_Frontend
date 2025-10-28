@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 
@@ -19,13 +19,18 @@ const getLocalUserId = () => {
       const id = localStorage.getItem('userId');
       return id && id.trim() ? id.trim() : null;
     }
-  } catch(err) {console.log("Error accessing localStorage for userId:", err);}
+  } catch (err) {
+    console.log("Error accessing localStorage for userId:", err);
+  }
   return null;
 };
 
 const CartArea = () => {
   const reduxUserId = useSelector(selectUserId);
   const router = useRouter();
+  const footerRef = useRef(null);
+  const [isFooterVisible, setIsFooterVisible] = useState(false);
+  const [isProceeding, setIsProceeding] = useState(false);
 
   const {
     data: cartResponse,
@@ -35,7 +40,6 @@ const CartArea = () => {
   } = useGetCartDataQuery(reduxUserId, { skip: !reduxUserId });
 
   const [clearCart, { isLoading: isClearing }] = useClearCartMutation();
-  const [isProceeding, setIsProceeding] = useState(false);
 
   const cart_products =
     cartResponse?.data?.items?.map((item) =>
@@ -70,14 +74,12 @@ const CartArea = () => {
     if (uid) {
       const url = `https://test.amrita-fashions.com/shopy/cart/clear/${uid}`;
       try {
-        // Try DELETE first
         let res = await fetch(url, {
           method: 'DELETE',
           headers: { Accept: 'application/json' },
           cache: 'no-store',
         });
 
-        // Some backends use POST for clear — fallback if DELETE not allowed
         if (!res.ok && (res.status === 405 || res.status === 404)) {
           res = await fetch(url, {
             method: 'POST',
@@ -94,10 +96,25 @@ const CartArea = () => {
       }
     }
 
-    // Navigate to checkout regardless — UX-first
     router.push('/checkout');
     setIsProceeding(false);
   };
+
+  // Detect when footer enters view to hide sticky buttons
+  useEffect(() => {
+    const footerEl = document.querySelector('footer');
+    if (!footerEl) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => setIsFooterVisible(entry.isIntersecting));
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(footerEl);
+    return () => observer.disconnect();
+  }, []);
 
   if (isLoading) {
     return (
@@ -183,7 +200,7 @@ const CartArea = () => {
 
       {/* Sticky Bottom Action Bar */}
       {cart_products.length > 0 && (
-        <div className="sticky-action-bar">
+        <div className={`sticky-action-bar ${isFooterVisible ? 'hide' : ''}`}>
           <div className="left-actions">
             <button
               type="button"
@@ -251,7 +268,7 @@ const CartArea = () => {
           color: var(--tp-common-white);
           border: 1px solid var(--tp-theme-primary);
           box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-          transition: color 0.18s, background-color 0.18s, border-color 0.18s, box-shadow 0.18s, transform 0.12s;
+          transition: all 0.18s ease;
         }
 
         .btn-ghost-invert.square {
@@ -294,6 +311,13 @@ const CartArea = () => {
           padding: 12px 24px;
           box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
           z-index: 1000;
+          transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        .sticky-action-bar.hide {
+          transform: translateY(100%);
+          opacity: 0;
+          pointer-events: none;
         }
 
         .left-actions,
