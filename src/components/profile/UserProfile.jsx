@@ -14,7 +14,6 @@ import {
   Text as PDFText,
   View as PDFView,
   StyleSheet as PDFStyleSheet,
-  Image as PDFImage,
 } from '@react-pdf/renderer';
 
 import {
@@ -27,7 +26,7 @@ import { notifyError, notifySuccess } from '@/utils/toast';
 import styles from './UserProfile.module.css';
 
 /* ---------------- helpers ---------------- */
-const pickInitialUser = (reduxUser: any) => {
+const pickInitialUser = (reduxUser) => {
   if (reduxUser) return reduxUser;
   const cookie = Cookies.get('userInfo');
   if (!cookie) return null;
@@ -37,7 +36,7 @@ const pickInitialUser = (reduxUser: any) => {
 const readUserInfoCookie = () => {
   try { return JSON.parse(Cookies.get('userInfo') || '{}'); } catch { return {}; }
 };
-const writeUserInfoCookiePreserving = (updatedUser: any) => {
+const writeUserInfoCookiePreserving = (updatedUser) => {
   const prev = readUserInfoCookie();
   Cookies.set('userInfo', JSON.stringify({ ...prev, user: updatedUser }), { expires: 0.5 });
 };
@@ -48,11 +47,10 @@ const initials = (name = '') =>
 const onlyDigits = (s='') => (s || '').replace(/\D+/g, '');
 const normalizeDial = (s='') => (s ? (s.startsWith('+') ? s : `+${s}`) : '');
 
-const cleanString = (v: any) => (typeof v === 'string' ? v.trim() : v);
+const cleanString = (v) => (typeof v === 'string' ? v.trim() : v);
 
-/** Return an object of only changed keys vs baseline, skipping undefined. */
-const diffPayload = (next: any, base: any, allowEmptyKeys = new Set()) => {
-  const out: any = {};
+const diffPayload = (next, base, allowEmptyKeys = new Set()) => {
+  const out = {};
   Object.keys(next).forEach((k) => {
     const nv = next[k];
     const bv = base?.[k];
@@ -111,12 +109,7 @@ const pdfStyles = PDFStyleSheet.create({
   col: { flex: 1 },
   label: { fontSize: 8, color: '#6B7280', marginBottom: 2 },
   value: { fontSize: 10, color: '#111827' },
-  badgeTitle: {
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: 700,
-    marginVertical: 8
-  },
+  badgeTitle: { textAlign: 'center', fontSize: 12, fontWeight: 700, marginVertical: 8 },
   metaRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   metaItem: { flex: 1, border: 1, borderColor: '#E5E7EB', borderRadius: 6, padding: 8 },
   table: { marginTop: 12, borderRadius: 6, border: 1, borderColor: '#E5E7EB' },
@@ -134,23 +127,20 @@ const pdfStyles = PDFStyleSheet.create({
 
 /* =============================== Component =============================== */
 export default function UserProfile() {
-  /* ---------- Client-side guard: if no session, redirect ---------- */
+  /* Guard: if no session, redirect */
   useEffect(() => {
     const sid = getClientSessionId();
     if (!sid) redirectToLogin();
   }, []);
-  /* --------------------------------------------------------------------- */
 
-  const authUser = useSelector((s: any) => s?.auth?.user);
+  const authUser = useSelector((s) => s?.auth?.user);
   const cookieUser = useMemo(() => pickInitialUser(authUser), [authUser]);
   const derivedUserId = (authUser?._id || cookieUser?._id);
 
-  // Persist userId to localStorage as soon as we know it
   useEffect(() => {
     if (derivedUserId) localStorage.setItem('userId', String(derivedUserId));
   }, [derivedUserId]);
 
-  // Fallback userId from localStorage
   const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
   const userId = derivedUserId || storedUserId || null;
 
@@ -162,7 +152,7 @@ export default function UserProfile() {
     });
 
   // optimistic local user
-  const [localUser, setLocalUser] = useState<any>(null);
+  const [localUser, setLocalUser] = useState(null);
   const user = {
     ...(localUser || authUser || sessionData?.session?.user || cookieUser || {}),
     avatar: (localUser?.userImage || authUser?.userImage || sessionData?.session?.user?.userImage || cookieUser?.userImage)
@@ -170,28 +160,28 @@ export default function UserProfile() {
       : (localUser?.avatar || authUser?.avatar || sessionData?.session?.user?.avatar || cookieUser?.avatar)
   };
 
-  const [logoutUser] = useLogoutUserMutation() as any;
-  const [updateProfile, { isLoading: saving }] = useUpdateProfileMutation() as any;
+  const [logoutUser] = useLogoutUserMutation();
+  const [updateProfile, { isLoading: saving }] = useUpdateProfileMutation();
 
-  const [active, setActive] = useState<'profile'|'edit'|'booking'>('profile');
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [active, setActive] = useState('profile');
+  const [avatarPreview, setAvatarPreview] = useState(null);
 
   /* Countries + dial codes */
-  const [countries, setCountries] = useState<any[]>([]);
+  const [countries, setCountries] = useState([]);
   const [dialSelected, setDialSelected] = useState(''); // +91
   const [phoneLocal, setPhoneLocal] = useState('');     // digits only
 
   /* Dependent state/city */
   const [countryName, setCountryName] = useState(user?.country || '');
-  const [states, setStates] = useState<any[]>([]);
+  const [states, setStates] = useState([]);
   const [stateName, setStateName] = useState(user?.state || '');
-  const [cities, setCities] = useState<string[]>([]);
+  const [cities, setCities] = useState([]);
   const [cityName, setCityName] = useState(user?.city || '');
 
   /* -------------------- Orders (My Orders tab) -------------------- */
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
-  const [ordersErr, setOrdersErr] = useState<string | null>(null);
+  const [ordersErr, setOrdersErr] = useState(null);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -200,13 +190,13 @@ export default function UserProfile() {
       setOrdersErr(null);
       try {
         const res = await fetch(`https://test.amrita-fashions.com/shopy/orders/user/${userId}`, {
-          headers: { 'Accept': 'application/json' },
+          headers: { Accept: 'application/json' },
           cache: 'no-store',
         });
         const json = await res.json();
         const list = json?.data?.orders || [];
         setOrders(Array.isArray(list) ? list : []);
-      } catch (e: any) {
+      } catch (e) {
         setOrdersErr('Failed to load orders');
       } finally {
         setOrdersLoading(false);
@@ -232,7 +222,7 @@ export default function UserProfile() {
   });
 
   useEffect(() => {
-    if (!avatarPreview || avatarPreview.startsWith('data:image')) {
+    if (!avatarPreview || (typeof avatarPreview === 'string' && avatarPreview.startsWith('data:image'))) {
       setAvatarPreview(user?.userImage || user?.avatarUrl || user?.avatar || null);
     }
     setCountryName(user?.country || '');
@@ -255,7 +245,7 @@ export default function UserProfile() {
         const res = await fetch('https://restcountries.com/v3.1/all?fields=name,idd,cca2,flags');
         const raw = await res.json();
         const list = (raw || [])
-          .map((r: any) => {
+          .map((r) => {
             const root = r?.idd?.root || '';
             const suffixes = r?.idd?.suffixes || [];
             const dial = root && suffixes && suffixes.length ? `${root}${suffixes[0]}` : root || '';
@@ -266,8 +256,8 @@ export default function UserProfile() {
               flagPng: r?.flags?.png || '',
             };
           })
-          .filter((x: any) => x.cca2 && x.name && x.dial && x.flagPng)
-          .sort((a: any,b: any) => a.name.localeCompare(b.name));
+          .filter((x) => x.cca2 && x.name && x.dial && x.flagPng)
+          .sort((a,b) => a.name.localeCompare(b.name));
         if (mounted) setCountries(list);
       } catch {
         setCountries([]);
@@ -290,7 +280,7 @@ export default function UserProfile() {
         const list = json?.data?.states || [];
         if (!abort) {
           setStates(list);
-          if (!list.find((s: any) => s.name === stateName)) {
+          if (!list.find((s) => s.name === stateName)) {
             setStateName(''); setCities([]); setCityName('');
           }
         }
@@ -325,28 +315,29 @@ export default function UserProfile() {
   }, [countryName, stateName]);
 
   /* ---------------- Avatar pick ---------------- */
-  const onPickAvatar = (file?: File) => {
+  const onPickAvatar = (file) => {
     if (!file) return;
     if (!file.type.match('image.*')) { notifyError('Please select a valid image file'); return; }
     if (file.size > 5 * 1024 * 1024) { notifyError('Image size should be less than 5MB'); return; }
     const reader = new FileReader();
-    reader.onload = (e: any) => {
-      setAvatarPreview(e.target.result);
-      setLocalUser((prev: any) => ({ ...prev, userImage: e.target.result, avatar: e.target.result }));
+    reader.onload = (e) => {
+      const result = e.target?.result || null;
+      setAvatarPreview(result);
+      setLocalUser((prev) => ({ ...(prev || {}), userImage: result, avatar: result }));
     };
     reader.onerror = () => notifyError('Failed to read the image file');
     reader.readAsDataURL(file);
   };
 
   /* ---------------- Save profile ---------------- */
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data) => {
     if (!userId) { notifyError('Cannot update profile: user not identified.'); return; }
 
     const composedPhone = (dialSelected && phoneLocal)
       ? `${normalizeDial(dialSelected)}${onlyDigits(phoneLocal)}`
       : (data.phone || '');
 
-    const candidate: any = {
+    const candidate = {
       ...user,
       ...data,
       phone: composedPhone || user?.phone || '',
@@ -386,14 +377,15 @@ export default function UserProfile() {
       return;
     }
 
-    let updatedResp: any = null;
+    let updatedResp = null;
     try {
-      updatedResp = await (updateProfile as any)({ id: userId, ...changed }).unwrap();
-    } catch (e1: any) {
+      updatedResp = await updateProfile({ id: userId, ...changed }).unwrap();
+    } catch (e1) {
       try {
-        updatedResp = await (updateProfile as any)({ id: userId, body: changed }).unwrap();
-      } catch (e2: any) {
-        const msg = e2?.data?.message || e1?.data?.message || e2?.error || e1?.error || 'Update failed';
+        updatedResp = await updateProfile({ id: userId, body: changed }).unwrap();
+      } catch (e2) {
+        const msg =
+          e2?.data?.message || e1?.data?.message || e2?.error || e1?.error || 'Update failed';
         notifyError(msg);
         return;
       }
@@ -423,12 +415,12 @@ export default function UserProfile() {
     });
     setAvatarPreview(updatedUser?.avatarUrl || updatedUser?.avatar || null);
 
-    try { writeUserInfoCookiePreserving(updatedUser); }catch{}
+    try { writeUserInfoCookiePreserving(updatedUser); } catch(err){console.log("Error refetching session:", err);} 
 
     try {
       const p = refetchSession?.();
       if (p && typeof p.then === 'function') await p;
-    } catch {}
+    } catch(err){console.log("Error refetching session:", err);} 
 
     notifySuccess('Profile updated');
     setActive('profile');
@@ -436,17 +428,16 @@ export default function UserProfile() {
 
   const handleLogout = async () => {
     try {
-      await (logoutUser as any)({ userId }).unwrap();
+      await logoutUser({ userId }).unwrap();
       Cookies.remove('userInfo');
-      try { localStorage.removeItem('sessionId'); } catch{}
+      try { localStorage.removeItem('sessionId'); } catch(err){console.log("Error refetching session:", err);}
       window.location.href = '/login';
-    } catch (err: any) {
+    } catch (err) {
       notifyError(err?.data?.message || 'Logout failed');
     }
   };
 
   /* ---- Derived values for read-only display ---- */
-  const selectedDialObj = countries.find(c => c.dial === dialSelected);
   const derivedPrettyPhone = (() => {
     const raw = String(user?.phone || '').trim();
     if (!raw) return '—';
@@ -465,10 +456,9 @@ export default function UserProfile() {
   })();
 
   const selectedCountryObj = countries.find(c => c.name.toLowerCase() === String(user?.country||'').toLowerCase());
-  const derivedCountryFlagPng = selectedCountryObj?.flagPng || '';
 
   /* ---------------- PDF generator ---------------- */
-  const generateInvoicePdf = async (order: any) => {
+  const generateInvoicePdf = async (order) => {
     const company = {
       name: 'AMRITA GLOBAL ENTERPRISES',
       tagline: 'Textiles & Fabrics • B2B',
@@ -491,7 +481,6 @@ export default function UserProfile() {
     const created = dayjs(order.createdAt).format('MMMM DD, YYYY');
     const orderNo = String(order._id);
 
-    // Build PDF
     const doc = (
       <PDFDocument>
         <PDFPage size="A4" style={pdfStyles.page}>
@@ -510,11 +499,7 @@ export default function UserProfile() {
               {billTo.email ? <PDFText style={pdfStyles.tiny}>{billTo.email}</PDFText> : null}
               {billTo.address ? <PDFText style={pdfStyles.tiny}>{billTo.address}</PDFText> : null}
               <PDFText style={pdfStyles.tiny}>
-                {[
-                  billTo.city,
-                  billTo.country,
-                  billTo.postcode
-                ].filter(Boolean).join(', ')}
+                {[billTo.city, billTo.country, billTo.postcode].filter(Boolean).join(', ')}
               </PDFText>
             </PDFView>
 
@@ -558,7 +543,7 @@ export default function UserProfile() {
               <PDFText style={[pdfStyles.th, { flex: 0.8, textAlign: 'right' }]}>Amount</PDFText>
             </PDFView>
 
-            {(order.productId || []).map((p: any, idx: number) => {
+            {(order.productId || []).map((p, idx) => {
               const qty = Array.isArray(order.quantity) ? (order.quantity[idx] || 0) : 0;
               const price = Array.isArray(order.price) ? (order.price[idx] || 0) : 0;
               const amount = (Number(qty) || 0) * (Number(price) || 0);
@@ -596,9 +581,10 @@ export default function UserProfile() {
             </PDFView>
           </PDFView>
 
-          {/* Footer */}
           <PDFView style={pdfStyles.footer}>
-            <PDFText>404, Safal Prelude, Corporate Rd, Prahlad Nagar, Ahmedabad, Gujarat 380015 • info@amritafashions.com • amrita-fashions.com • +91 98240 03484</PDFText>
+            <PDFText>
+              404, Safal Prelude, Corporate Rd, Prahlad Nagar, Ahmedabad, Gujarat 380015 • info@amritafashions.com • amrita-fashions.com • +91 98240 03484
+            </PDFText>
           </PDFView>
         </PDFPage>
       </PDFDocument>
@@ -607,9 +593,7 @@ export default function UserProfile() {
     const blob = await pdfRenderer(doc).toBlob();
     const fname = `AGE-Invoice-${orderNo}.pdf`;
     const url = URL.createObjectURL(blob);
-
-    // open in a new tab and also trigger download
-    const win = window.open(url, '_blank');
+    window.open(url, '_blank');
     const a = document.createElement('a');
     a.href = url;
     a.download = fname;
@@ -652,7 +636,7 @@ export default function UserProfile() {
             active={active}
             setActive={(id) => {
               if (userId) localStorage.setItem('userId', String(userId));
-              setActive(id as any);
+              setActive(id);
             }}
           />
           <SideTab id="booking"  label="My Orders"       active={active} setActive={setActive} />
@@ -660,7 +644,7 @@ export default function UserProfile() {
         </aside>
 
         <main className={styles.main}>
-          {/* My Profile (read-only) */}
+          {/* My Profile */}
           {active === 'profile' && (
             <div className={styles.form}>
               <AlignedRead label="Name"         value={user?.name} />
@@ -711,20 +695,11 @@ export default function UserProfile() {
                   <label className={styles.fileBtn}>
                     <FaEdit style={{ marginRight: 6 }} />
                     Edit Photo
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => onPickAvatar(e.target.files?.[0])}
-                      hidden
-                    />
+                    <input type="file" accept="image/*" onChange={(e) => onPickAvatar(e.target.files?.[0])} hidden />
                   </label>
 
                   {avatarPreview && (
-                    <button
-                      type="button"
-                      className={styles.linkBtn}
-                      onClick={() => setAvatarPreview(null)}
-                    >
+                    <button type="button" className={styles.linkBtn} onClick={() => setAvatarPreview(null)}>
                       <FaTrash style={{ marginRight: 6 }} />
                       Remove Profile Photo
                     </button>
@@ -732,7 +707,7 @@ export default function UserProfile() {
                 </div>
               </div>
 
-              <AlignedField id="name"  label="Name"  register={register('name')}  error={(errors as any).name?.message as any} required />
+              <AlignedField id="name"  label="Name"  register={register('name')}  error={errors?.name?.message} required />
               <AlignedField id="email" label="Email" type="email" register={register('email')} disabled note="Email can't be changed" />
               <AlignedField id="organisation" label="Organisation" register={register('organisation')} />
 
@@ -763,7 +738,7 @@ export default function UserProfile() {
                     >
                       {countries.find(c => c.dial === dialSelected)?.flagPng ? (
                         <img
-                          src={countries.find(c => c.dial === dialSelected)!.flagPng}
+                          src={countries.find(c => c.dial === dialSelected)?.flagPng}
                           alt="Country flag"
                           width={20}
                           height={14}
@@ -774,7 +749,7 @@ export default function UserProfile() {
                       )}
                       <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {countries.find(c => c.dial === dialSelected)
-                          ? `${countries.find(c => c.dial === dialSelected)!.name} (${dialSelected})`
+                          ? `${countries.find(c => c.dial === dialSelected)?.name} (${dialSelected})`
                           : 'Select country code'}
                       </span>
                     </div>
@@ -783,14 +758,7 @@ export default function UserProfile() {
                       aria-label="Country dial code"
                       value={dialSelected}
                       onChange={(e) => setDialSelected(e.target.value)}
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        width: '100%',
-                        height: '100%',
-                        opacity: 0,
-                        cursor: 'pointer'
-                      }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
                     >
                       <option value="">Select code</option>
                       {countries.map(c => (
@@ -813,7 +781,7 @@ export default function UserProfile() {
                 </div>
 
                 <input type="hidden" {...register('phone')} />
-                {(errors as any).phone?.message ? <p className={styles.err}>{(errors as any).phone.message}</p> : null}
+                {errors?.phone?.message ? <p className={styles.err}>{errors.phone.message}</p> : null}
               </AlignedCustom>
 
               {/* Country/State/City */}
@@ -850,7 +818,7 @@ export default function UserProfile() {
                   }}
                 >
                   <option value="">{countryName ? 'Select state' : 'Select country first'}</option>
-                  {states.map((s: any) => (
+                  {states.map((s) => (
                     <option key={s.name} value={s.name}>{s.name}</option>
                   ))}
                 </select>
@@ -888,13 +856,9 @@ export default function UserProfile() {
           {/* My Orders */}
           {active === 'booking' && (
             <div className={styles.bookingWrap}>
-              {ordersLoading && (
-                <div className={styles.bookingEmpty}><p>Loading orders…</p></div>
-              )}
+              {ordersLoading && (<div className={styles.bookingEmpty}><p>Loading orders…</p></div>)}
 
-              {ordersErr && (
-                <div className={styles.bookingEmpty}><p style={{ color: 'red' }}>{ordersErr}</p></div>
-              )}
+              {ordersErr && (<div className={styles.bookingEmpty}><p style={{ color: 'red' }}>{ordersErr}</p></div>)}
 
               {!ordersLoading && !ordersErr && (!orders || orders.length === 0) && (
                 <div className={styles.bookingEmpty}>
@@ -969,7 +933,7 @@ export default function UserProfile() {
 const LABEL_COL_STYLE = { width: 160, minWidth: 160, flex: '0 0 160px' };
 const VALUE_COL_STYLE = { flex: 1, minWidth: 0 };
 
-function AlignedRow({ label, children }: any) {
+function AlignedRow({ label, children }) {
   return (
     <div className={styles.field} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <div className={styles.fieldLabel} style={LABEL_COL_STYLE}>{label}</div>
@@ -978,7 +942,7 @@ function AlignedRow({ label, children }: any) {
   );
 }
 
-function AlignedRead({ label, value }: any) {
+function AlignedRead({ label, value }) {
   return (
     <AlignedRow label={label}>
       <div className={styles.readInput}>{value || '—'}</div>
@@ -986,7 +950,7 @@ function AlignedRead({ label, value }: any) {
   );
 }
 
-function AlignedCustom({ label, children }: any) {
+function AlignedCustom({ label, children }) {
   return (
     <AlignedRow label={label}>
       <div>{children}</div>
@@ -994,7 +958,7 @@ function AlignedCustom({ label, children }: any) {
   );
 }
 
-function AlignedField({ id, label, type='text', register, error, disabled, note, required }: any) {
+function AlignedField({ id, label, type='text', register, error, disabled, note, required }) {
   return (
     <AlignedRow label={<>{label}{required && <span className={styles.required}>*</span>}</>}>
       <div>
@@ -1007,7 +971,7 @@ function AlignedField({ id, label, type='text', register, error, disabled, note,
 }
 
 /* ---------------- sidebar tab ---------------- */
-function SideTab({ id, label, active, setActive }: any) {
+function SideTab({ id, label, active, setActive }) {
   const is = active === id;
   return (
     <button
