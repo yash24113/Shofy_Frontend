@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import Image from 'next/image';
 import dayjs from 'dayjs';
 import {
   pdf as pdfRenderer,
@@ -16,7 +15,6 @@ import {
 import ErrorMsg from '@/components/common/error-msg';
 import PrdDetailsLoader from '@/components/loader/prd-details-loader';
 import { useGetUserByIdQuery } from '@/redux/features/order/orderApi';
-// import LOGO_WEB_URL from  '@assets/img/logo/my_logo.png';
 
 /* ------------------------------ helpers ------------------------------ */
 const safeGetLocalUserId = () => {
@@ -37,24 +35,31 @@ const BORDER = '#e5e7eb';
 const ROW_ALT = '#f8fafc';
 const SOFT = '#f1f5f9';
 
-// Your logo (WEBP). React-PDF can’t render WEBP reliably, so we proxy to PNG.
- const LOGO_WEB_URL ='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJM0g6DS-JDkn7VvBDb6KfRzbS8ZiZfnuHJQ&s'
+// Your source logo (WEBP)
+const LOGO_WEB_URL =
+  'https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp';
 
-// Convert any image URL to a PNG via Cloudinary “fetch” (no account needed for demo domain).
-// If you have your own Cloudinary cloud, replace `demo` with your cloud name.
+// Convert any external image to PNG via Cloudinary “fetch” (works without editing your Next config)
 const toPngProxy = (url) =>
   `https://res.cloudinary.com/demo/image/fetch/f_png/${encodeURIComponent(url)}`;
 
-// For PDF we must ensure non-WEBP. If it’s already jpg/png, keep it.
-const pdfSafeLogo = (url) => {
+// Use PNG proxy everywhere to avoid WEBP issues
+const DISPLAY_LOGO_URL = toPngProxy(LOGO_WEB_URL);
+
+// Fetch -> dataURL so React-PDF can embed reliably (handles CORS/WEBP)
+async function toDataUrl(url) {
   try {
-    const u = String(url || '');
-    if (/\.(png|jpg|jpeg)$/i.test(u)) return u;
-    return toPngProxy(u);
+    const res = await fetch(url, { cache: 'no-store' });
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(blob);
+    });
   } catch {
-    return toPngProxy(LOGO_WEB_URL);
+    return null;
   }
-};
+}
 
 /* --------------------------- PDF: styles ---------------------------- */
 const HEADER_H = 96;
@@ -84,7 +89,9 @@ const pdfStyles = PDFStyleSheet.create({
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
+  leftHeader: { flexDirection: 'row', alignItems: 'center' },
   logoBox: { width: 56, height: 56, borderRadius: 8, overflow: 'hidden', backgroundColor: '#fff' },
   logo: { width: '100%', height: '100%' },
   brandTextWrap: { marginLeft: 12 },
@@ -93,7 +100,7 @@ const pdfStyles = PDFStyleSheet.create({
 
   /* title under header */
   docTitleWrap: { marginTop: 8, marginBottom: 10 },
-  docTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827',textAlign: 'center', letterSpacing: 1 },
+  docTitle: { fontSize: 20, fontWeight: 'bold', color: BRAND_BLUE, textAlign: 'center', letterSpacing: 1 },
 
   /* footer */
   footerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, height: FOOTER_H, paddingHorizontal: 40, justifyContent: 'flex-end', paddingBottom: 12 },
@@ -139,11 +146,11 @@ const pdfStyles = PDFStyleSheet.create({
   totalsCellValue: { width: 100, textAlign: 'right', fontSize: 11 },
   grandRow: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 10, backgroundColor: ROW_ALT },
   grandLabel: { flex: 1, fontSize: 12, fontWeight: 'bold' },
-  grandValue: { width: 100, textAlign: 'right', fontSize: 12, fontWeight: 'bold' },
+  grandValue: { width: 100, textAlign: 'right', fontSize: 12, fontWeight: 'bold', color: BRAND_BLUE },
 });
 
 /* --------------------------- PDF: component --------------------------- */
-function InvoicePDF({ order, fullName }) {
+function InvoicePDF({ order, fullName, logoSrc }) {
   const addressLines = [
     '4th Floor, Safal Prelude, 404 Corporate Road, Near YMCA Club,',
     'Prahlad Nagar, Ahmedabad, Gujarat, India - 380015',
@@ -171,9 +178,9 @@ function InvoicePDF({ order, fullName }) {
             <PDFView style={pdfStyles.headerGoldLine} />
           </PDFView>
           <PDFView style={pdfStyles.headerRow}>
-            <PDFView style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <PDFView style={pdfStyles.leftHeader}>
               <PDFView style={pdfStyles.logoBox}>
-                <PDFImage src={pdfSafeLogo(LOGO_WEB_URL)} style={pdfStyles.logo} />
+                {logoSrc ? <PDFImage src={logoSrc} style={pdfStyles.logo} /> : null}
               </PDFView>
               <PDFView style={pdfStyles.brandTextWrap}>
                 <PDFText style={pdfStyles.brandTitle}>AMRITA GLOBAL ENTERPRISES</PDFText>
@@ -322,11 +329,11 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
     }
   }, []);
 
-  // Fetch user profile for invoice header/details (skip if no userId; we'll still render using lastOrder only)
+  // Fetch user profile for invoice header/details
   const { data: userResp, isError, isLoading } = useGetUserByIdQuery(userId, { skip: !userId });
   const user = userResp?.user ?? null;
 
-  // ---- Compute renderable order without hooks ----
+  // Fallback order
   const fallbackOrder = {
     _id: orderId,
     firstName: user?.name?.split(' ')?.[0] || '',
@@ -365,7 +372,12 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
   /* ----------------------- PRINT -> PDF (A4, header/footer) ----------------------- */
   const handlePrint = useCallback(async () => {
     try {
-      const instance = pdfRenderer(<InvoicePDF order={order} fullName={fullName} />);
+      // Prepare a PDF-safe logo as dataURL
+      const logoDataUrl = await toDataUrl(DISPLAY_LOGO_URL);
+
+      const instance = pdfRenderer(
+        <InvoicePDF order={order} fullName={fullName} logoSrc={logoDataUrl} />
+      );
       const blob = await instance.toBlob();
       const url = URL.createObjectURL(blob);
 
@@ -410,23 +422,27 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
           <div
             ref={printRef}
             className="invoice__wrapper grey-bg-2 pt-40 pb-40 pl-40 pr-40 tp-invoice-print-wrapper"
+            style={{ borderRadius: 14, background: '#f8fafc' }}
           >
-            <div className="invoice__header-wrapper border-2 border-bottom border-white mb-30">
+            {/* Header with LOGO (PNG proxy to guarantee render) */}
+            <div className="invoice__header-wrapper border-2 border-bottom border-white mb-20">
               <div className="row align-items-center">
-                {/* On-screen header with Next/Image */}
                 <div className="col-md-7 col-sm-12">
                   <div className="d-flex align-items-center" style={{ gap: 12 }}>
                     <img
-                      src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJM0g6DS-JDkn7VvBDb6KfRzbS8ZiZfnuHJQ&s"
+                      src={DISPLAY_LOGO_URL}
                       alt="Amrita Global Enterprises"
-                      width={110}
+                      width={140}
                       height={50}
-                      
-                      style={{ borderRadius: 6, background: '#fff' }}
+                      style={{ borderRadius: 6, background: '#fff', objectFit: 'contain' }}
                     />
                     <div>
-                      <h3 className="mb-5" style={{ color: BRAND_BLUE, marginBottom: 0 }}>Amrita Global Enterprises</h3>
-                      <p className="mb-0" style={{ color: TEXT_MUTED }}>Textiles & Fabrics • B2B</p>
+                      <h3 className="mb-5" style={{ color: BRAND_BLUE, marginBottom: 0 }}>
+                        Amrita Global Enterprises
+                      </h3>
+                      <p className="mb-0" style={{ color: TEXT_MUTED }}>
+                        Textiles & Fabrics • B2B
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -435,14 +451,18 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
 
             {/* Title BELOW header */}
             <div className="mb-20">
-              <h2 className="text-uppercase" style={{ fontWeight: 800, letterSpacing: 1 }}>INVOICE</h2>
+              <h2 className="text-uppercase" style={{ fontWeight: 800, letterSpacing: 1, color: BRAND_BLUE }}>
+                INVOICE
+              </h2>
             </div>
 
             {/* Bill To / From */}
             <div className="row g-3 mb-20">
               <div className="col-md-6">
                 <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
-                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Bill To</div>
+                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>
+                    Bill To
+                  </div>
                   <div style={{ fontWeight: 600 }}>{fullName}</div>
                   {(order.phone || user?.phone) && <div>{order.phone || user?.phone}</div>}
                   {(order.email || user?.email) && <div>{order.email || user?.email}</div>}
@@ -451,7 +471,9 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
               </div>
               <div className="col-md-6">
                 <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
-                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>From</div>
+                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>
+                    From
+                  </div>
                   <div style={{ fontWeight: 600 }}>Amrita Global Enterprises</div>
                   <div>4th Floor, Safal Prelude, 404 Corporate Road, Near YMCA Club,</div>
                   <div>Prahlad Nagar, Ahmedabad, Gujarat, India - 380015</div>
