@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import NextImage from 'next/image';
+import Image from 'next/image';
 import dayjs from 'dayjs';
 import {
   pdf as pdfRenderer,
@@ -28,13 +28,33 @@ const safeGetLocalUserId = () => {
   }
 };
 
+// Brand
 const BRAND_BLUE = '#2C4C97';
 const BRAND_YELLOW = '#D6A74B';
 const TEXT_MUTED = '#475569';
 const BORDER = '#e5e7eb';
 const ROW_ALT = '#f8fafc';
 const SOFT = '#f1f5f9';
-const LOGO_URL = 'https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp';
+
+// Your logo (WEBP). React-PDF can’t render WEBP reliably, so we proxy to PNG.
+const LOGO_WEB_URL =
+  'https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp';
+
+// Convert any image URL to a PNG via Cloudinary “fetch” (no account needed for demo domain).
+// If you have your own Cloudinary cloud, replace `demo` with your cloud name.
+const toPngProxy = (url) =>
+  `https://res.cloudinary.com/demo/image/fetch/f_png/${encodeURIComponent(url)}`;
+
+// For PDF we must ensure non-WEBP. If it’s already jpg/png, keep it.
+const pdfSafeLogo = (url) => {
+  try {
+    const u = String(url || '');
+    if (/\.(png|jpg|jpeg)$/i.test(u)) return u;
+    return toPngProxy(u);
+  } catch {
+    return toPngProxy(LOGO_WEB_URL);
+  }
+};
 
 /* --------------------------- PDF: styles ---------------------------- */
 const HEADER_H = 96;
@@ -64,16 +84,15 @@ const pdfStyles = PDFStyleSheet.create({
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
   logoBox: { width: 56, height: 56, borderRadius: 8, overflow: 'hidden', backgroundColor: '#fff' },
   logo: { width: '100%', height: '100%' },
   brandTextWrap: { marginLeft: 12 },
   brandTitle: { fontSize: 16, color: BRAND_BLUE, fontWeight: 'bold', letterSpacing: 0.2 },
   brandSub: { fontSize: 9, color: TEXT_MUTED, marginTop: 2 },
 
-  titleRight: { alignItems: 'flex-end' },
+  /* title under header */
+  docTitleWrap: { marginTop: 8, marginBottom: 10 },
   docTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
 
   /* footer */
@@ -84,21 +103,19 @@ const pdfStyles = PDFStyleSheet.create({
   footerTextBlock: { textAlign: 'center', color: BRAND_BLUE },
   footerLine: { fontSize: 9, marginTop: 3, textAlign: 'center', lineHeight: 1.4 },
 
-  /* blocks */
-  card: { padding: 12, border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: '#fff', marginBottom: 10 },
-  light: { backgroundColor: '#ffffff' },
+  /* cards & text */
+  card: { padding: 12, border: `1px solid ${BORDER}`, borderRadius: 12, backgroundColor: '#fff', marginBottom: 10 },
   label: { fontSize: 9, color: TEXT_MUTED, marginBottom: 4, textTransform: 'uppercase' },
   strong: { fontSize: 11, fontWeight: 'bold' },
 
   twoCol: { flexDirection: 'row', gap: 12 },
   col: { flex: 1 },
 
-  /* invoice meta row */
   metaRow: { flexDirection: 'row', gap: 12, marginTop: 6 },
   metaItem: { flex: 1 },
 
   /* table */
-  table: { width: '100%', borderRadius: 8, border: `1px solid ${BORDER}`, overflow: 'hidden', marginTop: 6 },
+  table: { width: '100%', borderRadius: 12, border: `1px solid ${BORDER}`, overflow: 'hidden', marginTop: 6 },
   thead: { flexDirection: 'row', backgroundColor: ROW_ALT, borderBottom: `1px solid ${BORDER}` },
   thSL: { width: 28, padding: 8, fontSize: 10, fontWeight: 'bold', color: TEXT_MUTED, textAlign: 'center' },
   thProduct: { flexGrow: 1, padding: 8, fontSize: 10, fontWeight: 'bold', color: TEXT_MUTED },
@@ -113,10 +130,10 @@ const pdfStyles = PDFStyleSheet.create({
   tdPrice: { width: 80, padding: 8, fontSize: 11, textAlign: 'right' },
   tdAmount: { width: 90, padding: 8, fontSize: 11, textAlign: 'right' },
 
-  /* totals area */
+  /* totals */
   totalsWrap: { flexDirection: 'row', marginTop: 10 },
   totalsSpacer: { flex: 1 },
-  totalsBox: { width: 260, borderRadius: 8, border: `1px solid ${BORDER}`, backgroundColor: '#ffffff' },
+  totalsBox: { width: 260, borderRadius: 12, border: `1px solid ${BORDER}`, backgroundColor: '#ffffff' },
   totalsRow: { flexDirection: 'row', paddingVertical: 8, paddingHorizontal: 10, borderBottom: `1px solid ${SOFT}` },
   totalsCellLabel: { flex: 1, fontSize: 11, color: TEXT_MUTED },
   totalsCellValue: { width: 100, textAlign: 'right', fontSize: 11 },
@@ -147,32 +164,34 @@ function InvoicePDF({ order, fullName }) {
   return (
     <PDFDocument>
       <PDFPage size="A4" style={pdfStyles.page}>
-        {/* header */}
+        {/* Fixed header */}
         <PDFView style={pdfStyles.headerWrap} fixed>
           <PDFView style={pdfStyles.headerCanvas}>
             <PDFView style={pdfStyles.headerBlueLine} />
             <PDFView style={pdfStyles.headerGoldLine} />
           </PDFView>
           <PDFView style={pdfStyles.headerRow}>
-            <PDFView style={pdfStyles.headerLeft}>
+            <PDFView style={{ flexDirection: 'row', alignItems: 'center' }}>
               <PDFView style={pdfStyles.logoBox}>
-                <PDFImage src={LOGO_URL} style={pdfStyles.logo} />
+                <PDFImage src={pdfSafeLogo(LOGO_WEB_URL)} style={pdfStyles.logo} />
               </PDFView>
               <PDFView style={pdfStyles.brandTextWrap}>
                 <PDFText style={pdfStyles.brandTitle}>AMRITA GLOBAL ENTERPRISES</PDFText>
                 <PDFText style={pdfStyles.brandSub}>Textiles & Fabrics • B2B</PDFText>
               </PDFView>
             </PDFView>
-            <PDFView style={pdfStyles.titleRight}>
-              <PDFText style={pdfStyles.docTitle}>INVOICE</PDFText>
-            </PDFView>
           </PDFView>
         </PDFView>
 
-        {/* Bill To / From + Meta */}
+        {/* Title BELOW header */}
+        <PDFView style={pdfStyles.docTitleWrap}>
+          <PDFText style={pdfStyles.docTitle}>INVOICE</PDFText>
+        </PDFView>
+
+        {/* Bill To / From */}
         <PDFView style={pdfStyles.twoCol}>
           <PDFView style={pdfStyles.col}>
-            <PDFView style={[pdfStyles.card, pdfStyles.light]}>
+            <PDFView style={pdfStyles.card}>
               <PDFText style={pdfStyles.label}>Bill To</PDFText>
               <PDFText style={pdfStyles.strong}>{fullName}</PDFText>
               {order.phone ? <PDFText>{order.phone}</PDFText> : null}
@@ -180,9 +199,8 @@ function InvoicePDF({ order, fullName }) {
               {order.streetAddress ? <PDFText>{order.streetAddress}</PDFText> : null}
             </PDFView>
           </PDFView>
-
           <PDFView style={pdfStyles.col}>
-            <PDFView style={[pdfStyles.card, pdfStyles.light]}>
+            <PDFView style={pdfStyles.card}>
               <PDFText style={pdfStyles.label}>From</PDFText>
               <PDFText style={pdfStyles.strong}>Amrita Global Enterprises</PDFText>
               {addressLines.map((l, i) => <PDFText key={i}>{l}</PDFText>)}
@@ -191,7 +209,8 @@ function InvoicePDF({ order, fullName }) {
           </PDFView>
         </PDFView>
 
-        <PDFView style={[pdfStyles.card, pdfStyles.light]}>
+        {/* Meta */}
+        <PDFView style={pdfStyles.card}>
           <PDFView style={pdfStyles.metaRow}>
             <PDFView style={pdfStyles.metaItem}>
               <PDFText style={pdfStyles.label}>Invoice #</PDFText>
@@ -212,7 +231,7 @@ function InvoicePDF({ order, fullName }) {
           </PDFView>
         </PDFView>
 
-        {/* Items table */}
+        {/* Items */}
         <PDFView style={pdfStyles.table}>
           <PDFView style={pdfStyles.thead}>
             <PDFText style={pdfStyles.thSL}>#</PDFText>
@@ -264,7 +283,7 @@ function InvoicePDF({ order, fullName }) {
           </PDFView>
         ) : null}
 
-        {/* footer */}
+        {/* fixed footer */}
         <PDFView style={pdfStyles.footerWrap} fixed>
           <PDFView style={pdfStyles.footerCanvas}>
             <PDFView style={pdfStyles.footerBlue} />
@@ -392,55 +411,88 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
             ref={printRef}
             className="invoice__wrapper grey-bg-2 pt-40 pb-40 pl-40 pr-40 tp-invoice-print-wrapper"
           >
-            <div className="invoice__header-wrapper border-2 border-bottom border-white mb-40">
-              <div className="row">
-                <div className="col-xl-12">
-                  <div className="invoice__header pb-20">
-                    <div className="row align-items-end">
-                      <div className="col-md-6 col-sm-6">
-                        <div className="invoice__left" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <NextImage src={LOGO_URL} alt="logo" width={140} height={45} />
-                          <div>
-                            <h3 className="mb-5">Amrita Global Enterprises</h3>
-                            <p className="mb-0" style={{ color: '#475569' }}>Textiles & Fabrics • B2B</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-6 col-sm-6">
-                        <div className="invoice__right mt-15 mt-sm-0 text-sm-end">
-                          <h3 className="text-uppercase font-70 mb-10">Invoice</h3>
-                          <p className="mb-0"><strong>Order ID:</strong> #{order._id || '—'}</p>
-                          <p className="mb-0"><strong>Date:</strong> {dayjs(order.createdAt).format('MMMM D, YYYY')}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="row mt-20">
-                      <div className="col-md-6">
-                        <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
-                          <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Bill To</div>
-                          <div style={{ fontWeight: 600 }}>{fullName}</div>
-                          {(order.phone || user?.phone) && <div>{order.phone || user?.phone}</div>}
-                          {(order.email || user?.email) && <div>{order.email || user?.email}</div>}
-                          {(order.streetAddress || user?.address) && <div>{order.streetAddress || user?.address}</div>}
-                        </div>
-                      </div>
-                      <div className="col-md-6">
-                        <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
-                          <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>From</div>
-                          <div style={{ fontWeight: 600 }}>Amrita Global Enterprises</div>
-                          <div>4th Floor, Safal Prelude, 404 Corporate Road, Near YMCA Club,</div>
-                          <div>Prahlad Nagar, Ahmedabad, Gujarat, India - 380015</div>
-                          <div>info@amritafashions.com • +91 98240 03484</div>
-                        </div>
-                      </div>
+            <div className="invoice__header-wrapper border-2 border-bottom border-white mb-30">
+              <div className="row align-items-center">
+                {/* On-screen header with Next/Image */}
+                <div className="col-md-7 col-sm-12">
+                  <div className="d-flex align-items-center" style={{ gap: 12 }}>
+                    <Image
+                      src={LOGO_WEB_URL}
+                      alt="Amrita Global Enterprises"
+                      width={160}
+                      height={50}
+                      unoptimized
+                      style={{ borderRadius: 6, background: '#fff' }}
+                    />
+                    <div>
+                      <h3 className="mb-5" style={{ color: BRAND_BLUE, marginBottom: 0 }}>Amrita Global Enterprises</h3>
+                      <p className="mb-0" style={{ color: TEXT_MUTED }}>Textiles & Fabrics • B2B</p>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* items */}
-            <div className="invoice__order-table pt-20 pb-20 pl-40 pr-40 bg-white mb-30" style={{ border: '1px solid #e5e7eb', borderRadius: 8 }}>
+            {/* Title BELOW header */}
+            <div className="mb-20">
+              <h2 className="text-uppercase" style={{ fontWeight: 800, letterSpacing: 1 }}>INVOICE</h2>
+            </div>
+
+            {/* Bill To / From */}
+            <div className="row g-3 mb-20">
+              <div className="col-md-6">
+                <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
+                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Bill To</div>
+                  <div style={{ fontWeight: 600 }}>{fullName}</div>
+                  {(order.phone || user?.phone) && <div>{order.phone || user?.phone}</div>}
+                  {(order.email || user?.email) && <div>{order.email || user?.email}</div>}
+                  {(order.streetAddress || user?.address) && <div>{order.streetAddress || user?.address}</div>}
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
+                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>From</div>
+                  <div style={{ fontWeight: 600 }}>Amrita Global Enterprises</div>
+                  <div>4th Floor, Safal Prelude, 404 Corporate Road, Near YMCA Club,</div>
+                  <div>Prahlad Nagar, Ahmedabad, Gujarat, India - 380015</div>
+                  <div>info@amritafashions.com • +91 98240 03484</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Meta row */}
+            <div className="row g-3 mb-30">
+              <div className="col-md-3">
+                <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
+                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Invoice #</div>
+                  <div style={{ fontWeight: 600 }}>{order._id || '—'}</div>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
+                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Date</div>
+                  <div style={{ fontWeight: 600 }}>{dayjs(order.createdAt).format('MMMM D, YYYY')}</div>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
+                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Payment</div>
+                  <div style={{ fontWeight: 600 }}>{String(order.payment || '—').toUpperCase()}</div>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
+                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Shipping</div>
+                  <div style={{ fontWeight: 600 }}>{String(order.shipping || '—').toUpperCase()}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Items */}
+            <div
+              className="pt-20 pb-20 pl-40 pr-40 bg-white mb-30"
+              style={{ border: '1px solid #e5e7eb', borderRadius: 12 }}
+            >
               <table className="table" style={{ marginBottom: 0 }}>
                 <thead className="table-light">
                   <tr>
@@ -471,18 +523,16 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
               </table>
             </div>
 
-            {/* totals */}
+            {/* Totals */}
             <div className="pl-40 pr-40 mb-30">
               <div className="row">
                 <div className="col-lg-7"></div>
                 <div className="col-lg-5">
-                  <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
+                  <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff', borderRadius: 12 }}>
                     <div className="d-flex justify-content-between mb-2" style={{ color: '#64748b' }}>
                       <span>Subtotal</span>
                       <span>
-                        ${
-                          lineItems.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0).toFixed(2)
-                        }
+                        ${lineItems.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0).toFixed(2)}
                       </span>
                     </div>
                     <div className="d-flex justify-content-between mb-2" style={{ color: '#64748b' }}>
@@ -495,7 +545,9 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                     </div>
                     <div className="d-flex justify-content-between pt-2 mt-2" style={{ borderTop: '1px solid #e5e7eb', fontWeight: 700 }}>
                       <span>Total</span>
-                      <span>${Number(order.total || (lineItems.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0) + Number(order.shippingCost || 0) - Number(order.discount || 0))).toFixed(2)}</span>
+                      <span>
+                        ${Number(order.total || (lineItems.reduce((s, it) => s + Number(it.qty) * Number(it.price), 0) + Number(order.shippingCost || 0) - Number(order.discount || 0))).toFixed(2)}
+                      </span>
                     </div>
                   </div>
                 </div>
