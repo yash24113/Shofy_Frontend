@@ -2,48 +2,36 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useSelector } from 'react-redux';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { toast } from 'react-toastify';
 import { FaCheck } from 'react-icons/fa';
 import { useGetCartDataQuery } from '@/redux/features/cartApi';
 import { selectUserId } from '@/utils/userSelectors';
 
-// NEW: use our RTK mutation to create the order
+// RTK mutation to create the order
 import { useCreateOrderMutation } from '@/redux/features/order/orderApi';
 
 /* ---------- helpers ---------- */
-const splitName = (fullName) => {
+const splitName = (fullName: string) => {
   const parts = String(fullName || '').trim().split(/\s+/);
   const firstName = parts.shift() || '';
   const lastName = parts.join(' ') || '';
   return { firstName, lastName };
 };
 
-const safeGetLocalUserId = () => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const id = localStorage.getItem('userId');
-    return id && id.trim() ? id.trim() : null;
-  } catch {
-    return null;
-  }
-};
-
 const CheckoutArea = () => {
   const router = useRouter();
 
-  // Redux userId (fallback to localStorage)
-  const reduxUserId = useSelector(selectUserId);
-  const localUserId = safeGetLocalUserId();
-  const userId = reduxUserId || localUserId || null;
+  // Only Redux userId (no localStorage fallback)
+  const userId = useSelector(selectUserId) || null;
 
   // Mutations
   const [createOrder, { isLoading: creatingOrder }] = useCreateOrderMutation();
 
   // UI / form state
   const [activeStep] = useState(2); // 1: cart, 2: checkout, 3: complete
-  const [shippingMethod, setShippingMethod] = useState('free'); // 'free' | 'flat' | 'local'
+  const [shippingMethod, setShippingMethod] = useState<'free' | 'flat' | 'local'>('free');
   const [shippingCost, setShippingCost] = useState(0);
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscount, setCouponDiscount] = useState(0);
@@ -58,7 +46,7 @@ const CheckoutArea = () => {
     phone: '',
     email: '',
     orderNotes: '',
-    paymentUI: 'online', // 'online' | 'cod'
+    paymentUI: 'online' as 'online' | 'cod',
   });
 
   // Fetch cart data
@@ -72,7 +60,7 @@ const CheckoutArea = () => {
   // Subtotal from cart
   const subtotal = useMemo(
     () =>
-      cart_products.reduce((sum, item) => {
+      cart_products.reduce((sum: number, item: any) => {
         const price = Number(item?.productId?.price ?? 0);
         const qty = Number(item?.quantity ?? 1);
         return sum + price * qty;
@@ -88,10 +76,10 @@ const CheckoutArea = () => {
   /* ---------- Auth guard ---------- */
   useEffect(() => {
     const isAuthenticated = Cookies.get('userInfo');
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !userId) {
       router.push('/login?redirect=/checkout');
     }
-  }, [router]);
+  }, [router, userId]);
 
   /* ---------- Fetch & prefill profile ---------- */
   useEffect(() => {
@@ -159,23 +147,23 @@ const CheckoutArea = () => {
   }, [userId]);
 
   /* ---------- Handlers ---------- */
-  const handleInputChange = useCallback((e) => {
-    const { name, value, type, checked } = e.target;
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value, type, checked } = e.target as HTMLInputElement;
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? Boolean(checked) : value,
     }));
   }, []);
 
-  const handleShippingChange = useCallback((e) => {
-    const value = e.target.value; // 'free' | 'flat' | 'local'
+  const handleShippingChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value as 'free' | 'flat' | 'local';
     setShippingMethod(value);
     const cost = value === 'free' ? 0 : value === 'flat' ? 15 : 8;
     setShippingCost(cost);
   }, []);
 
   const handleApplyCoupon = useCallback(
-    (e) => {
+    (e: React.FormEvent) => {
       e.preventDefault();
       if (!couponCode.trim()) {
         setCouponDiscount(0);
@@ -193,9 +181,48 @@ const CheckoutArea = () => {
     [couponCode]
   );
 
+  // Helper: remove ordered products from cart (server-side), product-wise
+  const removeOrderedProductsFromCart = useCallback(async (productIds: string[]) => {
+    if (!Array.isArray(productIds) || productIds.length === 0) return;
+
+    try {
+      await Promise.all(
+        productIds.map(async (pid) => {
+          if (!pid) return;
+          try {
+            const res = await fetch(
+              `https://test.amrita-fashions.com/shopy/cart/remove/${encodeURIComponent(pid)}`,
+              {
+                method: 'DELETE',
+                headers: { Accept: 'application/json' },
+                credentials: 'include',
+                cache: 'no-store',
+              }
+            );
+            // Non-2xx is treated as a soft failure; we still resolve others
+            if (!res.ok) {
+              const txt = await res.text().catch(() => '');
+              console.warn(`Failed to remove product ${pid} from cart: ${res.status} ${txt}`);
+            }
+          } catch (err) {
+            console.warn(`Error removing product ${pid} from cart`, err);
+          }
+        })
+      );
+    } finally {
+      // Always try to refresh the cart view after attempts
+      await refetch();
+    }
+  }, [refetch]);
+
   const handleSubmitOrder = useCallback(
-    async (e) => {
+    async (e: React.FormEvent) => {
       e.preventDefault();
+      if (!userId) {
+        toast.error('Please log in to place your order.');
+        router.push('/login?redirect=/checkout');
+        return;
+      }
       if (!cart_products.length) {
         toast.error('Your cart is empty');
         return;
@@ -215,9 +242,9 @@ const CheckoutArea = () => {
       }
 
       try {
-        const productId = cart_products.map((it) => it?.productId?._id).filter(Boolean);
-        const quantity = cart_products.map((it) => Number(it?.quantity ?? 1));
-        const price = cart_products.map((it) => Number(it?.productId?.price ?? 0));
+        const productId = cart_products.map((it: any) => it?.productId?._id).filter(Boolean);
+        const quantity = cart_products.map((it: any) => Number(it?.quantity ?? 1));
+        const price = cart_products.map((it: any) => Number(it?.productId?.price ?? 0));
 
         const shipping =
           shippingMethod === 'free' ? 'standard' : shippingMethod === 'flat' ? 'flat' : 'local';
@@ -226,7 +253,7 @@ const CheckoutArea = () => {
         const payload = {
           firstName: formData.firstName,
           lastName: formData.lastName,
-          // NOTE: backend sample used "USA" etc.; we’ll send plain country name
+          // Send plain country name variants
           country:
             formData.country.includes('United States') ? 'USA' :
             formData.country.includes('United Kingdom') ? 'UK' :
@@ -251,23 +278,19 @@ const CheckoutArea = () => {
         };
 
         const resp = await createOrder(payload).unwrap();
-
         const createdOrder = resp?.data?.order || null;
-        if (createdOrder) {
-          // Store for OrderArea display/print
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('lastOrder', JSON.stringify(createdOrder));
-          }
-        }
+
+        // Immediately remove the ordered items from the cart on the server
+        await removeOrderedProductsFromCart(productId);
 
         toast.success('Order placed successfully!');
         const orderId = createdOrder?._id;
-if (orderId) {
-  router.push(`/order/${orderId}`);
-} else {
-  router.push(`/order-confirmation?userId=${userId}`);
-}
-
+        if (orderId) {
+          router.push(`/order/${orderId}`);
+        } else {
+          // Fallback if API doesn’t return an id
+          router.push(`/order-confirmation?userId=${userId}`);
+        }
       } catch (err) {
         console.error('Order submission failed:', err);
         toast.error('Failed to place order. Please try again.');
@@ -287,6 +310,7 @@ if (orderId) {
       formData.phone,
       formData.postcode,
       formData.streetAddress,
+      removeOrderedProductsFromCart,
       router,
       shippingCost,
       shippingMethod,
@@ -324,7 +348,7 @@ if (orderId) {
   }
 
   if (error) {
-    const message = error?.message ?? 'Please try again later';
+    const message = (error as any)?.message ?? 'Please try again later';
     return (
       <div className="error-wrap">
         <div className="msg">Failed to load cart: {message}</div>
@@ -447,7 +471,7 @@ if (orderId) {
             <div className="order-summary-header"><h3>Your Order</h3></div>
 
             <div className="order-products">
-              {cart_products.map((item) => {
+              {cart_products.map((item: any) => {
                 const name = item?.productId?.name || 'Product';
                 const qty = Number(item?.quantity ?? 1);
                 const price = Number(item?.productId?.price ?? 0);
@@ -515,8 +539,11 @@ if (orderId) {
               </button>
             </div>
 
-            {/* Coupon */}
-           
+            {/* Coupon (optional UI hook) */}
+            {/* <form onSubmit={handleApplyCoupon} className="coupon-form">
+              <input value={couponCode} onChange={(e) => setCouponCode(e.target.value)} placeholder="Coupon code" />
+              <button type="submit">Apply</button>
+            </form> */}
           </div>
         </div>
       </div>
