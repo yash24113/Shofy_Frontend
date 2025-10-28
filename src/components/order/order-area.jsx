@@ -16,7 +16,7 @@ import {
 import ErrorMsg from '@/components/common/error-msg';
 import PrdDetailsLoader from '@/components/loader/prd-details-loader';
 import { useGetUserByIdQuery } from '@/redux/features/order/orderApi';
-import LOGO_WEB_URL from  '@assets/img/logo/my_logo.png';
+// import LOGO_WEB_URL from  '@assets/img/logo/my_logo.png';
 
 /* ------------------------------ helpers ------------------------------ */
 const safeGetLocalUserId = () => {
@@ -38,8 +38,8 @@ const ROW_ALT = '#f8fafc';
 const SOFT = '#f1f5f9';
 
 // Your logo (WEBP). React-PDF can’t render WEBP reliably, so we proxy to PNG.
-// const LOGO_WEB_URL =
-//   'https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp';
+ const LOGO_WEB_URL =
+   'https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp';
 
 // Convert any image URL to a PNG via Cloudinary “fetch” (no account needed for demo domain).
 // If you have your own Cloudinary cloud, replace `demo` with your cloud name.
@@ -214,11 +214,11 @@ function InvoicePDF({ order, fullName }) {
         <PDFView style={pdfStyles.card}>
           <PDFView style={pdfStyles.metaRow}>
             <PDFView style={pdfStyles.metaItem}>
-              <PDFText style={pdfStyles.label}>Invoice #</PDFText>
+              <PDFText style={pdfStyles.label}>Invoice Number</PDFText>
               <PDFText style={pdfStyles.strong}>{order._id || '—'}</PDFText>
             </PDFView>
             <PDFView style={pdfStyles.metaItem}>
-              <PDFText style={pdfStyles.label}>Date</PDFText>
+              <PDFText style={pdfStyles.label}>Invoice Date</PDFText>
               <PDFText style={pdfStyles.strong}>{dayjs(order.createdAt).format('MMMM D, YYYY')}</PDFText>
             </PDFView>
             <PDFView style={pdfStyles.metaItem}>
@@ -423,7 +423,7 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                       width={110}
                       height={50}
                       
-                      // style={{ borderRadius: 6, background: '#fff' }}
+                      style={{ borderRadius: 6, background: '#fff' }}
                     />
                     <div>
                       <h3 className="mb-5" style={{ color: BRAND_BLUE, marginBottom: 0 }}>Amrita Global Enterprises</h3>
@@ -465,13 +465,13 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
             <div className="row g-3 mb-30">
               <div className="col-md-3">
                 <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
-                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Invoice #</div>
+                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Invoice Number</div>
                   <div style={{ fontWeight: 600 }}>{order._id || '—'}</div>
                 </div>
               </div>
               <div className="col-md-3">
                 <div className="p-3 rounded" style={{ border: '1px solid #e5e7eb', background: '#fff' }}>
-                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Date</div>
+                  <div className="text-uppercase" style={{ fontSize: 12, color: '#64748b' }}>Invoice Date</div>
                   <div style={{ fontWeight: 600 }}>{dayjs(order.createdAt).format('MMMM D, YYYY')}</div>
                 </div>
               </div>
