@@ -517,7 +517,7 @@ const HeaderTwo = ({ style_2 = false }) => {
             </div>
 
             {/* FULL-WIDTH underline inside the sticky header (stays on scroll) */}
-            <div className={`brand-underline-full ${sticky ? 'is-sticky' : ''}`} aria-hidden="true" />
+            {/* <div className={`brand-underline-full ${sticky ? 'is-sticky' : ''}`} aria-hidden="true" /> */}
           </div>
         </div>
       </header>
