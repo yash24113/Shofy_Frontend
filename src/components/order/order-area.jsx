@@ -471,8 +471,8 @@ const OrderArea = ({ orderId, userId: userIdProp }) => {
                 <div className="col-md-7 col-sm-12">
                   <div className="d-flex align-items-center" style={{ gap: 12 }}>
                     <img
-                      src={RESOLVED_LOGO_URL}
-                      alt="Company Logo"
+                      src="https://amritafashions.com/wp-content/uploads/amrita-fashions-small-logo-india.webp"
+                      alt="Amrita Global Enterprises"
                       width={140}
                       height={44}
                       style={{ height: 'auto', width: 'auto', maxWidth: '140px', maxHeight: '44px' }}
