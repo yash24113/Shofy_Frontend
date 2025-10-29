@@ -9,7 +9,8 @@ import ErrorMsg from '../common/error-msg';
 import { notifyError, notifySuccess } from '@/utils/toast';
 
 const schema = Yup.object().shape({
-  name:          Yup.string().required('Name is required'),
+  firstName:     Yup.string().required('First name is required'),
+  lastName:      Yup.string().required('Last name is required'),
   email:         Yup.string().required('Email is required').email('Enter a valid email'),
   password:      Yup.string().min(8, 'At least 8 characters').required('Password is required'),
   organisation:  Yup.string().required('Organisation is required'),
@@ -92,18 +93,31 @@ export default function RegisterForm() {
       <div className="tp-scroll-area">
         {stage === 'form' && (
           <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
-            {/* Name */}
+            {/* First Name */}
             <div className="tp-input-box">
-              <label className="tp-label" htmlFor="rf-name">Name</label>
+              <label className="tp-label" htmlFor="rf-firstname">First Name</label>
               <input
-                id="rf-name"
+                id="rf-firstname"
                 autoFocus
-                {...register('name')}
                 type="text"
-                placeholder="Your name"
-                className="tp-input"
+                {...register('firstName')}
+                className={`tp-input ${errors.firstName ? 'border-red-500' : ''}`}
+                placeholder="Enter your first name"
               />
-              <ErrorMsg msg={errors.name?.message}/>
+              {errors.firstName && <ErrorMsg msg={errors.firstName.message} />}
+            </div>
+
+            {/* Last Name */}
+            <div className="tp-input-box">
+              <label className="tp-label" htmlFor="rf-lastname">Last Name</label>
+              <input
+                id="rf-lastname"
+                {...register('lastName')}
+                type="text"
+                placeholder="Your last name"
+                className={`tp-input ${errors.lastName ? 'border-red-500' : ''}`}
+              />
+              {errors.lastName && <ErrorMsg msg={errors.lastName.message} />}
             </div>
 
             {/* Email */}

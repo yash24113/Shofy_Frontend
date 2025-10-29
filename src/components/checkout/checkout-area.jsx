@@ -11,12 +11,12 @@ import { selectUserId } from '@/utils/userSelectors';
 import { useCreateOrderMutation } from '@/redux/features/order/orderApi';
 
 /* ---------- helpers ---------- */
-const splitName = (fullName) => {
-  const parts = String(fullName || '').trim().split(/\s+/);
-  const firstName = parts.shift() || '';
-  const lastName = parts.join(' ') || '';
-  return { firstName, lastName };
-};
+// const splitName = (fullName) => {
+//   const parts = String(fullName || '').trim().split(/\s+/);
+//   const firstName = parts.shift() || '';
+//   const lastName = parts.join(' ') || '';
+//   return { firstName, lastName };
+// };
 
 const getErrorMessage = (err) => {
   if (typeof err === 'string') return err;
@@ -145,38 +145,27 @@ const CheckoutArea = () => {
         }
 
         const json = await res.json();
-        const apiUser = json?.user;
+        const user = json?.user;
 
-        if (!apiUser || !apiUser._id) throw new Error('Invalid profile response');
-        if (apiUser._id !== userId) {
+        if (!user || !user._id) throw new Error('Invalid profile response');
+        if (user._id !== userId) {
           toast.error('Loaded profile does not match the current user.');
           return;
         }
 
-        const { firstName, lastName } = splitName(apiUser.name);
-
         if (!alive) return;
         setFormData((prev) => ({
           ...prev,
-          firstName,
-          lastName,
-          email: apiUser.email || prev.email || '',
-          phone: apiUser.phone || prev.phone || '',
-          streetAddress: apiUser.address || prev.streetAddress || '',
-          city: apiUser.city || prev.city || '',
-          country:
-            apiUser.country && /india/i.test(apiUser.country)
-              ? 'India (IN)'
-              : apiUser.country && /united states|usa|us/i.test(apiUser.country)
-              ? 'United States (US)'
-              : apiUser.country && /united kingdom|uk/i.test(apiUser.country)
-              ? 'United Kingdom (UK)'
-              : apiUser.country && /canada/i.test(apiUser.country)
-              ? 'Canada (CA)'
-              : apiUser.country && /australia/i.test(apiUser.country)
-              ? 'Australia (AU)'
-              : prev.country || 'United States (US)',
-          postcode: apiUser.pincode || prev.postcode || '',
+          firstName: user.firstName || 'Customer',
+          lastName: user.lastName || '',
+          email: user.email || prev.email || '',
+          phone: user.phone || prev.phone || 'Not provided',
+          streetAddress: user.address || prev.streetAddress || 'Not provided',
+          city: user.city || prev.city || 'Not provided',
+          country: user.country || prev.country || 'India (IN)',
+          postcode: user.pincode || prev.postcode || 'Not provided',
+          state: user.state || 'Not provided',
+          organisation: user.organisation || 'Not provided'
         }));
       } catch (e) {
         console.error('Failed to prefill profile:', e);
