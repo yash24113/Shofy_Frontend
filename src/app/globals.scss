@@ -310,3 +310,18 @@ h1,h2,h3,h4,h5,h6{
     border-color: var(--tp-theme-primary);
     color: var(--tp-theme-primary);
 }
+/* BLOG: force equal image size like template, and show full image */
+.blog-card { border-radius: 10px; overflow: hidden; }
+.blog-card__thumb{
+  position: relative;
+  width: 100%;
+  /* same visual ratio as template card */
+  aspect-ratio: 16 / 10;  /* tweak to 16/9 if you prefer */
+  background: #f6f8fb;    /* soft backdrop while loading */
+  border-radius: 10px;
+  overflow: hidden;
+}
+.blog-card__img{
+  object-fit: contain !important; /* show the whole photo */
+  object-position: center;
+}
