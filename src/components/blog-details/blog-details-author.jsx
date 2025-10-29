@@ -1,7 +1,7 @@
 import React from "react";
 import Image from "next/image";
 // internal
-import founder_img from "@assets/img/blog/founder_img.jpg";
+import founder_img from "@assets/img/blog/founder1.jpg";
 import signature from "@assets/img/blog/signature/signature.png";
 
 const BlogDetailsAuthor = () => {
