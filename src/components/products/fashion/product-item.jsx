@@ -53,6 +53,61 @@ const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
 const getAnyId = (obj) =>
   obj?._id || obj?.id || obj?.productId || obj?.slug || obj?.product?._id || obj?.product?.id || obj?.product;
 
+/* ensure a robust cart payload for your slice */
+const buildCartItem = (prd, opts = {}) => {
+  const id = getAnyId(prd);
+  const slug = prd?.slug || prd?.product?.slug || id;
+  const name =
+    prd?.name ||
+    prd?.product?.name ||
+    prd?.productname ||
+    prd?.title ||
+    prd?.productTitle ||
+    prd?.groupcode?.name ||
+    'Product';
+
+  // fallbacks for price & image
+  const price =
+    prd?.price ??
+    prd?.mrp ??
+    prd?.minPrice ??
+    prd?.sellingPrice ??
+    prd?.product?.price ??
+    0;
+
+  const image =
+    prd?.image ||
+    prd?.img ||
+    prd?.image1 ||
+    prd?.image2 ||
+    prd?.thumbnail ||
+    prd?.images?.[0] ||
+    prd?.mainImage ||
+    '/assets/img/product/default-product-img.jpg';
+
+  return {
+    // common ids your reducers typically use:
+    _id: id,
+    id,
+    productId: id,
+
+    // core fields:
+    name,
+    slug,
+    image,
+    price,
+
+    // cart fields:
+    qty: opts.qty ?? 1,
+
+    // keep original for reducers/selectors that need full object
+    product: prd,
+
+    // allow downstream overrides
+    ...opts,
+  };
+};
+
 const ProductItem = ({ product }) => {
   const router = useRouter();
   const rainbowId = useId();
@@ -63,6 +118,7 @@ const ProductItem = ({ product }) => {
   const [showActions, setShowActions] = useState(false);
   const [supportsHover, setSupportsHover] = useState(true);
   const [addingCart, setAddingCart] = useState(false);
+  const [optimisticInCart, setOptimisticInCart] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -70,52 +126,8 @@ const ProductItem = ({ product }) => {
     }
   }, []);
 
-  // Get userId from centralized selector
+  // Get userId from centralized selector (might not be required for local cart, but keep)
   const userId = useSelector(selectUserId);
-
-  // act immediately - ADD TO CART
-  const handleAddProduct = async (prd, e) => {
-    e?.stopPropagation?.(); e?.preventDefault?.();
-    if (addingCart) return; // guard: avoid double-click races
-    setAddingCart(true);
-    try {
-      // Shape the item as your slice expects
-      const formatted = formatProductForCart(prd);
-      // Dispatch add to cart
-      await dispatch(add_cart_product(formatted));
-      // Optionally open mini cart (comment out if not desired)
-      dispatch(openCartMini());
-      setShowActions(true);
-    } catch (err) {
-      console.error('Add to cart failed:', err);
-    } finally {
-      setAddingCart(false);
-    }
-  };
-
-  // server-backed toggle (PUT)
-  const handleWishlistProduct = async (prd, e) => {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
-
-    // If we still don't have a userId, go to login
-    if (!userId) {
-      router.push('/login');
-      return;
-    }
-
-    const formatted = formatProductForWishlist(prd);
-    try {
-      await dispatch(toggleWishlistItem({ userId, product: formatted })).unwrap();
-    } catch (err) {
-      console.error('Wishlist toggle failed:', err);
-    }
-  };
-
-  const openQuickView = (prd, e) => {
-    e?.preventDefault?.(); e?.stopPropagation?.();
-    dispatch(handleProductModal({ ...prd }));
-  };
 
   /* image helpers */
   const valueToUrlString = (v) => {
@@ -207,8 +219,66 @@ const ProductItem = ({ product }) => {
   const wishlistItems = useSelector((s) => s.wishlist?.wishlist || []);
 
   // robust id matching against various shapes
-  const inCart = cartItems.some((it) => String(getAnyId(it)) === String(productId));
+  const inCartReal = cartItems.some((it) => String(getAnyId(it)) === String(productId));
+  const inCart = inCartReal || optimisticInCart;
   const inWishlist = wishlistItems.some((it) => String(getAnyId(it)) === String(productId));
+
+  /* ADD TO CART — guaranteed */
+  const handleAddProduct = async (prd, e) => {
+    e?.stopPropagation?.(); e?.preventDefault?.();
+    if (addingCart) return;
+    setAddingCart(true);
+
+    try {
+      // 1) Start with a safe normalized shape
+      const baseItem = buildCartItem(prd, { qty: 1 });
+
+      // 2) Merge any richer mapping you already have
+      const mapped = (typeof formatProductForCart === 'function')
+        ? { ...baseItem, ...formatProductForCart(prd) }
+        : baseItem;
+
+      // 3) Dispatch using the most common payload shape for cart slices
+      //    (If your slice expects a wrapper object, it can still read needed fields from mapped)
+      await dispatch(add_cart_product(mapped));
+
+      // 4) Optimistic UI + open mini cart
+      setOptimisticInCart(true);
+      dispatch(openCartMini());
+      setShowActions(true);
+    } catch (err) {
+      console.error('Add to cart failed:', err);
+    } finally {
+      setAddingCart(false);
+    }
+  };
+
+  // server-backed toggle (PUT)
+  const handleWishlistProduct = async (prd, e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+
+    // If we still don't have a userId, go to login
+    if (!userId) {
+      router.push('/login');
+      return;
+    }
+
+    const formatted = (typeof formatProductForWishlist === 'function')
+      ? formatProductForWishlist(prd)
+      : { product: prd, productId: getAnyId(prd) };
+
+    try {
+      await dispatch(toggleWishlistItem({ userId, product: formatted })).unwrap();
+    } catch (err) {
+      console.error('Wishlist toggle failed:', err);
+    }
+  };
+
+  const openQuickView = (prd, e) => {
+    e?.preventDefault?.(); e?.stopPropagation?.();
+    dispatch(handleProductModal({ ...prd }));
+  };
 
   /* 🔎 decide visibility for this item */
   const isVisible = useMemo(() => {
