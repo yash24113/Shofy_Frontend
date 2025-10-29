@@ -6,6 +6,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { usePathname } from 'next/navigation';
 import useSticky from '@/hooks/use-sticky';
 import useCartInfo from '@/hooks/use-cart-info'; // keep if you still need other info it provides
+import Image from 'next/image';
+
 import {
   openCartMini,
   selectCartDistinctCount,
@@ -36,6 +38,7 @@ const selectUserIdFromStore = (state) =>
   state?.user?.user?._id ||
   null;
 
+/** Normalizer for search results */
 function normalizeProduct(p) {
   const id = p._id || p.id || p.slug || String(Math.random());
   const slug = p.slug || p.seoSlug || p.handle || '';
@@ -47,6 +50,7 @@ function normalizeProduct(p) {
   return { id, slug, name, img, price };
 }
 
+/** Multi-endpoint product search helper */
 async function searchProducts(q, limit = PAGE_SIZE, signal) {
   const b = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
   const queries = [
@@ -66,11 +70,36 @@ async function searchProducts(q, limit = PAGE_SIZE, signal) {
               : Array.isArray(data?.items) ? data.items
                 : [];
       return arr.map(normalizeProduct);
-    } catch {
-      // try next
+    } catch(err) {
+        console.log("Error in searchProducts:", err);
     }
   }
   return [];
+}
+
+/** === NEW: dedicated fetcher for profile image by userId === */
+const SHOPY_API_BASE = 'https://test.amrita-fashions.com/shopy';
+async function fetchUserAvatarById(userId, signal) {
+  if (!userId) return null;
+  try {
+    const res = await fetch(`${SHOPY_API_BASE}/users/${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      credentials: 'include', // safe to keep; server may ignore
+      signal,
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    // server example shape:
+    // { success: true, user: { userImage: "https://..." } }
+    const url =
+      json?.user?.userImage ||
+      json?.userImage ||
+      json?.data?.user?.userImage ||
+      null;
+    return typeof url === 'string' && url.trim() ? url.trim() : null;
+  } catch {
+    return null;
+  }
 }
 
 const HeaderTwo = ({ style_2 = false }) => {
@@ -81,7 +110,6 @@ const HeaderTwo = ({ style_2 = false }) => {
   const reduxUserId = useSelector(selectUserIdFromStore);
   const [fallbackUserId, setFallbackUserId] = useState(null);
   useEffect(() => {
-    // fallback to localStorage if Redux isn’t populated yet
     if (typeof window !== 'undefined') {
       const uid = window.localStorage.getItem('userId');
       if (uid) setFallbackUserId(uid);
@@ -218,35 +246,47 @@ const HeaderTwo = ({ style_2 = false }) => {
   const [userImage, setUserImage] = useState(null);
   const userBtnRef = useRef(null);
   const userMenuRef = useRef(null);
-  
-  // Fetch user data when userId is available
+
+  // Prefer fetching full session if available (may include avatar)
   const { data: userData } = useGetSessionInfoQuery(
     { userId },
     { skip: !userId, refetchOnMountOrArgChange: true }
   );
-  
-  // Update user image when user data changes
+
+  // Update image from session payload if present
   useEffect(() => {
     if (userData?.user?.userImage) {
       setUserImage(userData.user.userImage);
     } else if (userData?.user?.avatar) {
       setUserImage(userData.user.avatar);
-    } else {
-      setUserImage(null);
     }
   }, [userData]);
 
-  const currentUrl = useMemo(() => {
-    if (typeof window === 'undefined') return '/';
-    const url = new URL(window.location.href);
-    return url.pathname + url.search;
-  }, []);
-
+  // === NEW: If userId exists but session didn't give avatar, fetch it from /shopy/users/{userId}
   useEffect(() => {
-    const check = () =>
-      setHasSession(typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId'));
+    if (!userId) return;
+    // If we already have an image from session, keep it; else fetch
+    if (userImage && typeof userImage === 'string' && userImage.trim()) return;
+
+    const controller = new AbortController();
+    fetchUserAvatarById(userId, controller.signal).then((url) => {
+      if (url) setUserImage(url);
+    });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  // Consider a user "has session" if either a server session or a userId exists
+  useEffect(() => {
+    const check = () => {
+      const lsHasSessionId = typeof window !== 'undefined' && !!window.localStorage.getItem('sessionId');
+      const lsHasUserId = typeof window !== 'undefined' && !!window.localStorage.getItem('userId');
+      setHasSession(lsHasSessionId || lsHasUserId);
+    };
     check();
-    const onStorage = (e) => { if (e.key === 'sessionId') check(); };
+    const onStorage = (e) => {
+      if (e.key === 'sessionId' || e.key === 'userId') check();
+    };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
@@ -311,6 +351,12 @@ const HeaderTwo = ({ style_2 = false }) => {
       dispatch(fetch_cart_products({ userId }));
     }
   };
+
+  const currentUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '/';
+    const url = new URL(window.location.href);
+    return url.pathname + url.search;
+  }, []);
 
   return (
     <>
@@ -426,24 +472,32 @@ const HeaderTwo = ({ style_2 = false }) => {
                                 type="button"
                                 style={userImage ? { padding: 0, overflow: 'hidden', borderRadius: '50%' } : {}}
                               >
+                                {/* === Show avatar if available; else fallback icon === */}
                                 {userImage ? (
-                                  <img 
-                                    src={userImage} 
-                                    alt="Profile" 
-                                    style={{
-                                      width: '32px',
-                                      height: '32px',
-                                      objectFit: 'cover',
-                                      borderRadius: '50%',
-                                      border: '1px solid rgba(0,0,0,0.1)'
-                                    }}
-                                    onError={(e) => {
-                                      e.target.style.display = 'none';
-                                      e.target.nextSibling.style.display = 'inline-flex';
-                                    }}
-                                  />
-                                ) : null}
-                                <FaUser style={userImage ? { display: 'none' } : {}} />
+                                  <>
+                                    <img
+                                      src={userImage}
+                                      alt="Profile"
+                                      style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        objectFit: 'cover',
+                                        borderRadius: '50%',
+                                        border: '1px solid rgba(0,0,0,0.1)'
+                                      }}
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                        // show icon if image fails
+                                        const sib = e.currentTarget.nextElementSibling;
+                                        if (sib && sib.style) sib.style.display = 'inline-flex';
+
+                                      }}
+                                    />
+                                    <FaUser style={{ display: 'none' }} />
+                                  </>
+                                ) : (
+                                  <FaUser />
+                                )}
                               </button>
 
                               {userOpen && (
@@ -486,7 +540,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                           </Link>
                         </div>
 
-                        {/* Cart — (show only when logged in) */}
+                        {/* Cart — (show only when logged in / user present) */}
                         {hasSession && (
                           <div className="tp-header-action-item me-2">
                             <button
