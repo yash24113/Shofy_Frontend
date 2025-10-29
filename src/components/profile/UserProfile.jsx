@@ -414,15 +414,29 @@ export default function UserProfile() {
   }, [countryName, stateName, setValue]);
 
   /* ---------------- Avatar pick ---------------- */
+  const [selectedFile, setSelectedFile] = useState(null);
+
   const onPickAvatar = (file) => {
     if (!file) return;
-    if (!file.type.match('image.*')) { notifyError('Please select a valid image file'); return; }
-    if (file.size > 5 * 1024 * 1024) { notifyError('Image size should be less than 5MB'); return; }
+    if (!file.type.match('image.*')) { 
+      notifyError('Please select a valid image file'); 
+      return; 
+    }
+    if (file.size > 5 * 1024 * 1024) { 
+      notifyError('Image size should be less than 5MB'); 
+      return; 
+    }
+    
+    // Store the actual file for upload
+    setSelectedFile(file);
+    
+    // Create preview
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result || null;
       setAvatarPreview(result);
-      setLocalUser(prev => ({ ...(prev || {}), userImage: result, avatar: result }));
+      // We don't update localUser with the base64 here anymore
+      // as we'll handle the file upload in the submit
     };
     reader.onerror = () => notifyError('Failed to read the image file');
     reader.readAsDataURL(file);
@@ -450,9 +464,17 @@ export default function UserProfile() {
       city: cleanString(cityName || data.city || user?.city || ''),
       state: cleanString(stateName || data.state || user?.state || ''),
       country: cleanString(countryName || data.country || user?.country || ''),
-      pincode: cleanString(data.pincode ?? ''),
-      avatar: avatarPreview || user?.avatar || user?.userImage || ''
+      pincode: cleanString(data.pincode ?? '')
     };
+    
+    // If we have a new file to upload, add it to the update data
+    let fileToUpload = null;
+    if (selectedFile) {
+      fileToUpload = selectedFile;
+    } else if (avatarPreview && avatarPreview.startsWith('data:')) {
+      // If we have a preview but no selected file, it means we're using an existing image
+      updateData.avatar = user?.avatar || user?.userImage || '';
+    }
 
     const changed = diffPayload(
       updateData,
@@ -460,7 +482,7 @@ export default function UserProfile() {
       new Set(['organisation','address','city','state','country','pincode'])
     );
 
-    if (!Object.keys(changed).length) {
+    if (!Object.keys(changed).length && !fileToUpload) {
       notifySuccess('Nothing to update');
       setActive('profile');
       return;
@@ -468,16 +490,44 @@ export default function UserProfile() {
 
     let updatedResp = null;
     try {
-      updatedResp = await updateProfile({ id: userId, ...changed }).unwrap();
-    } catch (e1) {
-      try {
-        updatedResp = await updateProfile({ id: userId, body: changed }).unwrap();
-      } catch (e2) {
-        const msg =
-          e2?.data?.message || e1?.data?.message || e2?.error || e1?.error || 'Update failed';
-        notifyError(msg);
-        return;
+      // If we have a file to upload, send it separately
+      if (fileToUpload) {
+        const formData = new FormData();
+        formData.append('userImage', fileToUpload);
+        
+        // Append other changed fields to formData
+        Object.keys(changed).forEach(key => {
+          if (changed[key] !== undefined && changed[key] !== null) {
+            formData.append(key, changed[key]);
+          }
+        });
+        
+        // Get the base URL from environment variables and ensure proper URL construction
+        const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
+        const apiUrl = `${baseUrl}/users/${userId}`.replace(/([^:])(\/\/)/g, '$1/');
+        
+        // Send the request with the file and other data
+        const response = await fetch(apiUrl, {
+          method: 'PUT',
+          credentials: 'include',
+          body: formData,
+          // Don't set Content-Type header - let the browser set it with the correct boundary
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Failed to update profile');
+        }
+        
+        updatedResp = await response.json();
+      } else {
+        // If no file to upload, use the regular updateProfile mutation
+        updatedResp = await updateProfile({ id: userId, ...changed }).unwrap();
       }
+    } catch (error) {
+      console.error('Update error:', error);
+      notifyError(error.message || 'Failed to update profile');
+      return;
     }
 
     // Normalize returned user
@@ -491,6 +541,9 @@ export default function UserProfile() {
       avatar: respUser.userImage ?? respUser.avatar ?? avatarPreview ?? user.avatar,
     };
 
+    // Clear the selected file after successful upload
+    setSelectedFile(null);
+    
     // persist
     writeUserInfoCookiePreserving(updatedUser);
     setLocalUser(updatedUser);

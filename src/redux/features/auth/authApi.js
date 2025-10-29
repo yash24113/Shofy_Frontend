@@ -192,12 +192,52 @@ export const authApi = apiSlice.injectEndpoints({
      * Update Profile
      * ────────────────────────────────────────── */
     updateProfile: builder.mutation({
-      query: ({ id, ...data }) => ({
-        url: `users/${id}`,
-        method: "PUT",
-        credentials: "include",
-        body: data,
-      }),
+      query: ({ id, avatar, ...data }) => {
+        // Ensure we have a valid user ID
+        if (!id) {
+          throw new Error('User ID is required');
+        }
+
+        // Always use FormData when there's a file or when we need to send the avatar
+        if (avatar instanceof File || (data.avatar && typeof data.avatar === 'string')) {
+          const formData = new FormData();
+          
+          // If we have a file, append it
+          if (avatar instanceof File) {
+            formData.append('userImage', avatar);
+          }
+          
+          // Append all other data fields to formData
+          Object.keys(data).forEach(key => {
+            if (data[key] !== undefined && data[key] !== null && key !== 'id') {
+              // Convert to string if it's not a file
+              const value = typeof data[key] === 'object' && !(data[key] instanceof File) 
+                ? JSON.stringify(data[key]) 
+                : data[key];
+              formData.append(key, value);
+            }
+          });
+          
+          return {
+            url: `/users/${id}`,  // Ensure leading slash for absolute URL
+            method: "PUT",
+            credentials: "include",
+            body: formData,
+            headers: {},
+          };
+        }
+        
+        // For non-file updates, send as JSON
+        return {
+          url: `/users/${id}`,  // Ensure leading slash for absolute URL
+          method: "PUT",
+          credentials: "include",
+          body: data,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        };
+      },
       async onQueryStarted(arg, { queryFulfilled, dispatch }) {
         try {
           const { data } = await queryFulfilled;
