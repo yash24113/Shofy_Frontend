@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { formatProductForCart, formatProductForWishlist } from '@/utils/authUtils';
-import { add_cart_product } from '@/redux/features/cartSlice';
+import { add_cart_product, openCartMini } from '@/redux/features/cartSlice';
 import { toggleWishlistItem } from '@/redux/features/wishlist-slice';
 
 import { Cart, CartActive, Wishlist, WishlistActive, QuickView, Share } from '@/svg';
@@ -17,6 +17,8 @@ import { useGetSeoByProductQuery } from '@/redux/features/seoApi';
 
 import useGlobalSearch from '@/hooks/useGlobalSearch';
 import { buildSearchPredicate } from '@/utils/searchMiddleware';
+
+import { selectUserId } from '@/utils/userSelectors';
 
 /* helpers */
 const nonEmpty = (v) => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && String(v).trim() !== '');
@@ -47,7 +49,9 @@ const uniq = (arr) => {
 };
 const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
 
-import { selectUserId } from '@/utils/userSelectors';
+/* safely extract a comparable id */
+const getAnyId = (obj) =>
+  obj?._id || obj?.id || obj?.productId || obj?.slug || obj?.product?._id || obj?.product?.id || obj?.product;
 
 const ProductItem = ({ product }) => {
   const router = useRouter();
@@ -58,6 +62,7 @@ const ProductItem = ({ product }) => {
 
   const [showActions, setShowActions] = useState(false);
   const [supportsHover, setSupportsHover] = useState(true);
+  const [addingCart, setAddingCart] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -68,10 +73,24 @@ const ProductItem = ({ product }) => {
   // Get userId from centralized selector
   const userId = useSelector(selectUserId);
 
-  // act immediately
-  const handleAddProduct = (prd, e) => {
+  // act immediately - ADD TO CART
+  const handleAddProduct = async (prd, e) => {
     e?.stopPropagation?.(); e?.preventDefault?.();
-    dispatch(add_cart_product(formatProductForCart(prd)));
+    if (addingCart) return; // guard: avoid double-click races
+    setAddingCart(true);
+    try {
+      // Shape the item as your slice expects
+      const formatted = formatProductForCart(prd);
+      // Dispatch add to cart
+      await dispatch(add_cart_product(formatted));
+      // Optionally open mini cart (comment out if not desired)
+      dispatch(openCartMini());
+      setShowActions(true);
+    } catch (err) {
+      console.error('Add to cart failed:', err);
+    } finally {
+      setAddingCart(false);
+    }
   };
 
   // server-backed toggle (PUT)
@@ -121,7 +140,7 @@ const ProductItem = ({ product }) => {
   }, [product]);
 
   /* title, slug, category */
-  const productId = product?._id || product?.product?._id || product?.product;
+  const productId = getAnyId(product);
   const { data: seoResp } = useGetSeoByProductQuery(productId, { skip: !productId });
   const seoDoc = Array.isArray(seoResp?.data) ? seoResp?.data?.[0] : seoResp?.data;
 
@@ -187,8 +206,9 @@ const ProductItem = ({ product }) => {
   const cartItems = useSelector((s) => s.cart?.cart_products || []);
   const wishlistItems = useSelector((s) => s.wishlist?.wishlist || []);
 
-  const inCart = cartItems.some((it) => String(it?._id) === String(productId));
-  const inWishlist = wishlistItems.some((it) => String(it?._id) === String(productId));
+  // robust id matching against various shapes
+  const inCart = cartItems.some((it) => String(getAnyId(it)) === String(productId));
+  const inWishlist = wishlistItems.some((it) => String(getAnyId(it)) === String(productId));
 
   /* 🔎 decide visibility for this item */
   const isVisible = useMemo(() => {
@@ -274,6 +294,7 @@ const ProductItem = ({ product }) => {
                 aria-label={inCart ? 'In cart' : 'Add to cart'}
                 aria-pressed={inCart}
                 title={inCart ? 'Added to cart' : 'Add to cart'}
+                disabled={addingCart}
               >
                 {inCart ? <CartActive /> : <Cart />}
               </button>
@@ -307,7 +328,7 @@ const ProductItem = ({ product }) => {
                       } else {
                         prompt('Copy link', url);
                       }
-                    } catch { return [];}
+                    } catch {/* ignore */}
                   })();
                 }}
                 className="action-button"
