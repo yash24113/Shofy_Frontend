@@ -7,6 +7,13 @@ export const metadata = {
   title: "Amrita Global Enterprises - Order Details",
 };
 
+// Force SSR for order details
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "default-no-store";
+export const runtime = 'edge';
+export const preferredRegion = 'auto';
+
 export default function OrderPage({ params, searchParams }) {
   // Route folder is [id], so params.id is the order id
   const orderId = params?.id;

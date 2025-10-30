@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { formatProductForCart, formatProductForWishlist } from '@/utils/authUtils';
-import { add_cart_product, openCartMini } from '@/redux/features/cartSlice';
+import { add_to_cart, openCartMini, fetch_cart_products } from '@/redux/features/cartSlice';
 import { toggleWishlistItem } from '@/redux/features/wishlist-slice';
 
 import { Cart, CartActive, Wishlist, WishlistActive, QuickView, Share } from '@/svg';
@@ -223,7 +223,7 @@ const ProductItem = ({ product }) => {
   const inCart = inCartReal || optimisticInCart;
   const inWishlist = wishlistItems.some((it) => String(getAnyId(it)) === String(productId));
 
-  /* ADD TO CART — guaranteed */
+  /* ADD TO CART — server-backed with header/mini-cart refresh */
   const handleAddProduct = async (prd, e) => {
     e?.stopPropagation?.(); e?.preventDefault?.();
     if (addingCart) return;
@@ -238,9 +238,15 @@ const ProductItem = ({ product }) => {
         ? { ...baseItem, ...formatProductForCart(prd) }
         : baseItem;
 
-      // 3) Dispatch using the most common payload shape for cart slices
-      //    (If your slice expects a wrapper object, it can still read needed fields from mapped)
-      await dispatch(add_cart_product(mapped));
+      // Require login
+      if (!userId) {
+        router.push('/login');
+        return;
+      }
+
+      // 3) Call API thunk and refresh slice
+      await dispatch(add_to_cart({ userId, productId: mapped.productId, quantity: mapped.qty })).unwrap();
+      await dispatch(fetch_cart_products({ userId }));
 
       // 4) Optimistic UI + open mini cart
       setOptimisticInCart(true);

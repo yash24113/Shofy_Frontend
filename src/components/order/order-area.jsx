@@ -34,8 +34,7 @@ const safeGetLocalUserId = () => {
  *  - LOGO_WEB_URL is a plain string (e.g., '/_next/static/media/age.xxx.jpg')
  *  - LOGO_WEB_URL might be an object with .src (if you've wrapped it)
  */
-const RESOLVED_LOGO_URL =
-  typeof LOGO_WEB_URL === 'string' ? LOGO_WEB_URL : (LOGO_WEB_URL && LOGO_WEB_URL.src) || '';
+const RESOLVED_LOGO_URL = '/assets/img/logo/my_logo.png';
 
 /** API base */
 const API_BASE = 'https://test.amrita-fashions.com';
@@ -49,8 +48,8 @@ const ROW_ALT = '#f8fafc';
 const SOFT = '#f1f5f9';
 
 /* --------------------------- PDF: styles ---------------------------- */
-const HEADER_H = 96;
-const FOOTER_H = 86;
+const HEADER_H = 70;
+const FOOTER_H = 70;
 
 const pdfStyles = PDFStyleSheet.create({
   page: {
@@ -64,9 +63,8 @@ const pdfStyles = PDFStyleSheet.create({
 
   /* header */
   headerWrap: { position: 'absolute', left: 0, right: 0, top: 0, height: HEADER_H, paddingHorizontal: 40 },
-  headerCanvas: { position: 'absolute', left: 0, right: 0, top: 70, height: 5 },
-  headerBlueLine: { position: 'absolute', left: 0, right: 0, top: 0, height: 1, backgroundColor: BRAND_BLUE },
-  headerGoldLine: { position: 'absolute', left: 0, right: 0, top: 2, height: 2, backgroundColor: BRAND_YELLOW },
+  headerCanvas: { position: 'absolute', left: 0, right: 0, top: 8, height: 2 },
+  headerGoldLine: { position: 'absolute', left: 0, right: 0, top: 8, height: 2, backgroundColor: BRAND_YELLOW },
 
   headerRow: {
     position: 'absolute',
@@ -109,12 +107,11 @@ const pdfStyles = PDFStyleSheet.create({
   docTitle: { fontSize: 20, fontWeight: 'bold', color: BRAND_BLUE, textAlign: 'center', letterSpacing: 1 },
 
   /* footer */
-  footerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, height: FOOTER_H, paddingHorizontal: 40, justifyContent: 'flex-end', paddingBottom: 12 },
-  footerCanvas: { position: 'absolute', left: 0, right: 0, top: 0, height: 5 },
-  footerBlue: { position: 'absolute', left: 0, right: 0, top: 0, height: 1, backgroundColor: BRAND_BLUE },
-  footerGold: { position: 'absolute', left: 0, right: 0, top: 2, height: 2, backgroundColor: BRAND_YELLOW },
-  footerTextBlock: { textAlign: 'center', color: BRAND_BLUE },
-  footerLine: { fontSize: 9, marginTop: 3, textAlign: 'center', lineHeight: 1.4 },
+  footerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, height: FOOTER_H, paddingHorizontal: 40, justifyContent: 'flex-end', paddingBottom: 6 },
+  footerCanvas: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 2 },
+  footerGold: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, backgroundColor: BRAND_YELLOW },
+  footerTextBlock: { position: 'absolute', left: 40, right: 40, bottom: 10, textAlign: 'center', color: BRAND_BLUE },
+  footerLine: { fontSize: 9, lineHeight: 1.35 },
 
   /* cards & text */
   card: { padding: 12, border: `1px solid ${BORDER}`, borderRadius: 12, backgroundColor: '#fff', marginBottom: 10 },
@@ -181,7 +178,6 @@ function InvoicePDF({ order, fullName, logoSrc }) {
         {/* Fixed header */}
         <PDFView style={pdfStyles.headerWrap} fixed>
           <PDFView style={pdfStyles.headerCanvas}>
-            <PDFView style={pdfStyles.headerBlueLine} />
             <PDFView style={pdfStyles.headerGoldLine} />
           </PDFView>
           <PDFView style={pdfStyles.headerRow}>
@@ -304,7 +300,6 @@ function InvoicePDF({ order, fullName, logoSrc }) {
         {/* fixed footer */}
         <PDFView style={pdfStyles.footerWrap} fixed>
           <PDFView style={pdfStyles.footerCanvas}>
-            <PDFView style={pdfStyles.footerBlue} />
             <PDFView style={pdfStyles.footerGold} />
           </PDFView>
           <PDFView style={pdfStyles.footerTextBlock}>

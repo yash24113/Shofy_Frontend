@@ -14,6 +14,7 @@ import {
   Text as PDFText,
   View as PDFView,
   StyleSheet as PDFStyleSheet,
+  Image as PDFImage,
 } from '@react-pdf/renderer';
 
 import {
@@ -610,6 +611,7 @@ export default function UserProfile() {
 
   /* ---------------- PDF generator (kept your implementation) ---------------- */
   const generateInvoicePdf = async (order) => {
+    const LOGO_URL = '/assets/img/logo/my_logo.png';
     const fmtINR = (n) => {
       const val = Number(n || 0);
       return `₹${val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -665,12 +667,23 @@ export default function UserProfile() {
     const HEAD_BG = '#F3F4F6';
     const TOTAL_BG = '#EEF2FF';
 
+    const HEADER_H = 70;
+    const FOOTER_H = 70;
+
     const S = PDFStyleSheet.create({
-      page: { paddingTop: 28, paddingBottom: 28, paddingHorizontal: 36, fontSize: 10, color: TEXT },
-      headerBrand: { textAlign: 'center', fontSize: 14, fontWeight: 700, color: BLUE },
-      headerTag: { textAlign: 'center', fontSize: 9, color: MUTED, marginTop: 2 },
-      goldRule: { height: 2, backgroundColor: GOLD, marginTop: 8, marginBottom: 14 },
-      title: { textAlign: 'center', fontSize: 13, fontWeight: 700, color: BLUE, marginBottom: 10 },
+      page: { paddingTop: HEADER_H + 12, paddingBottom: FOOTER_H + 8, paddingHorizontal: 36, fontSize: 10, color: TEXT },
+      // header
+      headerWrap: { position: 'absolute', left: 0, right: 0, top: 0, height: HEADER_H, paddingHorizontal: 36 },
+      headerCanvas: { position: 'absolute', left: 0, right: 0, top: 8, height: 2 },
+      headerGoldLine: { position: 'absolute', left: 0, right: 0, top: 8, height: 2, backgroundColor: GOLD },
+      headerRow: { position: 'absolute', top: 16, left: 36, right: 36, height: 44, flexDirection: 'row', alignItems: 'center' },
+      logoBox: { width: 140, height: 44, borderRadius: 6, overflow: 'hidden', backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center' },
+      logoContain: { width: 'auto', height: 'auto', maxWidth: 140, maxHeight: 44, objectFit: 'contain' },
+      brandTextWrap: { marginLeft: 12 },
+      headerBrand: { fontSize: 16, fontWeight: 700, color: BLUE },
+      headerTag: { fontSize: 9, color: MUTED, marginTop: 2 },
+      // title
+      title: { textAlign: 'center', fontSize: 20, fontWeight: 700, color: BLUE, marginBottom: 10 },
 
       row: { flexDirection: 'row', gap: 10 },
       col: { flex: 1 },
@@ -721,16 +734,30 @@ export default function UserProfile() {
       totalsCellR: { width: 100, padding: 8, fontSize: 9, textAlign: 'right' },
       totalsHead: { backgroundColor: TOTAL_BG, fontWeight: 700 },
 
-      footerGoldRule: { height: 2, backgroundColor: GOLD, marginTop: 24, marginBottom: 6 },
-      footer: { textAlign: 'center', fontSize: 8, color: MUTED, lineHeight: 1.3 },
+      footerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, height: FOOTER_H, paddingHorizontal: 36 },
+      footerCanvas: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 2 },
+      footerGold: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, backgroundColor: GOLD },
+      footerText: { position: 'absolute', left: 36, right: 36, bottom: 10, textAlign: 'center', fontSize: 8, color: MUTED, lineHeight: 1.3 },
     });
 
     const doc = (
       <PDFDocument>
         <PDFPage size="A4" style={S.page}>
-          <PDFText style={S.headerBrand}>{company.name}</PDFText>
-          <PDFText style={S.headerTag}>{company.tagline}</PDFText>
-          <PDFView style={S.goldRule} />
+          <PDFView style={S.headerWrap} fixed>
+            <PDFView style={S.headerCanvas}>
+              <PDFView style={S.headerGoldLine} />
+            </PDFView>
+            <PDFView style={S.headerRow}>
+              <PDFView style={S.logoBox}>
+                <PDFImage src={LOGO_URL} style={S.logoContain} />
+              </PDFView>
+              <PDFView style={S.brandTextWrap}>
+                <PDFText style={S.headerBrand}>{company.name}</PDFText>
+                <PDFText style={S.headerTag}>{company.tagline}</PDFText>
+              </PDFView>
+            </PDFView>
+          </PDFView>
+
           <PDFText style={S.title}>INVOICE</PDFText>
 
           <PDFView style={[S.row, { marginBottom: 4 }]}>
@@ -817,10 +844,14 @@ export default function UserProfile() {
             </PDFView>
           </PDFView>
 
-          <PDFView style={{ height: 2, backgroundColor: GOLD, marginTop: 24, marginBottom: 6 }} />
-          <PDFText style={{ textAlign: 'center', fontSize: 8, color: MUTED, lineHeight: 1.3 }}>
-            404, Safal Prelude, Corporate Rd, Prahlad Nagar, Ahmedabad, Gujarat 380015 • {company.email} • amrita-fashions.com • {company.phone}
-          </PDFText>
+          <PDFView style={S.footerWrap} fixed>
+            <PDFView style={S.footerCanvas}>
+              <PDFView style={S.footerGold} />
+            </PDFView>
+            <PDFText style={S.footerText}>
+              404, Safal Prelude, Corporate Rd, Prahlad Nagar, Ahmedabad, Gujarat 380015 • {company.email} • amrita-fashions.com • {company.phone}
+            </PDFText>
+          </PDFView>
         </PDFPage>
       </PDFDocument>
     );

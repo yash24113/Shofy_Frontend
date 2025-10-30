@@ -5,11 +5,9 @@ import Footer from "@/layout/footers/footer";
 import ShopArea from "@/components/shop/shop-area";
 
 /* ---------------------------------------------
-   Force SSR for this route (no caching)
+   Incremental Static Regeneration (ISR)
 ---------------------------------------------- */
-export const dynamic = "force-dynamic";       // render on the server every request
-export const revalidate = 0;                   // disable ISR
-export const fetchCache = "default-no-store";  // don't cache fetch() calls
+export const revalidate = 120; // rebuild page in the background at most every 2 minutes
 
 export const metadata = {
   title: "Shofy - Shop Page",
@@ -49,8 +47,9 @@ async function fetchProductsSSR() {
     try {
       const res = await fetch(url, {
         headers: buildApiHeaders(),
-        cache: "no-store",        // SSR: no HTTP cache
-        next: { revalidate: 0 },  // SSR: no Next cache
+        // Let Next.js cache and revalidate according to the route's revalidate
+        cache: "force-cache",
+        next: { revalidate },
       });
       if (!res.ok) continue;
 

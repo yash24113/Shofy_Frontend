@@ -12,6 +12,13 @@ export const metadata = {
   title: "Shofy - Cart Page",
 };
 
+// Force SSR for fast, fresh API-driven cart
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "default-no-store";
+export const runtime = 'edge';
+export const preferredRegion = 'auto';
+
 export default function CartPage() {
   // ----- Server-side guard -----
   const cookieStore = cookies();

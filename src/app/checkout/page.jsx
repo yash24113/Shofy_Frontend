@@ -8,6 +8,13 @@ export const metadata = {
   title: "Shofy - Checkout Page",
 };
 
+// Force SSR for fresh checkout calculations and validations
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "default-no-store";
+export const runtime = 'edge';
+export const preferredRegion = 'auto';
+
 export default function CheckoutPage() {
   return (
     <Wrapper>

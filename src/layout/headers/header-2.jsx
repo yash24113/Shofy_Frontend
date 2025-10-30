@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import useSticky from '@/hooks/use-sticky';
 import useCartInfo from '@/hooks/use-cart-info'; // keep if you still need other info it provides
 import Image from 'next/image';
@@ -105,6 +105,7 @@ async function fetchUserAvatarById(userId, signal) {
 const HeaderTwo = ({ style_2 = false }) => {
   const dispatch = useDispatch();
   const { sticky } = useSticky();
+  const router = useRouter();
 
   // ===== user / wishlist =====
   const reduxUserId = useSelector(selectUserIdFromStore);
@@ -207,7 +208,7 @@ const HeaderTwo = ({ style_2 = false }) => {
   const go = (href) => {
     resetSearchUI();
     try { window.scrollTo?.(0, 0); } catch(err) { console.log("err:",err) ;}
-    window.location.href = href;
+    router.push(href);
   };
 
   const onSearchSubmit = (e) => {
@@ -337,7 +338,7 @@ const HeaderTwo = ({ style_2 = false }) => {
     } finally {
       setHasSession(false);
       setUserOpen(false);
-      if (typeof window !== 'undefined') window.location.href = '/';
+      if (typeof window !== 'undefined') router.push('/');
     }
   };
 
@@ -357,6 +358,14 @@ const HeaderTwo = ({ style_2 = false }) => {
     const url = new URL(window.location.href);
     return url.pathname + url.search;
   }, []);
+
+  // Prefetch common routes for faster nav
+  useEffect(() => {
+    try {
+      ['/shop','/wishlist','/cart','/profile','/login','/register']
+        .forEach((p) => router.prefetch?.(p));
+    } catch {}
+  }, [router]);
 
   return (
     <>
@@ -440,7 +449,7 @@ const HeaderTwo = ({ style_2 = false }) => {
                                   key={`${p.id}-${i}`}
                                   type="button"
                                   className={`search-item ${active ? 'active' : ''}`}
-                                  onMouseEnter={() => setSelIndex(i)}
+                                  onMouseEnter={() => { setSelIndex(i); try { router.prefetch?.(href); } catch {} }}
                                   onClick={() => {
                                     setSelIndex(i);
                                     go(href);
@@ -524,6 +533,8 @@ const HeaderTwo = ({ style_2 = false }) => {
                               href={`/login?redirect=${encodeURIComponent(currentUrl)}`}
                               className="tp-auth-cta"
                               aria-label="Login or Sign Up"
+                              prefetch
+                              onMouseEnter={() => { try { router.prefetch?.('/login'); } catch {} }}
                             >
                               <span className="tp-auth-cta-text">
                                 <FaUser className="tp-auth-cta-icon" />
@@ -535,7 +546,7 @@ const HeaderTwo = ({ style_2 = false }) => {
 
                         {/* Wishlist */}
                         <div className="tp-header-action-item d-none d-lg-block me-2">
-                          <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist">
+                          <Link href="/wishlist" className="tp-header-action-btn" aria-label="Wishlist" prefetch onMouseEnter={() => { try { router.prefetch?.('/wishlist'); } catch {} }}>
                             <FaHeart /><span className="tp-header-action-badge">{wishlistCount}</span>
                           </Link>
                         </div>

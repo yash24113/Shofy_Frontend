@@ -17,7 +17,7 @@ export const cartApi = apiSlice.injectEndpoints({
     getCartData: builder.query({
       query: (userId) => {
         console.log("Cart API: Fetching cart data for user", { userId });
-        return { url: `cart/user/${userId}`, method: "GET" };
+        return { url: `cart/user/${userId}`, method: "GET", cache: 'no-store' };
       },
       // ✅ user-scoped tag
       providesTags: (result, error, userId) => [{ type: "Cart", id: userId ?? "UNKNOWN" }],

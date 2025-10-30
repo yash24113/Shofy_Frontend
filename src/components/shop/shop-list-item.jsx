@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { CompareThree, QuickView, Wishlist, Cart } from "@/svg";
 import { handleProductModal } from "@/redux/features/productModalSlice";
-import { add_cart_product } from "@/redux/features/cartSlice";
+import { add_to_cart, fetch_cart_products, openCartMini } from "@/redux/features/cartSlice";
 import { add_to_wishlist } from "@/redux/features/wishlist-slice";
 import { add_to_compare } from "@/redux/features/compareSlice";
 
@@ -50,12 +50,17 @@ const ShopListItem = ({ product }) => {
   const dispatch = useDispatch();
 
   /** Gate add-to-cart behind session like wishlist does */
-  const guardedAddToCart = (prd) => {
-    const { sessionId } = getSessionUser();
-    if (sessionId) {
-      dispatch(add_cart_product(prd));
-    } else {
-      openLoginModal();
+  const guardedAddToCart = async (prd) => {
+    const { sessionId, userId } = getSessionUser();
+    if (!sessionId || !userId) { openLoginModal(); return; }
+    try {
+      const pid = prd?._id || prd?.id || prd?.productId;
+      if (!pid) return;
+      await dispatch(add_to_cart({ userId, productId: pid, quantity: 1 })).unwrap();
+      await dispatch(fetch_cart_products({ userId }));
+      dispatch(openCartMini());
+    } catch (e) {
+      // ignore
     }
   };
 
