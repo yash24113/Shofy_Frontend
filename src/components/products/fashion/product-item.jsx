@@ -458,10 +458,18 @@ const ProductItem = ({ product }) => {
       </div>
 
       <style jsx>{`
-        :global(.products-grid){ display:flex; flex-wrap:wrap; gap:24px; margin:0; }
-        :global(.products-grid .product-col){ flex:1 1 calc(25% - 24px); max-width:calc(25% - 24px); }
-        @media (max-width:991px){ :global(.products-grid .product-col){ flex:1 1 calc(50% - 24px); max-width:calc(50% - 24px); } }
-        @media (max-width:575px){ :global(.products-grid .product-col){ flex:1 1 100%; max-width:100%; } }
+        :global(.products-grid){ 
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+          gap: 24px;
+          margin: 0;
+          padding: 0;
+          width: 100%;
+        }
+        :global(.products-grid .product-col) { 
+          width: 100%;
+          min-width: 0; /* Prevents flex items from overflowing */
+        }
 
         .fashion-product-card{
           --primary:#0f172a; --muted:#6b7280; --accent:#7c3aed;
@@ -472,14 +480,51 @@ const ProductItem = ({ product }) => {
           transition:transform .3s ease-out, box-shadow .3s ease-out;
         }
         .fashion-product-card:hover{ transform:translateY(-2px); }
-        .card-wrapper{ background:var(--card-bg); border:2px solid var(--card-border); border-radius:14px; overflow:hidden; box-shadow:var(--shadow-sm); }
+        .card-wrapper { 
+          background: var(--card-bg); 
+          border: 1px solid var(--card-border); 
+          border-radius: 12px; 
+          overflow: hidden; 
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+        }
 
-        .product-image-container{ position:relative; aspect-ratio:1/1; min-height:220px; overflow:hidden; }
-        .image-link{ display:block; height:100%; }
-        .image-wrapper{ position:relative; width:100%; height:100%; transition:transform .6s cubic-bezier(.22,1,.36,1); background:#fff; }
-        .fashion-product-card:hover .image-wrapper{ transform:scale(1.02); }
-        :global(.img-main){ position:absolute; inset:0; object-fit:cover; }
-        .image-overlay{ position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,.16) 0%, transparent 40%); z-index:1; }
+        .product-image-container { 
+          position: relative; 
+          aspect-ratio: 1/1; 
+          width: 100%;
+          overflow: hidden;
+          background-color: #f8f8f8;
+        }
+        .image-link { 
+          display: block; 
+          width: 100%;
+          height: 100%;
+        }
+        .image-wrapper { 
+          position: relative; 
+          width: 100%; 
+          height: 100%; 
+          transition: transform 0.3s ease;
+        }
+        .fashion-product-card:hover .image-wrapper { 
+          transform: scale(1.02); 
+        }
+        :global(.img-main) { 
+          width: 100%; 
+          height: 100%;
+          object-fit: cover;
+          object-position: center;
+          transition: transform 0.3s ease;
+        }
+        .image-overlay { 
+          position: absolute; 
+          inset: 0; 
+          background: linear-gradient(to top, rgba(0,0,0,0.1) 0%, transparent 30%); 
+          z-index: 1; 
+        }
 
         .options-ribbon{ position:absolute; left:50%; transform:translateX(-50%); bottom:10px; border:0; background:transparent; cursor:pointer; z-index:3; }
         .ribbon-inner{ display:flex; align-items:center; gap:8px; height:clamp(22px, 5.2vw, 30px); padding:0 clamp(8px, 2.2vw, 14px); border-radius:999px; background:rgba(255,255,255,0.28); backdrop-filter:blur(8px) saturate(180%); border:1px solid rgba(255,255,255,0.28); box-shadow:0 4px 10px rgba(0,0,0,0.10); transition:all .2s ease; }
@@ -489,10 +534,38 @@ const ProductItem = ({ product }) => {
         .ribbon-text{ font-size:clamp(12px, 3.2vw, 14px); font-weight:600; color:#111827; letter-spacing:.2px; line-height:1; }
         .ribbon-text strong{ font-weight:800; margin-right:4px; }
 
-        .product-actions{ position:absolute; top:12px; right:12px; display:flex; flex-direction:column; gap:8px; opacity:0; transform:translateY(-6px); transition:opacity .25s ease, transform .25s ease; z-index:3; }
-        @media (hover:hover) and (pointer:fine){
+        .product-actions{ 
+          position:absolute; 
+          top:12px; 
+          right:12px; 
+          display:flex; 
+          flex-direction:column; 
+          gap:8px; 
+          opacity:0; 
+          transform:translateY(-6px); 
+          transition:opacity .25s ease, transform .25s ease; 
+          z-index:3; 
+        }
+        /* Show actions by default on mobile */
+        @media (max-width: 767px) {
+          .product-actions {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @media (hover: hover) and (pointer: fine) {
           .fashion-product-card:hover .product-actions,
-          .fashion-product-card:focus-within .product-actions{ opacity:1; transform:translateY(0); }
+          .fashion-product-card:focus-within .product-actions { 
+            opacity: 1; 
+            transform: translateY(0); 
+          }
+        }
+        /* Show actions when card is tapped on touch devices */
+        @media (hover: none) and (pointer: coarse) {
+          .fashion-product-card.show-actions .product-actions {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
         .fashion-product-card.show-actions .product-actions{ opacity:1; transform:translateY(0); }
 
@@ -507,18 +580,62 @@ const ProductItem = ({ product }) => {
         .action-button.wishlist-active :global(svg){ color:#ef4444; }
         .action-button:focus-visible{ outline:2px solid #800000; outline-offset:2px; }
 
-        .product-info{ padding:18px 12px 12px; border-top:1px solid var(--inner-border); background:#fff; }
+        .product-info { 
+          padding: 16px 12px 12px; 
+          border-top: 1px solid var(--inner-border); 
+          background: #fff;
+          flex-grow: 1;
+          display: flex;
+          flex-direction: column;
+        }
         .product-category{ font-size:11px; font-weight:600; letter-spacing:.02em; color:#6b7280; margin-bottom:4px; }
-        .product-title{ font-family:'Montserrat',system-ui,Arial,sans-serif; font-size:clamp(14px,1.9vw,16px); font-weight:700; line-height:1.22; letter-spacing:.002em; color:#111827; margin:0 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
+        .product-title { 
+          font-family: 'Montserrat', system-ui, Arial, sans-serif; 
+          font-size: 14px; 
+          font-weight: 600; 
+          line-height: 1.3; 
+          letter-spacing: 0.01em; 
+          color: #111827; 
+          margin: 0 0 8px; 
+          display: -webkit-box; 
+          -webkit-line-clamp: 2; 
+          -webkit-box-orient: vertical; 
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-height: 2.6em;
+        }
         .product-title :global(a){ color:inherit; text-decoration:none; }
         .product-title :global(a:hover){ color:#800000; }
 
-        .spec-columns{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; margin-top:4px; }
+        .spec-columns { 
+          display: grid; 
+          grid-template-columns: 1fr 1fr; 
+          gap: 0 12px; 
+          margin-top: 8px;
+          flex-grow: 1;
+        }
         @media (max-width:340px){ .spec-columns{ grid-template-columns:1fr; } }
         .spec-col{ list-style:none; margin:0; padding:0; }
-        .spec-row{ display:block; padding:5px 0; border-bottom:1px dashed rgba(17,24,39,.06); }
-        .spec-row:last-child{ border-bottom:0; }
-        .spec-value{ font-size:12.5px; font-weight:500; color:#374151; line-height:1.28; letter-spacing:.005em; }
+        .spec-row { 
+          display: flex; 
+          align-items: center;
+          padding: 4px 0; 
+          border-bottom: 1px dashed rgba(17,24,39,.06); 
+          min-height: 22px;
+        }
+        .spec-row:last-child { 
+          border-bottom: 0; 
+        }
+        .spec-value { 
+          font-size: 12px; 
+          font-weight: 400; 
+          color: #4B5563; 
+          line-height: 1.3; 
+          letter-spacing: 0.01em;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
 
         .price-wrapper{ display:none; }
       `}</style>
