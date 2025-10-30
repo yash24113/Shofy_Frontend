@@ -9,7 +9,7 @@ import { Plus } from '@/svg';
 import { selectUserId } from '@/utils/userSelectors';
 import {
   useGetCartDataQuery,
-  useClearCartMutation
+  useClearCartMutation,
 } from '@/redux/features/cartApi';
 
 const CartArea = () => {
@@ -22,30 +22,34 @@ const CartArea = () => {
     data: cartResponse,
     isLoading,
     error,
-    refetch
+    refetch,
   } = useGetCartDataQuery(userId, { skip: !userId });
 
   const [clearCart, { isLoading: isClearing }] = useClearCartMutation();
 
   const cart_products =
-    cartResponse?.data?.items?.map((item) =>
-      item?.productId
-        ? {
-            ...(item.productId || {}),
-            title: item.productId?.name,
-            _id: item.productId?._id,
-            orderQuantity: item.quantity,
-            cartItemId: item._id,
-          }
-        : null
-    ).filter(Boolean) || [];
+    cartResponse?.data?.items
+      ?.map((item) =>
+        item?.productId
+          ? {
+              ...(item.productId || {}),
+              title: item.productId?.name,
+              _id: item.productId?._id,
+              orderQuantity: item.quantity,
+              cartItemId: item._id,
+            }
+          : null
+      )
+      .filter(Boolean) || [];
 
   const handleAddProduct = () => router.push('/shop');
 
   const handleClearCart = async () => {
-    if (isClearing) return;
+    if (!userId || isClearing) return;
     try {
-      await clearCart().unwrap();
+      // IMPORTANT: pass userId so RTKQ invalidation hits the right tag
+      await clearCart({ userId }).unwrap();
+      // Either rely on invalidation, or force a refetch for instant UI sync:
       refetch();
     } catch (e) {
       console.error('Failed to clear cart:', e);
@@ -76,6 +80,25 @@ const CartArea = () => {
     observer.observe(footerEl);
     return () => observer.disconnect();
   }, []);
+
+  if (!userId) {
+    return (
+      <section className="tp-cart-area pb-120">
+        <div className="container">
+          <div className="text-center pt-50">
+            <h3>Please sign in to view your cart</h3>
+            <button
+              type="button"
+              className="btn-ghost-invert square mt-20"
+              onClick={() => router.push('/login')}
+            >
+              Go to Login
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -169,7 +192,9 @@ const CartArea = () => {
               className="btn-ghost-invert square"
               title="Browse products"
             >
-              <span className="btn-icon" aria-hidden="true"><Plus /></span>
+              <span className="btn-icon" aria-hidden="true">
+                <Plus />
+              </span>
               <span className="btn-label">Add Product</span>
             </button>
           </div>

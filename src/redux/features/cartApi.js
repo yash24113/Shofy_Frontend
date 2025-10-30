@@ -1,8 +1,8 @@
 import { apiSlice } from "../api/apiSlice";
 
 /**
- * Make sure apiSlice is created with:  tagTypes: ['Cart']
- * Example:
+ * Ensure apiSlice has: tagTypes: ['Cart']
+ *
  * export const apiSlice = createApi({
  *   baseQuery: fetchBaseQuery({ baseUrl: '/api/' }),
  *   tagTypes: ['Cart'],
@@ -19,10 +19,9 @@ export const cartApi = apiSlice.injectEndpoints({
         console.log("Cart API: Fetching cart data for user", { userId });
         return { url: `cart/user/${userId}`, method: "GET", cache: 'no-store' };
       },
-      // ✅ user-scoped tag
       providesTags: (result, error, userId) => [{ type: "Cart", id: userId ?? "UNKNOWN" }],
       keepUnusedDataFor: 60,
-      // ✅ if a new subscriber mounts (e.g., opening mini-cart), force a read
+      // With RTKQ, returning true forces a refetch when same arg remounts
       forceRefetch({ currentArg, previousArg }) {
         return currentArg === previousArg;
       },
@@ -47,7 +46,6 @@ export const cartApi = apiSlice.injectEndpoints({
           body: { quantity, userId },
         };
       },
-      // ✅ invalidate only this user's cart
       invalidatesTags: (result, error, { userId }) => [{ type: "Cart", id: userId ?? "UNKNOWN" }],
       async onQueryStarted({ productId, quantity }, { queryFulfilled }) {
         try {
@@ -84,16 +82,21 @@ export const cartApi = apiSlice.injectEndpoints({
 
     // DELETE /cart/clear
     clearCart: builder.mutation({
-      // accept { userId } so invalidation can be precise
-      query: ({ userId }) => ({
-        url: "cart/clear",
-        method: "DELETE",
-        body: { userId }, // remove if your API doesn't expect it
-      }),
+      // Accept { userId } so invalidation can be precise
+      query: ({ userId }) => {
+        // Some backends ignore bodies on DELETE; put userId in querystring too.
+        const qs = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+        return {
+          url: `cart/clear/${userId}`,
+          method: "DELETE",
+          body: { userId }, // keep for servers that do accept DELETE bodies
+        };
+      },
       invalidatesTags: (result, error, { userId }) => [{ type: "Cart", id: userId ?? "UNKNOWN" }],
       async onQueryStarted(arg, { queryFulfilled }) {
         try {
           await queryFulfilled;
+          console.log("Cart API: Clear successful");
         } catch (err) {
           console.error("Failed to clear cart:", err);
         }
