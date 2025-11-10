@@ -10,11 +10,59 @@ import MicrosoftClarity from '@/components/analytics/MicrosoftClarity';
 /* Font Awesome CSS + reset */
 import '/public/assets/css/font-awesome-pro.css';
 
+// Default metadata (can be overridden by page-specific metadata)
+export const metadata = {
+  title: {
+    default: 'Amrita Global Enterprises',
+    template: '%s | Amrita Global Enterprises',
+  },
+  description: 'Premium quality fabrics for apparel and fashion industry',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://shofy-frontend1.vercel.app'),
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    siteName: 'Amrita Global Enterprises',
+    images: [
+      {
+        url: 'https://amritafashions.com/wp-content/uploads/amrita-fashions-company-logo-270x270.webp',
+        width: 800,
+        height: 600,
+        alt: 'Amrita Global Enterprises',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    creator: '@amritafabrics',
+  },
+  icons: {
+    icon: [
+      {
+        url: 'https://amritafashions.com/wp-content/uploads/amrita-fashions-company-logo-32x32.webp',
+        type: 'image/webp',
+        sizes: '32x32',
+      },
+      {
+        url: 'https://amritafashions.com/wp-content/uploads/amrita-fashions-company-logo-192x192.webp',
+        type: 'image/webp',
+        sizes: '192x192',
+      },
+    ],
+    apple: [
+      {
+        url: 'https://amritafashions.com/wp-content/uploads/amrita-fashions-company-logo-180x180.webp',
+        sizes: '180x180',
+        type: 'image/webp',
+      },
+    ],
+  },
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        <title>Amrita Global Enterprises</title>
+        
 
         {/* Favicon / Touch Icons (from amritafashions.com) */}
         <link
