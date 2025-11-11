@@ -87,7 +87,7 @@ export default function BlogArea() {
         <div className="row">
           <div className="col-xl-12">
             <div className="tp-blog-more-2 mt-10 text-center">
-              <Link href="/blog" className="tp-btn tp-btn-border tp-btn-border-sm">
+              <Link href="/blog-grid" className="tp-btn tp-btn-border tp-btn-border-sm">
                 Discover More
               </Link>
             </div>
