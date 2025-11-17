@@ -5,9 +5,6 @@ import { useDispatch } from "react-redux";
 import { Filter } from "@/svg";
 import { handleFilterSidebarOpen } from "@/redux/features/shop-filter-slice";
 
-// ✅ Reuse the same header search component so it inherits the exact header CSS
-/* import HeaderSearchForm from "@/components/forms/header-search-form"; // adjust path if needed
- */
 const ShopTopRight = () => {
   const dispatch = useDispatch();
 
@@ -22,8 +19,8 @@ const ShopTopRight = () => {
        {/*  <HeaderSearchForm /> */}
       </div>
 
-      {/* Filter */}
-      <div className="shop-toolbar__filter">
+      {/* Filter - Hidden on desktop, visible on mobile */}
+      <div className="shop-toolbar__filter d-lg-none">
         <button
           type="button"
           className="tp-filter-btn"
