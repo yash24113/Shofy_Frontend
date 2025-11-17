@@ -1,83 +1,213 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { CloseTwo } from '@/svg';
-import myLogo from '@assets/img/logo/my_logo.png';
-import contact_img from '@assets/img/icon/contact.png';
-import language_img from '@assets/img/icon/language-flag.png';
-import MobileMenus from './mobile-menus';
 
-// removed unused categoryType prop; fixed default for setIsCanvasOpen
 const OffCanvas = ({ isOffCanvasOpen, setIsCanvasOpen = () => {} }) => {
-  const [isCurrencyActive, setIsCurrencyActive] = useState(false);
-  const [isLanguageActive, setIsLanguageActive] = useState(false);
+  const handleCloseCanvas = () => {
+    setIsCanvasOpen(false);
+  };
 
-  const handleLanguageActive = () => {
-    setIsLanguageActive((v) => !v);
-    setIsCurrencyActive(false);
-  };
-  const handleCurrencyActive = () => {
-    setIsCurrencyActive((v) => !v);
-    setIsLanguageActive(false);
-  };
+  // Main menu items
+  const mainMenuItems = [
+    { title: "Home", link: "/" },
+    { title: "Products", link: "/shop" },
+    { title: "Blog", link: "/blog-grid" },
+    { title: "Contact", link: "/contact" },
+    { title: "Wishlist", link: "/wishlist" }
+  ];
+
+  // Clean close icon
+  const CloseIcon = () => (
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 20 20" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path 
+        d="M15 5L5 15M5 5L15 15" 
+        stroke="currentColor" 
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  // CSS Styles - No hover effects
+  const styles = `
+    .offcanvas__area {
+      position: fixed;
+      top: 0;
+      right: -100%;
+      width: 320px;
+      max-width: 85vw;
+      height: 100vh;
+      background: #ffffff;
+      transition: right 0.3s ease;
+      z-index: 10000;
+      box-shadow: -4px 0 20px rgba(15, 34, 53, 0.1);
+      border-left: 1px solid #E6ECF2;
+    }
+    .offcanvas__area.offcanvas-opened {
+      right: 0;
+    }
+    .offcanvas__wrapper {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .offcanvas__content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+    }
+    .offcanvas__header {
+      padding: 25px;
+      border-bottom: 1px solid #F1F5F9;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ffffff;
+    }
+    .offcanvas__close-btn {
+      background: #F7F9FC;
+      border: 1px solid #E6ECF2;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+      color: #475569;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .brand-text {
+      font-family: 'Poppins', 'Jost', system-ui, sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: #2C4C97;
+    }
+    .mobile-menu-list {
+      list-style: none;
+      padding: 30px 0;
+      margin: 0;
+      background: #ffffff;
+    }
+    .mobile-menu-item {
+      margin: 0;
+    }
+    .mobile-menu-link {
+      display: flex;
+      align-items: center;
+      padding: 16px 25px;
+      color: #0F2235;
+      text-decoration: none;
+      font-family: 'Hind', 'Jost', system-ui, sans-serif;
+      font-weight: 500;
+      font-size: 16px;
+      background: #ffffff;
+      border-left: 3px solid transparent;
+    }
+    .mobile-menu-item:not(:last-child) .mobile-menu-link {
+      border-bottom: 1px solid #F7F9FC;
+    }
+    .body-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 34, 53, 0.5);
+      z-index: 9999;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+    .body-overlay.opened {
+      opacity: 1;
+      visibility: visible;
+    }
+    /* Enhanced scrollbar */
+    .offcanvas__content::-webkit-scrollbar {
+      width: 3px;
+    }
+    .offcanvas__content::-webkit-scrollbar-track {
+      background: #F7F9FC;
+    }
+    .offcanvas__content::-webkit-scrollbar-thumb {
+      background: #E6ECF2;
+    }
+    /* Mobile optimizations */
+    @media (max-width: 576px) {
+      .offcanvas__area {
+        width: 280px;
+      }
+      .offcanvas__header {
+        padding: 20px;
+      }
+      .mobile-menu-list {
+        padding: 25px 0;
+      }
+      .mobile-menu-link {
+        padding: 15px 20px;
+      }
+    }
+    @media (max-width: 1024px) {
+      .mobile-menu-link {
+        min-height: 52px;
+        display: flex;
+        align-items: center;
+      }
+    }
+  `;
 
   return (
     <>
-      <div className={`offcanvas__area offcanvas__radius ${isOffCanvasOpen ? 'offcanvas-opened' : ''}`}>
+      <style jsx>{styles}</style>
+      
+      <div className={`offcanvas__area ${isOffCanvasOpen ? 'offcanvas-opened' : ''}`}>
         <div className="offcanvas__wrapper">
-          <div className="offcanvas__close">
-            <button onClick={() => setIsCanvasOpen(false)} className="offcanvas__close-btn offcanvas-close-btn">
-              <CloseTwo />
-            </button>
-          </div>
           <div className="offcanvas__content">
-            <div className="offcanvas__top mb-70 d-flex justify-content-between align-items-center">
-              <div className="offcanvas__logo logo d-flex align-items-center">
-                <Link href="/" className="d-flex align-items-center" style={{ gap: '12px' }}>
-                  <Image src={myLogo} alt="AGE logo" width={36} height={36} style={{ borderRadius: 8, objectFit: 'cover' }} />
-                  <span className="brand-text">AGE</span>
-                </Link>
-              </div>
+            {/* Header */}
+            <div className="offcanvas__header">
+              <span className="brand-text">AGE</span>
+              <button 
+                onClick={handleCloseCanvas} 
+                className="offcanvas__close-btn"
+                aria-label="Close menu"
+              >
+                <CloseIcon />
+              </button>
             </div>
 
-            <div className="tp-main-menu-mobile fix d-lg-none mb-40">
-              <MobileMenus />
-            </div>
-
-            <div className="offcanvas__btn">
-              <Link href="/contact" className="tp-btn-2 tp-btn-border-2">Contact Us</Link>
-            </div>
+            {/* Navigation - No hover effects */}
+            <nav className="mobile-menu-nav">
+              <ul className="mobile-menu-list">
+                {mainMenuItems.map((menu) => (
+                  <li key={menu.link} className="mobile-menu-item">
+                    <Link 
+                      href={menu.link} 
+                      className="mobile-menu-link"
+                      onClick={handleCloseCanvas}
+                    >
+                      {menu.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
           </div>
-
-          <div className="offcanvas__bottom">
-            <div className="offcanvas__footer d-flex align-items-center justify-content-between">
-              <div className="offcanvas__currency-wrapper currency">
-                <span onClick={handleCurrencyActive} className="offcanvas__currency-selected-currency tp-currency-toggle">
-                  Currency : USD
-                </span>
-                <ul className={`offcanvas__currency-list tp-currency-list ${isCurrencyActive ? 'tp-currency-list-open' : ''}`}>
-                  <li>USD</li><li>ERU</li><li>BDT</li><li>INR</li>
-                </ul>
-              </div>
-              <div className="offcanvas__select language">
-                <div className="offcanvas__lang d-flex align-items-center justify-content-md-end">
-                  <div className="offcanvas__lang-img mr-15">
-                    <Image src={language_img} alt="language-flag" />
-                  </div>
-                  <div className="offcanvas__lang-wrapper">
-                    <span onClick={handleLanguageActive} className="offcanvas__lang-selected-lang tp-lang-toggle">English</span>
-                    <ul className={`offcanvas__lang-list tp-lang-list ${isLanguageActive ? 'tp-lang-list-open' : ''}`}>
-                      <li>Spanish</li><li>Portugese</li><li>American</li><li>Canada</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
         </div>
       </div>
-      <div onClick={() => setIsCanvasOpen(false)} className={`body-overlay ${isOffCanvasOpen ? 'opened' : ''}`} />
+      
+      {/* Backdrop Overlay */}
+      <div 
+        onClick={handleCloseCanvas} 
+        className={`body-overlay ${isOffCanvasOpen ? 'opened' : ''}`}
+        aria-hidden="true"
+      />
     </>
   );
 };
