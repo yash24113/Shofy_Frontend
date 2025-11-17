@@ -3,7 +3,7 @@ import React from 'react';
 const SectionTitle = () => {
   return (
     <>
-      <section className="tp-section-title-area pt-95 pb-80">
+      <section className="tp-section-title-area pt-30 pb-25">
         <div className="container">
           <div className="row">
             <div className="col-xl-8">
