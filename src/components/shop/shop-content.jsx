@@ -110,7 +110,7 @@ const ShopContent = ({
               <div className="shop-toolbar-sticky">
                 <div className="tp-shop-top mb-45">
                   <div className="row">
-                     <div className="col-xl-6">
+                     <div className="col-xl-6 mb-10">
                       <ShopTopLeft
                         showing={filteredRows.slice(0, visibleCount).length}
                         total={all_products.length}
@@ -192,19 +192,30 @@ const ShopContent = ({
           padding: 8px 0;
         }
         .load-more-wrapper { display: flex; justify-content: center; }
-        .load-more-btn {
-          background: #000;
-          color: #fff;
-          border: 1px solid #000;
-          padding: 12px 28px;
-          border-radius: 9999px;
-          font-weight: 600;
-          transition: all .2s ease;
-        }
-        .load-more-btn:hover {
-          background: #fff;
-          color: #000;
-        }
+      .load-more-btn {
+  background: var(--tp-theme-primary);
+  color: var(--tp-common-white);
+  border: 2px solid var(--tp-theme-primary);
+  padding: 14px 32px;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  font-family: var(--tp-ff-roboto);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--tp-theme-primary) 25%, transparent);
+}
+
+.load-more-btn:hover {
+  background: var(--tp-common-white);
+  color: var(--tp-theme-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--tp-theme-primary) 35%, transparent);
+}
+
+.load-more-btn:active {
+  transform: translateY(0);
+}
       `}</style>
     </section>
   );
